@@ -1,106 +1,192 @@
 import streamlit as st
 import pandas as pd
-import openpyxl 
+import numpy as np
+import plotly.express as px
+import google.generativeai as genai
 
-# 1. 페이지 레이아웃 기본 설정
-st.set_page_config(page_title="KODEX AI Agent 2.0", layout="wide")
+# 1. 페이지 레이아웃 및 기본 테마 설정
+st.set_page_config(page_title="ETF Monitoring AI Agent", layout="wide")
 
-# 2. 사이드바 설정 (컨트롤 영역 분리)
+# 2. 안전한 API 키 로드 (Streamlit Secrets 활용)
+if "GEMINI_API_KEY" in st.secrets:
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+    model = genai.GenerativeModel('gemini-1.5-flash')
+else:
+    model = None
+
+# 3. 사이드바 구성 (파일 업로드)
 with st.sidebar:
-    st.title("📁 데이터 센터")
-    uploaded_file = st.file_uploader("ETF 순매수 데이터(xlsx)를 업로드하세요", type=['xlsx'])
-    st.info("💡 데이터 정제를 위해 상단 9개 행의 설명 영역을 자동으로 스킵합니다.")
-
-# 3. 메인 화면 타이틀
-st.title("🤖 KODEX ETF 마케팅 & 신상품 기획 에이전트")
-st.write("사후적 수급 모니터링 데이터 분석을 바탕으로, 향후 진입할 시장의 공백을 동적으로 스크리닝합니다.")
-
-# 4. 기획 의도를 반영한 사후 분석 및 향후 액션 탭 구성
-tab1, tab2 = st.tabs(["📊 1. 수급 현황 모니터링 (사후 분석)", "🎯 2. 시장 갭(Gap) 스크리닝 및 기획 (향후 Action)"])
-
-# --- 탭 1: 수급 현황 모니터링 (과거~현재 데이터 확인) ---
-with tab1:
-    if uploaded_file is not None:
-        try:
-            # 10번째 행부터 순수 데이터를 정밀 추출
-            df = pd.read_excel(uploaded_file, skiprows=9, engine='openpyxl')
-            
-            # 상단 핵심 요약 지표 (KPI Metrics)
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric("총 데이터 행 수", f"{len(df):,}건")
-            with col2:
-                # 종목명 컬럼이 존재할 경우 유니크 개수 산출, 없을 경우 기본 처리
-                total_etfs = len(df.iloc[:, 1].unique()) if len(df.columns) > 1 else "전체"
-                st.metric("분석 대상 ETF 수", f"{total_etfs}개")
-            with col3:
-                st.metric("분석 주체 범위", "기관 / 외국인 / 개인")
-            with col4:
-                st.metric("데이터 정제 상태", "완료 (1-9행 스킵)")
-
-            st.divider()
-            
-            # 레이아웃 분할 후 데이터 및 통계 배치
-            c1, c2 = st.columns([3, 2])
-            with c1:
-                st.subheader("📈 정제된 수급 데이터 현황")
-                st.dataframe(df, height=400, use_container_width=True)
-            with c2:
-                st.subheader("📊 데이터 기초 통계 요약")
-                st.write(df.describe())
-
-        except Exception as e:
-            st.error(f"데이터를 불러오는 중 오류가 발생했습니다: {e}")
-    else:
-        st.warning("👈 왼쪽 사이드바에서 엑셀 파일을 업로드하시면 수급 현황 모니터링 화면이 활성화됩니다.")
-
-# --- 탭 2: 시장 갭 스크리닝 및 기획 (동적 조건별 Action 제안) ---
-with tab2:
-    st.header("🎯 타사 수급 집중 및 KODEX 라인업 공백 탐색")
-    st.write("특정 답을 정해두지 않고, 입력하신 필터 조건에 따라 실시간으로 시장의 White Space를 분석합니다.")
+    st.markdown("### 📊 데이터 컨트롤 타워")
+    st.divider()
     
-    st.markdown("### ⚙️ 스크리닝 필터 설정")
+    st.markdown("##### ETF 순매수 엑셀 파일 업로드")
+    uploaded_excel = st.file_uploader("Excel Upload", type=["xlsx", "xls"], key="excel_main", label_visibility="collapsed")
     
-    # 사용자가 직접 조작하는 인터랙티브 필터 구성
-    col_f1, col_f2, col_f3 = st.columns(3)
-    with col_f1:
-        target_investor = st.selectbox("분석 대상 주체 선택", ["기관 합계", "외국인 합계", "개인", "전체 주체"])
-    with col_f2:
-        competitor = st.selectbox("비교 대상 경쟁사 선택", ["TIGER (미래에셋)", "ACE (한국투자)", "RISE (KB)"])
-    with col_f3:
-        min_inflow = st.slider("최소 순매수액 기준 설정 (억원)", 10, 500, 100)
+    st.divider()
+    
+    st.markdown("##### Naver DataLab CSV 파일 업로드")
+    uploaded_csv = st.file_uploader("CSV Upload", type=["csv"], key="csv_main", label_visibility="collapsed")
+
+# 4. 엑셀 시트 동적 파싱 및 주차(Week) 리스트 추출 로직
+available_weeks = ["5.17~5.23", "5.10~5.16", "5.03~5.09"] # 파일 업로드 전 기본 가상 주차
+
+if uploaded_excel is not None:
+    # 엑셀 파일 객체 생성 및 전체 시트 이름 가져오기
+    xls = pd.ExcelFile(uploaded_excel)
+    # '참고사항' 시트를 제외한 나머지 시트 이름만 리스트로 추출
+    sheet_names = [sheet for sheet in xls.sheet_names if sheet != "참고사항"]
+    
+    if sheet_names:
+        # 최신 주차가 위로 올라오도록 리스트 순서 뒤집기 (선택 사항)
+        available_weeks = sheet_names[::-1] 
+
+# 5. 상단 헤더 및 동적 주차 필터
+col_title, col_week = st.columns([3, 1])
+with col_title:
+    st.title("ETF Monitoring AI Agent")
+with col_week:
+    # 엑셀이 업로드되면 이 드롭다운 목록이 엑셀 시트 이름들로 자동 변경됨
+    selected_week = st.selectbox(
+        "주차 (최대 6개월 전까지 선택 가능):", 
+        options=available_weeks,
+        index=0
+    )
+
+# 6. 하위 탭 메뉴 생성
+tab_names = [
+    "[Weekly Info.]", "[ETF 순매수 등락, 수익률]", "[뉴스, 검색량, 종토방 분석]", 
+    "[주간 거래대금 추이]", "[진행 이벤트]", "[AI 분석 및 인사이트]", "[ETF 운용 현황]"
+]
+tabs = st.tabs(tab_names)
+
+for i in range(1, len(tab_names)):
+    with tabs[i]:
+        st.warning(f"🚧 {tab_names[i]} 탭은 기획안을 바탕으로 순차적으로 구현될 예정입니다.")
+
+# =========================================================================
+# --- Tab 0: [Weekly Info.] ---
+# =========================================================================
+with tabs[0]:
+    
+    # -------------------------------------------------------------------------
+    # PART 1: 지난 주 주요 ISSUE TOP 3 (Gemini API 실시간 연동)
+    # -------------------------------------------------------------------------
+    st.markdown("### 📰 주요 ISSUE TOP 3 <span style='font-size:12px; color:gray;'>(Gemini AI 기반 실시간 스크랩 & 요약)</span>", unsafe_allow_html=True)
+    
+    @st.cache_data(show_spinner="Gemini가 선택된 주차의 시장 이슈를 분석 중입니다...")
+    def get_weekly_issues(week_str):
+        if model:
+            try:
+                prompt = f"{week_str} 주차의 대한민국 ETF 시장, 주식 시장, 거시경제 관련 가장 중요한 핵심 뉴스 이슈 3가지를 요약해줘. 형식: '제목: [이슈제목]\n- [내용1]\n- [내용2]\n- [내용3]' (각 이슈는 '---'로 구분)"
+                response = model.generate_content(prompt)
+                return response.text.split('---')
+            except Exception as e:
+                return [f"제목: API 연동 오류\n- {str(e)}", "제목: - \n- -", "제목: - \n- -"]
+        else:
+            return [
+                "제목: API 키가 입력되지 않았습니다.\n- Streamlit Secrets 설정을 확인해주세요.", 
+                "제목: 임시 데이터 1\n- 내용 없음", 
+                "제목: 임시 데이터 2\n- 내용 없음"
+            ]
+
+    issues = get_weekly_issues(selected_week)
+    
+    cols_issue = st.columns(3)
+    for idx, col in enumerate(cols_issue):
+        with col:
+            with st.container(border=True):
+                if idx < len(issues):
+                    lines = issues[idx].strip().split('\n')
+                    title = lines[0].replace("제목:", "").strip() if lines[0].startswith("제목:") else "주요 시장 이슈"
+                    st.markdown(f"**🎯 {title}**")
+                    for line in lines[1:]:
+                        st.markdown(f"<span style='font-size:14px; color:#333;'>{line}</span>", unsafe_allow_html=True)
 
     st.divider()
 
-    # 분석 실행 로직
-    st.subheader("🤖 스크리닝 결과 및 향후 기획 방향성")
-    
-    if uploaded_file is not None:
-        # 사용자가 설정한 조건에 맞춰 결과 뷰가 유동적으로 빌드됨 (답정너 탈피)
-        st.success(f"✅ 분석 완료: {competitor} 대비 KODEX의 시장 공백 영역 분석 구조 도출")
-        
-        c3, c4 = st.columns([2, 1])
-        with c3:
-            st.markdown(f"#### 📋 `{competitor}` 향 자금 유입 기반 Gap 영역 추정")
+    # -------------------------------------------------------------------------
+    # PART 2: 데이터 연동 (엑셀 파일 업로드 여부에 따른 분기 처리)
+    # -------------------------------------------------------------------------
+    if uploaded_excel is not None:
+        try:
+            # 사용자가 상단에서 선택한 주차(시트 이름)의 데이터만 쏙 빼서 읽어옴
+            df_source = pd.read_excel(uploaded_excel, sheet_name=selected_week)
             
-            # 입력 조건 변수가 실시간 반영되는 동적 프레임워크 테이블
-            mock_gap_data = {
-                "우선순위": ["1순위 영역", "2순위 영역", "3순위 영역"],
-                "투자 테마 및 섹터": [f"{competitor} 자금 집중 상위 테마", "인컴 및 자산배분형 공백 섹터", "신종 구조형/파생 상품군"],
-                "필터링 기준": [f"{target_investor} {min_inflow}억 이상 유입", "지속 수급 유입 세그먼트", "초기 자금 유입 포착"],
-                "KODEX 라인업 진단": ["라인업 보완 및 매칭 필요", "점유율 방어 필요", "신규 론칭 검토 지점"]
-            }
-            gap_df = pd.DataFrame(mock_gap_data)
-            st.table(gap_df)
-            
-            st.markdown(f"""
-            **💡 향후 액션 제안 (Action Plan):**
-            * 사후 데이터 분석 결과 `{competitor}`의 `{target_investor}` 순매수 강도가 높은 영역 중, 당사의 점유율이 취약한 세부 지점이 스크리닝되었습니다.
-            * 다음 단계에서는 이 필터링 결과를 토대로 실제 유입액 상위 종목 명세를 대조하여, 타사 독점 섹터를 방어하거나 선점할 수 있는 구체적인 신상품 기획 프로세스로 연결합니다.
-            """)
-            
-        with c4:
-            st.metric("탐색된 세부 공백 수", "3개 영역 포착")
-            st.info("💡 본 에이전트는 결론을 고정하지 않으며, 업로드된 수급 데이터 파일과 설정하신 필터 값에 따라 동적으로 판단 근거를 제공합니다.")
+            # 혹시나 엑셀의 열 이름에 공백이 섞여 있을까 봐 안전하게 공백 제거
+            df_source.columns = df_source.columns.str.strip() 
+        except Exception as e:
+            st.error(f"엑셀 데이터를 읽는 중 오류가 발생했습니다: {e}")
+            df_source = pd.DataFrame() # 에러 방지용 빈 데이터프레임
     else:
-        st.info("👆 왼쪽 사이드바에 데이터를 업로드하고 필터를 설정한 뒤, 수급 데이터를 기반으로 한 공백 스크리닝을 진행하세요.")
+        # 파일이 없을 때 보여줄 가상 데이터셋
+        mock_data = {
+            "종목명": ["전체", "TIGER SK하이닉스단일종목레버리지", "KODEX SK하이닉스단일종목레버리지", "TIGER 미국우량테크", "SOL AI반도체TOP2플러스", "KODEX 고배당"],
+            "대표테마": ["기타", "레버리지", "레버리지", "빅테크", "AI", "배당"],
+            "개인": [4327874393, 1040476291, 1035108397, 888880331, 799680607, 325405611],
+            "기관": [2100000000, -500000000, -480000000, 300000000, 400000000, 120000000],
+            "외국인": [2227874393, 1540476291, 1515108397, 588880331, 399680607, 205405611]
+        }
+        df_source = pd.DataFrame(mock_data)
+
+    # -------------------------------------------------------------------------
+    # PART 3: 해당 주 순매수 ETF 순위 차트 렌더링
+    # -------------------------------------------------------------------------
+    if not df_source.empty:
+        st.markdown("### 🏆 해당 주 순매수 ETF 순위")
+        
+        col_subject, col_space, col_slider = st.columns([2, 3, 3])
+        with col_subject:
+            target_subject = st.selectbox("주체:", ["개인", "기관", "외국인"], key="main_subject")
+        with col_slider:
+            top_n = st.slider("TOP N개 설정", min_value=5, max_value=50, value=10, step=5, label_visibility="collapsed")
+            st.markdown(f"<p style='text-align:right; color:red; font-weight:bold; margin-top:-10px;'>{top_n}</p>", unsafe_allow_html=True)
+
+        # '전체' 및 불필요한 결측치 행 제외 로직
+        df_filtered = df_source.dropna(subset=[target_subject]).copy()
+        if '종목명' in df_filtered.columns:
+            df_filtered = df_filtered[df_filtered["종목명"] != "전체"]
+            
+        df_filtered = df_filtered.sort_values(by=target_subject, ascending=False).head(top_n)
+
+        col_table, col_chart = st.columns([4, 5])
+        with col_table:
+            st.dataframe(
+                df_filtered[["종목명", target_subject]] if '종목명' in df_filtered.columns else df_filtered, 
+                use_container_width=True, 
+                height=380
+            )
+            
+        with col_chart:
+            if '종목명' in df_filtered.columns:
+                fig_etf = px.bar(
+                    df_filtered, x=target_subject, y="종목명", orientation='h',
+                    title=f"{target_subject} 순매수 상위 TOP {top_n}"
+                )
+                fig_etf.update_layout(yaxis={'categoryorder':'total ascending'}, height=380, template="plotly_dark")
+                st.plotly_chart(fig_etf, use_container_width=True)
+            else:
+                st.warning("엑셀 파일에 '종목명' 컬럼이 존재하지 않아 그래프를 그릴 수 없습니다.")
+
+        st.divider()
+
+        # -------------------------------------------------------------------------
+        # PART 4: 해당 주 인기 테마
+        # -------------------------------------------------------------------------
+        st.markdown("### 🔥 해당 주 인기 테마")
+        
+        if '대표테마' in df_source.columns and '종목명' in df_source.columns:
+            df_theme = df_source[df_source["종목명"] != "전체"].groupby("대표테마")[target_subject].sum().reset_index()
+            df_theme = df_theme.sort_values(by=target_subject, ascending=False)
+
+            col_theme_table, col_theme_chart = st.columns([4, 5])
+            with col_theme_table:
+                st.dataframe(df_theme, use_container_width=True, height=300)
+            with col_theme_chart:
+                fig_theme = px.bar(
+                    df_theme, x="대표테마", y=target_subject,
+                    title=f"{selected_week} 대표테마별 {target_subject} 순매수 현황"
+                )
+                fig_theme.update_layout(height=300, template="plotly_dark")
+                st.plotly_chart(fig_theme, use_container_width=True)
+        else:
+            st.info("엑셀 파일에 '대표테마' 데이터가 없거나 형식이 달라 테마 분석을 생략합니다.")
