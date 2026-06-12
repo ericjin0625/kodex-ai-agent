@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 # 1. 페이지 레이아웃 및 기본 테마 설정
 st.set_page_config(page_title="ETF Monitoring AI Agent", layout="wide")
 
-# 2. 안전한 API 키 로드
+# 2. 안전한 API 키 로드 및 gemini-1.5-flash 고정
 if "GEMINI_API_KEY" in st.secrets:
     api_key = st.secrets["GEMINI_API_KEY"].strip('\'" ')
     genai.configure(api_key=api_key)
@@ -38,7 +38,7 @@ if uploaded_excel is not None:
     if sheet_names:
         available_weeks = sheet_names[::-1] 
 
-# 5. 상단 헤더 및 필터
+# 5. 상단 헤더 및 필터 (기본값: 1주 전)
 col_title, col_week = st.columns([3, 1])
 with col_title:
     st.title("ETF Monitoring AI Agent")
@@ -53,11 +53,10 @@ tab_names = [
 ]
 tabs = st.tabs(tab_names)
 
-# 미완성 탭들만 경고창 표시 (4번, 6번 탭)
+# 미완성 탭 경고창 표시 (4번, 6번 탭)
 for i in [4, 6]:
     with tabs[i]:
         st.warning(f"🚧 {tab_names[i]} 탭은 기획안을 바탕으로 순차적으로 구현될 예정입니다.")
-
 
 # 공통 데이터 클렌징 함수
 @st.cache_data
@@ -71,7 +70,7 @@ def load_and_clean_excel(file, sheet_name):
     return df
 
 # =========================================================================
-# --- Tab 0: [Weekly Info.] (첫 번째 탭 가상 데이터 완벽 복구) ---
+# --- Tab 0: [Weekly Info.] ---
 # =========================================================================
 with tabs[0]:
     st.markdown("### 📰 주요 ISSUE TOP 3 <span style='font-size:12px; color:gray;'>(Gemini AI 자동 스크랩)</span>", unsafe_allow_html=True)
@@ -107,7 +106,6 @@ with tabs[0]:
         except Exception as e:
             st.error(f"오류: {e}")
     else:
-        # 파일 미업로드 시 표시되는 가상 데이터 복구 완료
         mock_data = {
             "종목명": ["전체", "TIGER SK하이닉스단일종목레버리지", "KODEX SK하이닉스단일종목레버리지", "TIGER 미국우량테크", "SOL AI반도체TOP2플러스", "KODEX 고배당"],
             "대표테마": ["기타", "레버리지", "레버리지", "빅테크", "AI", "배당"],
@@ -154,7 +152,7 @@ with tabs[0]:
                 st.plotly_chart(fig_theme, use_container_width=True)
 
 # =========================================================================
-# --- Tab 1: [ETF 순매수 등락, 수익률] (산점도 포함 유지) ---
+# --- Tab 1: [ETF 순매수 등락, 수익률] ---
 # =========================================================================
 with tabs[1]:
     st.markdown("### 📈 기간별 ETF 순매수 현황")
@@ -395,7 +393,7 @@ with tabs[5]:
                         response = model.generate_content(prompt)
                         st.session_state.ai_insights = response.text.split('///')
                     except Exception as e:
-                        st.session_state.ai_insights = [f"API 연동 에러 발생: {e}"] * 3
+                        st.session_state.ai_insights = [f"AI 연동 에러 발생: {e}"] * 3
             else:
                 st.session_state.ai_insights = ["API 키 세팅이 누락되었습니다. Secrets 창을 확인해 주세요."] * 3
 
