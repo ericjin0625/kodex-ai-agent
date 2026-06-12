@@ -107,13 +107,19 @@ with tabs[0]:
     # -------------------------------------------------------------------------
     # PART 2: 데이터 연동 (엑셀 파일 업로드 여부에 따른 분기 처리)
     # -------------------------------------------------------------------------
-    if uploaded_excel is not None:
+if uploaded_excel is not None:
         try:
             # 사용자가 상단에서 선택한 주차(시트 이름)의 데이터만 쏙 빼서 읽어옴
             df_source = pd.read_excel(uploaded_excel, sheet_name=selected_week)
             
             # 혹시나 엑셀의 열 이름에 공백이 섞여 있을까 봐 안전하게 공백 제거
             df_source.columns = df_source.columns.str.strip() 
+            
+            # ★ 핵심 정제 로직: 쉼표(,) 제거 및 문자를 강제로 숫자로 변환
+            for col in ["개인", "기관", "외국인"]:
+                if col in df_source.columns:
+                    df_source[col] = pd.to_numeric(df_source[col].astype(str).str.replace(',', ''), errors='coerce')
+                    
         except Exception as e:
             st.error(f"엑셀 데이터를 읽는 중 오류가 발생했습니다: {e}")
             df_source = pd.DataFrame() # 에러 방지용 빈 데이터프레임
