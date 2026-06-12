@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 # 1. 페이지 레이아웃 및 기본 테마 설정
 st.set_page_config(page_title="ETF Monitoring AI Agent", layout="wide")
 
-# 2. 실시간 데이터 파싱 함수 (400 에러 우회 및 본문 한 줄 요약 정제)
+# 2. 실시간 데이터 파싱 함수
 @st.cache_data(ttl=3600)
 def get_realtime_news(keyword="ETF"):
     url = f"https://news.google.com/rss/search?q={keyword}+when:7d&hl=ko&gl=KR&ceid=KR:ko"
@@ -27,11 +27,9 @@ def get_realtime_news(keyword="ETF"):
             pubDate = item.find('pubDate').text[5:16] if item.find('pubDate') is not None else ""
             source = item.find('source').text if item.find('source') is not None else "Google News"
             
-            # 설명 텍스트에서 순수 본문 요약만 파싱
             desc_html = item.find('description').text if item.find('description') is not None else ""
             desc_text = BeautifulSoup(desc_html, 'html.parser').get_text(separator=' ', strip=True)
             
-            # 요약 텍스트 정제 (언론사 반복 텍스트 제거 및 깔끔한 한 줄 추출)
             clean_text = desc_text.split("...")[0].strip() if "..." in desc_text else desc_text
             if "다." in clean_text:
                 one_line = clean_text.split("다.")[0].strip() + "다."
@@ -107,7 +105,6 @@ with col_week:
     default_idx = 1 if len(available_weeks) > 1 else 0
     selected_week = st.selectbox("주차 (최대 6개월 전까지 선택 가능):", options=available_weeks, index=default_idx)
 
-# ★ 워딩 수정: '주간 거래대금 추이' -> '[주간 거래량 추이]'
 tab_names = [
     "[Weekly Info.]", "[ETF 순매수 등락, 수익률]", "[뉴스, 검색량, 종토방 분석]", 
     "[주간 거래량 추이]", "[진행 이벤트]", "[AI 분석용 프롬프트]", "[ETF 운용 현황]"
@@ -303,7 +300,7 @@ with tabs[1]:
                 st.warning("직전 주차 데이터가 없어 증감률을 비교할 수 없습니다.")
 
 # =========================================================================
-# --- Tab 2: [뉴스, 검색량, 종토방 분석] (새 창 하이퍼링크 + 한 줄 요약 완전 정제) ---
+# --- Tab 2: [뉴스, 검색량, 종토방 분석] (DataLab CSV 연동 완료) ---
 # =========================================================================
 with tabs[2]:
     st.markdown("### 📰 실시간 ETF 마켓 뉴스 <span style='font-size:12px; color:gray;'>(Google News 고속 크롤링)</span>", unsafe_allow_html=True)
@@ -311,7 +308,6 @@ with tabs[2]:
     with st.spinner("최신 뉴스 데이터를 수집하고 있습니다..."):
         df_real_news = get_realtime_news("ETF")
         
-        # 400 Bad Request 에러 방지 및 깔끔한 대시보드형 카드 UI 구현
         if "링크" in df_real_news.columns and df_real_news["링크"].iloc[0] != "":
             for idx, row in df_real_news.iterrows():
                 with st.container(border=True):
@@ -319,7 +315,6 @@ with tabs[2]:
                     with col_meta:
                         st.caption(f"📅 {row['게시일 / 출처']}")
                     with col_content:
-                        # target='_blank' 속성을 주어 Streamlit 클라우드 Iframe 참조 에러(400)를 완벽하게 우회 차단합니다.
                         st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:16px; font-weight:bold; color:#4da6ff; text-decoration:none;'>{row['원본제목']} 🔗</a>", unsafe_allow_html=True)
                         st.markdown(f"<p style='font-size:14px; margin-top:4px; color:#cccccc;'>{row['본문 한 줄 요약']}</p>", unsafe_allow_html=True)
         else:
@@ -330,16 +325,55 @@ with tabs[2]:
     col_wip1, col_wip2 = st.columns(2)
     with col_wip1:
         st.markdown("### 📊 키워드 트렌드 요약 및 검색비율 추이")
-        st.warning("🚧 DataLab CSV 파일 연동 기능 구현 중입니다.")
+        
+        # DataLab CSV 파일 병합 및 시각화 로직
+        if uploaded_csv is not None:
+            try:
+                # 상위 6줄 무시하고 데이터 읽기
+                df_dl = pd.read_csv(uploaded_csv, skiprows=6)
+                
+                # 첫 번째 열을 마스터 '날짜' 기준으로 삼음
+                master_date = df_dl.iloc[:, 0]
+                
+                # 값 컬럼 추출 ('날짜'나 'Unnamed'가 포함되지 않은 실제 종목명 컬럼)
+                value_cols = [col for col in df_dl.columns if '날짜' not in col and 'Unnamed' not in col]
+                
+                # 정리된 DataFrame 조립
+                clean_df = pd.DataFrame({'날짜': master_date})
+                for col in value_cols:
+                    clean_df[col] = df_dl[col]
+                
+                # 날짜 형식 변환
+                clean_df['날짜'] = pd.to_datetime(clean_df['날짜'])
+                
+                # Plotly 시각화를 위해 넓은 데이터를 길게(melt) 변환
+                df_melted = clean_df.melt(id_vars=['날짜'], var_name='종목명', value_name='검색량')
+                
+                # 꺾은선 차트 그리기
+                fig_trend = px.line(
+                    df_melted, 
+                    x='날짜', 
+                    y='검색량', 
+                    color='종목명',
+                    title="선택된 연령군의 ETF 검색 트렌드 (Naver DataLab)",
+                    template="plotly_dark"
+                )
+                fig_trend.update_layout(height=400, margin=dict(l=20, r=20, t=50, b=20), xaxis_title=None, yaxis_title="상대적 검색량")
+                st.plotly_chart(fig_trend, use_container_width=True)
+                
+            except Exception as e:
+                st.error(f"CSV 파일 처리 중 오류가 발생했습니다. 파일 형식을 확인해주세요: {e}")
+        else:
+            st.info("좌측 사이드바에 Naver DataLab CSV 파일을 업로드하시면 트렌드 차트가 나타납니다.")
+            
     with col_wip2:
         st.markdown("### 💬 종목토론방 분석")
         st.warning("🚧 실시간 종목토론방 감성 분석 로직 연동 중입니다.")
 
 # =========================================================================
-# --- Tab 3: [주간 거래량 추이] (워딩 완전 수정 완료) ---
+# --- Tab 3: [주간 거래량 추이] ---
 # =========================================================================
 with tabs[3]:
-    # ★ 워딩 수정: '거래대금' -> '거래량'
     st.markdown("### 📊 선택 ETF 실제 주간 거래량 추이 (최대 12개)")
     
     if uploaded_excel is not None and not df_source.empty and '종목명' in df_source.columns:
@@ -370,7 +404,6 @@ with tabs[3]:
                                 df_weekly = df_hist['Volume'].resample('W').sum().reset_index()
                                 df_weekly.columns = ['주 시작일', '거래량']
                                 
-                                # ★ 차트 내부 타이틀과 라벨도 '거래량'으로 정합성 조절 완료
                                 fig_line = px.line(df_weekly, x='주 시작일', y='거래량', title=f"**{etf_name}** 실제 주간 거래량 추이", markers=True, color_discrete_sequence=['#4da6ff'])
                                 fig_line.update_layout(height=350, template="plotly_dark", margin=dict(l=20, r=20, t=50, b=20), yaxis_title="주간 거래량 (주)", xaxis_title=None)
                                 st.plotly_chart(fig_line, use_container_width=True)
