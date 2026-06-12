@@ -7,9 +7,10 @@ import google.generativeai as genai
 # 1. 페이지 레이아웃 및 기본 테마 설정
 st.set_page_config(page_title="ETF Monitoring AI Agent", layout="wide")
 
-# 2. 안전한 API 키 로드 (Streamlit Secrets 활용)
+# 2. 안전한 API 키 로드 (따옴표나 공백이 섞여도 자동 제거하도록 안전장치 추가)
 if "GEMINI_API_KEY" in st.secrets:
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+    api_key = st.secrets["GEMINI_API_KEY"].strip('\'" ')
+    genai.configure(api_key=api_key)
     model = genai.GenerativeModel('gemini-1.5-flash')
 else:
     model = None
@@ -27,17 +28,13 @@ with st.sidebar:
     st.markdown("##### Naver DataLab CSV 파일 업로드")
     uploaded_csv = st.file_uploader("CSV Upload", type=["csv"], key="csv_main", label_visibility="collapsed")
 
-# 4. 엑셀 시트 동적 파싱 및 주차(Week) 리스트 추출 로직
+# 4. 엑셀 시트 동적 파싱 및 주차(Week) 리스트 추출
 available_weeks = ["5.17~5.23", "5.10~5.16", "5.03~5.09"] # 파일 업로드 전 기본 가상 주차
 
 if uploaded_excel is not None:
-    # 엑셀 파일 객체 생성 및 전체 시트 이름 가져오기
     xls = pd.ExcelFile(uploaded_excel)
-    # '참고사항' 시트를 제외한 나머지 시트 이름만 리스트로 추출
     sheet_names = [sheet for sheet in xls.sheet_names if sheet != "참고사항"]
-    
     if sheet_names:
-        # 최신 주차가 위로 올라오도록 리스트 순서 뒤집기 (선택 사항)
         available_weeks = sheet_names[::-1] 
 
 # 5. 상단 헤더 및 동적 주차 필터
@@ -45,12 +42,7 @@ col_title, col_week = st.columns([3, 1])
 with col_title:
     st.title("ETF Monitoring AI Agent")
 with col_week:
-    # 엑셀이 업로드되면 이 드롭다운 목록이 엑셀 시트 이름들로 자동 변경됨
-    selected_week = st.selectbox(
-        "주차 (최대 6개월 전까지 선택 가능):", 
-        options=available_weeks,
-        index=0
-    )
+    selected_week = st.selectbox("주차 (최대 6개월 전까지 선택 가능):", options=available_weeks, index=0)
 
 # 6. 하위 탭 메뉴 생성
 tab_names = [
@@ -69,7 +61,7 @@ for i in range(1, len(tab_names)):
 with tabs[0]:
     
     # -------------------------------------------------------------------------
-    # PART 1: 지난 주 주요 ISSUE TOP 3 (Gemini API 실시간 연동)
+    # PART 1: 지난 주 주요 ISSUE TOP 3 
     # -------------------------------------------------------------------------
     st.markdown("### 📰 주요 ISSUE TOP 3 <span style='font-size:12px; color:gray;'>(Gemini AI 기반 실시간 스크랩 & 요약)</span>", unsafe_allow_html=True)
     
@@ -81,13 +73,10 @@ with tabs[0]:
                 response = model.generate_content(prompt)
                 return response.text.split('---')
             except Exception as e:
-                return [f"제목: API 연동 오류\n- {str(e)}", "제목: - \n- -", "제목: - \n- -"]
+                # 구글 API 거절(403) 등 에러 발생 시 원인을 명확히 출력
+                return [f"제목: API 연동 실패\n- 에러코드: {str(e)}\n- API 키가 'AIza'로 시작하는지 확인하세요.", "제목: - \n- -", "제목: - \n- -"]
         else:
-            return [
-                "제목: API 키가 입력되지 않았습니다.\n- Streamlit Secrets 설정을 확인해주세요.", 
-                "제목: 임시 데이터 1\n- 내용 없음", 
-                "제목: 임시 데이터 2\n- 내용 없음"
-            ]
+            return ["제목: API 키 미설정\n- Streamlit Secrets 설정을 확인해주세요.", "제목: - \n- -", "제목: - \n- -"]
 
     issues = get_weekly_issues(selected_week)
     
@@ -105,20 +94,23 @@ with tabs[0]:
     st.divider()
 
     # -------------------------------------------------------------------------
-    # PART 2: 데이터 연동 (엑셀 파일 업로드 여부에 따른 분기 처리)
+    # PART 2: 데이터 연동 및 강력한 클렌징 (오류 원인 완벽 제거)
     # -------------------------------------------------------------------------
     if uploaded_excel is not None:
         try:
-            # 사용자가 상단에서 선택한 주차(시트 이름)의 데이터만 쏙 빼서 읽어옴
             df_source = pd.read_excel(uploaded_excel, sheet_name=selected_week)
-            
-            # 혹시나 엑셀의 열 이름에 공백이 섞여 있을까 봐 안전하게 공백 제거
             df_source.columns = df_source.columns.str.strip() 
+            
+            # ★ 핵심 해결 로직: 쉼표, 하이픈(-) 등 불순물을 제거하고 무조건 숫자로 변환
+            for col in ["개인", "기관", "외국인"]:
+                if col in df_source.columns:
+                    clean_data = df_source[col].astype(str).str.replace(',', '', regex=False).str.replace('-', '0', regex=False)
+                    df_source[col] = pd.to_numeric(clean_data, errors='coerce').fillna(0)
+                    
         except Exception as e:
             st.error(f"엑셀 데이터를 읽는 중 오류가 발생했습니다: {e}")
-            df_source = pd.DataFrame() # 에러 방지용 빈 데이터프레임
+            df_source = pd.DataFrame()
     else:
-        # 파일이 없을 때 보여줄 가상 데이터셋
         mock_data = {
             "종목명": ["전체", "TIGER SK하이닉스단일종목레버리지", "KODEX SK하이닉스단일종목레버리지", "TIGER 미국우량테크", "SOL AI반도체TOP2플러스", "KODEX 고배당"],
             "대표테마": ["기타", "레버리지", "레버리지", "빅테크", "AI", "배당"],
@@ -141,7 +133,6 @@ with tabs[0]:
             top_n = st.slider("TOP N개 설정", min_value=5, max_value=50, value=10, step=5, label_visibility="collapsed")
             st.markdown(f"<p style='text-align:right; color:red; font-weight:bold; margin-top:-10px;'>{top_n}</p>", unsafe_allow_html=True)
 
-        # '전체' 및 불필요한 결측치 행 제외 로직
         df_filtered = df_source.dropna(subset=[target_subject]).copy()
         if '종목명' in df_filtered.columns:
             df_filtered = df_filtered[df_filtered["종목명"] != "전체"]
@@ -152,8 +143,7 @@ with tabs[0]:
         with col_table:
             st.dataframe(
                 df_filtered[["종목명", target_subject]] if '종목명' in df_filtered.columns else df_filtered, 
-                use_container_width=True, 
-                height=380
+                use_container_width=True, height=380
             )
             
         with col_chart:
@@ -189,4 +179,4 @@ with tabs[0]:
                 fig_theme.update_layout(height=300, template="plotly_dark")
                 st.plotly_chart(fig_theme, use_container_width=True)
         else:
-            st.info("엑셀 파일에 '대표테마' 데이터가 없거나 형식이 달라 테마 분석을 생략합니다.")
+            st.info("엑셀 파일에 '대표테마' 컬럼이 없어 테마 분석을 생략합니다.")
