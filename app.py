@@ -10,10 +10,9 @@ from datetime import datetime, timedelta
 # 1. 페이지 레이아웃 및 기본 테마 설정
 st.set_page_config(page_title="ETF Monitoring AI Agent", layout="wide")
 
-# 2. 실시간 데이터 파싱 함수 (초고속 RSS 우회 및 최적화)
+# 2. 실시간 데이터 파싱 함수 (뉴스 3줄 요약 + 링크 추가)
 @st.cache_data(ttl=3600)
 def get_realtime_news(keyword="ETF"):
-    # 네이버의 IP 차단을 피하기 위해 빠르고 안정적인 구글 뉴스 RSS 한국어 피드 사용
     url = f"https://news.google.com/rss/search?q={keyword}+when:7d&hl=ko&gl=KR&ceid=KR:ko"
     try:
         res = requests.get(url, timeout=5)
@@ -23,10 +22,25 @@ def get_realtime_news(keyword="ETF"):
             title = item.find('title').text
             pubDate = item.find('pubDate').text[5:16] # 날짜 추출
             source = item.find('source').text
-            news_list.append({"게시일 / 출처": f"{pubDate} / {source}", "제목": title, "핵심 요약": "실시간 뉴스 연동 완료"})
+            link = item.find('link').text # 기사 원본 링크
+            
+            # 구글 뉴스 설명(description)에서 순수 텍스트만 추출
+            desc_html = item.find('description').text
+            desc_text = BeautifulSoup(desc_html, 'html.parser').get_text(separator=' ', strip=True)
+            
+            # "다."를 기준으로 문장을 쪼개어 최대 3개의 불릿 포인트로 생성
+            sentences = [s.strip() + "다." for s in desc_text.split("다.") if len(s.strip()) > 5]
+            bullets = "\n".join([f"• {s}" for s in sentences[:3]]) if sentences else f"• {desc_text}"
+            
+            news_list.append({
+                "게시일 / 출처": f"{pubDate} / {source}", 
+                "제목": title, 
+                "핵심 요약": bullets,
+                "링크": link
+            })
         return pd.DataFrame(news_list)
     except Exception as e:
-        return pd.DataFrame([{"게시일 / 출처": "오류", "제목": "실시간 뉴스를 불러올 수 없습니다.", "핵심 요약": str(e)}])
+        return pd.DataFrame([{"게시일 / 출처": "오류", "제목": "실시간 뉴스를 불러올 수 없습니다.", "핵심 요약": str(e), "링크": ""}])
 
 @st.cache_data(ttl=86400)
 def get_etf_mapping():
@@ -244,7 +258,6 @@ with tabs[1]:
                     all_etfs_scatter = df_merged['종목명'].dropna().tolist()
                     default_selection = all_etfs_scatter[:10] if len(all_etfs_scatter) >= 10 else all_etfs_scatter
                     
-                    # ★ 검색 필터를 먼저 배치
                     selected_scatter_etfs = st.multiselect(
                         "📍 산점도에 표시할 ETF를 검색/선택하세요 (선택된 종목만 실시간 수익률을 고속으로 가져옵니다):", 
                         options=all_etfs_scatter, 
@@ -252,7 +265,6 @@ with tabs[1]:
                         key="scatter_multiselect_tab2"
                     )
                     
-                    # ★ 선택된 종목만 실시간 연동 (수백 개 -> 10개로 연동량 90% 감소, 로딩속도 1초)
                     if selected_scatter_etfs:
                         with st.spinner("선택된 종목의 실시간 수익률을 불러오는 중입니다..."):
                             symbols_mapping = get_etf_mapping()
@@ -280,14 +292,28 @@ with tabs[1]:
                 st.warning("직전 주차 데이터가 없어 증감률을 비교할 수 없습니다.")
 
 # =========================================================================
-# --- Tab 2: [뉴스, 검색량, 종토방 분석] ---
+# --- Tab 2: [뉴스, 검색량, 종토방 분석] (3줄 요약 + 클릭 링크 구현) ---
 # =========================================================================
 with tabs[2]:
     st.markdown("### 📰 실시간 ETF 마켓 뉴스 <span style='font-size:12px; color:gray;'>(Google News 자동 크롤링)</span>", unsafe_allow_html=True)
     
     with st.spinner("최신 뉴스 데이터를 0.1초 만에 수집하고 있습니다..."):
         df_real_news = get_realtime_news("ETF")
-        st.dataframe(df_real_news, use_container_width=True, hide_index=True)
+        
+        # st.dataframe의 column_config를 사용해 링크 열을 클릭 가능하게 렌더링
+        st.dataframe(
+            df_real_news,
+            column_config={
+                "링크": st.column_config.LinkColumn(
+                    "기사 이동", display_text="기사 읽기 🔗"
+                ),
+                "핵심 요약": st.column_config.TextColumn(
+                    "핵심 요약", width="large"
+                )
+            },
+            use_container_width=True,
+            hide_index=True
+        )
     
     st.divider()
 
