@@ -7,81 +7,57 @@ import requests
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 
+# 1. 페이지 레이아웃 및 기본 테마 설정
 st.set_page_config(page_title="ETF Monitoring AI Agent", layout="wide")
 
+# 2. 실시간 데이터 파싱 함수 (기사 본문 3줄 요약 + 하이퍼링크 제목 적용)
 @st.cache_data(ttl=3600)
 def get_realtime_news(keyword="ETF"):
-    url = f"https://finance.naver.com/news/news_search.naver?q={keyword}"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-    }
+    url = f"https://search.naver.com/search.naver?where=news&query={keyword}&sm=tab_opt&sort=1"
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
     
     try:
         res = requests.get(url, headers=headers, timeout=5)
-        res.encoding = 'euc-kr'
         soup = BeautifulSoup(res.text, 'html.parser')
         news_list = []
         
-        news_items = soup.select(".newsList .articleSubject")[:5]
-        summary_items = soup.select(".newsList .articleSummary")[:5]
+        items = soup.find_all("div", class_="news_wrap")[:5]
         
-        for subj, summ in zip(news_items, summary_items):
-            a_tag = subj.find("a")
-            if not a_tag: continue
+        for item in items:
+            tit_tag = item.find("a", class_="news_tit")
+            if not tit_tag: continue
+            title = tit_tag.get("title") or tit_tag.text
+            link = tit_tag.get("href")
             
-            title = a_tag.text.strip()
-            link = "https://finance.naver.com" + a_tag['href']
+            press_tag = item.find("a", class_="info press")
+            source = press_tag.text.replace("언론사 선정", "").strip() if press_tag else "알 수 없음"
             
-            press_tag = summ.find("span", class_="press")
-            wdate_tag = summ.find("span", class_="wdate")
-            press = press_tag.text.strip() if press_tag else "언론사"
-            wdate = wdate_tag.text.strip() if wdate_tag else ""
+            info_tags = item.find_all("span", class_="info")
+            date = info_tags[-1].text if info_tags else ""
             
-            for span in summ.find_all("span"):
-                span.decompose()
-                
-            snippet = summ.text.strip()
+            dsc_tag = item.find("div", class_="news_dsc")
+            snippet = dsc_tag.text.strip() if dsc_tag else ""
             
             sentences = [s.strip() + "다." for s in snippet.split("다.") if len(s.strip()) > 3]
             if not sentences and snippet:
-                sentences = [snippet]
+                sentences = [snippet] 
                 
-            bullets = "\n".join([f"• {s}" for s in sentences[:3]]) if sentences else "• 상세 내용은 링크를 참조하세요."
+            bullets = "\n".join([f"• {s}" for s in sentences[:3]]) if sentences else "• 본문 요약을 제공하지 않는 기사입니다."
             md_title = f"[{title}]({link})"
             
             news_list.append({
-                "게시일 / 출처": f"{wdate} / {press}", 
+                "게시일 / 출처": f"{date} / {source}", 
                 "제목": md_title, 
                 "본문 핵심 요약": bullets
             })
             
         if not news_list:
-            raise Exception("검색 결과가 없습니다.")
+            return pd.DataFrame([{"게시일 / 출처": "-", "제목": "뉴스 검색 결과가 없습니다.", "본문 핵심 요약": "-"}])
             
         return pd.DataFrame(news_list)
         
-    except Exception:
-        try:
-            g_url = f"https://news.google.com/rss/search?q={keyword}+when:7d&hl=ko&gl=KR&ceid=KR:ko"
-            g_res = requests.get(g_url, timeout=5)
-            g_soup = BeautifulSoup(g_res.text, 'xml')
-            g_news_list = []
-            
-            for item in g_soup.find_all('item')[:5]:
-                title = item.find('title').text
-                pubDate = item.find('pubDate').text[5:16]
-                source = item.find('source').text
-                link = item.find('link').text
-                md_title = f"[{title}]({link})"
-                
-                g_news_list.append({
-                    "게시일 / 출처": f"{pubDate} / {source}", 
-                    "제목": md_title, 
-                    "본문 핵심 요약": "• 해당 기사는 본문 요약이 제공되지 않습니다.\n• 제목을 클릭하여 원문 기사를 확인해주세요."
-                })
-            return pd.DataFrame(g_news_list)
-        except:
-            return pd.DataFrame([{"게시일 / 출처": "-", "제목": "뉴스를 불러올 수 없습니다.", "본문 핵심 요약": "-"}])
+    except Exception as e:
+        return pd.DataFrame([{"게시일 / 출처": "오류", "제목": "실시간 뉴스를 불러올 수 없습니다.", "본문 핵심 요약": str(e)}])
 
 @st.cache_data(ttl=86400)
 def get_etf_mapping():
@@ -111,6 +87,7 @@ def get_real_returns(symbols_dict, etf_names):
             returns_dict[name] = 0.0
     return returns_dict
 
+# 3. 사이드바 구성
 with st.sidebar:
     st.markdown("### 📊 데이터 컨트롤 타워")
     st.divider()
@@ -118,6 +95,7 @@ with st.sidebar:
     st.divider()
     uploaded_csv = st.file_uploader("CSV Upload", type=["csv"], key="csv_main", label_visibility="collapsed")
 
+# 4. 엑셀 시트 파싱
 available_weeks = ["5.17~5.23", "5.10~5.16", "5.03~5.09"] 
 if uploaded_excel is not None:
     xls = pd.ExcelFile(uploaded_excel)
@@ -210,7 +188,6 @@ with tabs[0]:
 # =========================================================================
 with tabs[1]:
     st.markdown("### 📈 기간별 ETF 순매수 현황")
-    
     col_start, col_end, col_text, col_slider = st.columns([1.5, 1.5, 2, 3])
     with col_start:
         start_week = st.selectbox("시작 주차:", options=available_weeks[::-1], index=0, key="start_week")
@@ -269,7 +246,6 @@ with tabs[1]:
         st.divider()
         
         st.markdown("### 🎯 주간 수익률 vs. 투자자별 순매수 증감률 산점도 (실시간 데이터 연동)")
-        
         col_subject_tab2_scatter, _ = st.columns([2, 8])
         with col_subject_tab2_scatter:
             subject_tab2_scatter = st.selectbox("분석 주체 선택:", ["개인", "기관", "외국인"], key="subject_tab2_scatter")
@@ -332,7 +308,7 @@ with tabs[1]:
 # --- Tab 2: [뉴스, 검색량, 종토방 분석] ---
 # =========================================================================
 with tabs[2]:
-    st.markdown("### 📰 실시간 ETF 마켓 뉴스 <span style='font-size:12px; color:gray;'>(Naver Finance News 자동 크롤링)</span>", unsafe_allow_html=True)
+    st.markdown("### 📰 실시간 ETF 마켓 뉴스 <span style='font-size:12px; color:gray;'>(Naver News 자동 크롤링)</span>", unsafe_allow_html=True)
     
     with st.spinner("최신 뉴스 데이터를 수집하고 있습니다..."):
         df_real_news = get_realtime_news("ETF")
@@ -340,7 +316,7 @@ with tabs[2]:
         st.dataframe(
             df_real_news,
             column_config={
-                "제목": st.column_config.TextColumn("기사 제목 (클릭 시 이동)", width="medium"),
+                "제목": st.column_config.LinkColumn("기사 제목 (클릭 시 이동)", width="medium"),
                 "본문 핵심 요약": st.column_config.TextColumn("본문 핵심 요약", width="large")
             },
             use_container_width=True,
