@@ -8,34 +8,13 @@ from datetime import datetime, timedelta
 # 1. 페이지 레이아웃 및 기본 테마 설정
 st.set_page_config(page_title="ETF Monitoring AI Agent", layout="wide")
 
-# 2. 안전한 API 키 로드 및 활성화 체크
+# 2. 안전한 API 키 로드
 if "GEMINI_API_KEY" in st.secrets:
     api_key = st.secrets["GEMINI_API_KEY"].strip('\'" ')
     genai.configure(api_key=api_key)
-    has_api_key = True
+    model = genai.GenerativeModel('gemini-1.5-flash')
 else:
-    has_api_key = False
-
-# ★ 404 에러 방지를 위한 자동 모델 폴백 함수
-def generate_content_with_fallback(prompt):
-    if not has_api_key:
-        return None
-        
-    # 가용한 후보 모델 리스트
-    model_candidates = ['gemini-1.5-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-pro', 'gemini-pro']
-    last_error = None
-    
-    for model_name in model_candidates:
-        try:
-            model = genai.GenerativeModel(model_name)
-            response = model.generate_content(prompt)
-            return response.text
-        except Exception as e:
-            last_error = e
-            continue  # 에러 발생 시 다음 모델로 자동 전환
-            
-    # 모든 후보 모델이 실패했을 경우 최종 에러 반환
-    raise last_error
+    model = None
 
 # 3. 사이드바 구성 (파일 업로드)
 with st.sidebar:
@@ -59,7 +38,7 @@ if uploaded_excel is not None:
     if sheet_names:
         available_weeks = sheet_names[::-1] 
 
-# 5. 상단 헤더 및 필터 (기본값: 1주 전)
+# 5. 상단 헤더 및 필터
 col_title, col_week = st.columns([3, 1])
 with col_title:
     st.title("ETF Monitoring AI Agent")
@@ -74,7 +53,7 @@ tab_names = [
 ]
 tabs = st.tabs(tab_names)
 
-# 미완성 탭들만 경고창 표시
+# 미완성 탭들만 경고창 표시 (4번, 6번 탭)
 for i in [4, 6]:
     with tabs[i]:
         st.warning(f"🚧 {tab_names[i]} 탭은 기획안을 바탕으로 순차적으로 구현될 예정입니다.")
@@ -92,20 +71,20 @@ def load_and_clean_excel(file, sheet_name):
     return df
 
 # =========================================================================
-# --- Tab 0: [Weekly Info.] ---
+# --- Tab 0: [Weekly Info.] (첫 번째 탭 가상 데이터 완벽 복구) ---
 # =========================================================================
 with tabs[0]:
     st.markdown("### 📰 주요 ISSUE TOP 3 <span style='font-size:12px; color:gray;'>(Gemini AI 자동 스크랩)</span>", unsafe_allow_html=True)
     
     @st.cache_data(show_spinner="Gemini가 시장 이슈를 분석 중입니다...")
     def get_weekly_issues(week_str):
-        if has_api_key:
+        if model:
             try:
                 prompt = f"{week_str} 주차의 대한민국 ETF 시장, 주식 시장 관련 핵심 뉴스 이슈 3가지 요약해줘. 형식: '제목: [이슈제목]\n- [내용1]\n- [내용2]' (구분자 '---')"
-                text = generate_content_with_fallback(prompt)
-                return text.split('---')
+                response = model.generate_content(prompt)
+                return response.text.split('---')
             except Exception as e:
-                return [f"제목: AI 요약 생성 실패\n- 원인: {str(e)}", "제목: -\n- -", "제목: -\n- -"]
+                return [f"제목: API 연동 에러\n- {str(e)}", "제목: -\n- -", "제목: -\n- -"]
         return ["제목: API 키 미설정\n- 확인 요망", "제목: -\n- -", "제목: -\n- -"]
 
     issues = get_weekly_issues(selected_week)
@@ -128,6 +107,7 @@ with tabs[0]:
         except Exception as e:
             st.error(f"오류: {e}")
     else:
+        # 파일 미업로드 시 표시되는 가상 데이터 복구 완료
         mock_data = {
             "종목명": ["전체", "TIGER SK하이닉스단일종목레버리지", "KODEX SK하이닉스단일종목레버리지", "TIGER 미국우량테크", "SOL AI반도체TOP2플러스", "KODEX 고배당"],
             "대표테마": ["기타", "레버리지", "레버리지", "빅테크", "AI", "배당"],
@@ -173,9 +153,8 @@ with tabs[0]:
                 fig_theme.update_layout(height=300, template="plotly_dark")
                 st.plotly_chart(fig_theme, use_container_width=True)
 
-
 # =========================================================================
-# --- Tab 1: [ETF 순매수 등락, 수익률] ---
+# --- Tab 1: [ETF 순매수 등락, 수익률] (산점도 포함 유지) ---
 # =========================================================================
 with tabs[1]:
     st.markdown("### 📈 기간별 ETF 순매수 현황")
@@ -399,22 +378,24 @@ with tabs[5]:
         st.caption("버튼을 누르면 Gemini AI가 대시보드의 데이터 흐름을 기반으로 마케팅 핵심 인사이트를 요약 도출합니다.")
     with col_ai_btn:
         if st.button("Gemini로 시작하기", use_container_width=True, key="gemini_start_btn"):
-            if has_api_key:
+            if model:
                 with st.spinner("Gemini가 데이터를 분석하여 인사이트를 도출하고 있습니다..."):
                     try:
-                        # 폴백 함수를 통해 분석 시작
+                        data_context = df_scatter.head(15).to_string() if not df_scatter.empty else "기본 가상 데이터"
                         prompt = f"""
                         너는 KODEX 상품기획 및 마케팅을 담당하는 최고 책임자야. 
-                        자금 유입 증감 및 수익률 연동 데이터를 바탕으로 마케팅 관점의 인사이트 보고서를 한글로 작성해줘.
+                        다음 주차의 자금 유입 증감 및 수익률 연동 데이터를 바탕으로 마케팅 관점의 인사이트 보고서를 한글로 작성해줘:
+                        {data_context}
+                        
                         반드시 아래 3가지 제목을 포함하여, 각 섹션을 '///' 기호로 구분해서 출력해줘. (각각 3~4문장 분량)
                         1. Executive Summary
                         2. Signal Interpretation
                         3. Next Month Watchlist
                         """
-                        text = generate_content_with_fallback(prompt)
-                        st.session_state.ai_insights = text.split('///')
+                        response = model.generate_content(prompt)
+                        st.session_state.ai_insights = response.text.split('///')
                     except Exception as e:
-                        st.session_state.ai_insights = [f"AI 연동 에러 발생: {e}"] * 3
+                        st.session_state.ai_insights = [f"API 연동 에러 발생: {e}"] * 3
             else:
                 st.session_state.ai_insights = ["API 키 세팅이 누락되었습니다. Secrets 창을 확인해 주세요."] * 3
 
