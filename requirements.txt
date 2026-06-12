@@ -2,6 +2,8 @@ streamlit
 pandas
 plotly
 openpyxl
-google-generativeai>=0.8.0
-FinanceDataReader
+google-generativeai
+finance-datareader
 beautifulsoup4
+lxml
+requests
