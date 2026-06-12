@@ -2,21 +2,12 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
-import google.generativeai as genai
 from datetime import datetime, timedelta
 
 # 1. 페이지 레이아웃 및 기본 테마 설정
 st.set_page_config(page_title="ETF Monitoring AI Agent", layout="wide")
 
-# 2. 안전한 API 키 로드 및 gemini-1.5-flash 고정
-if "GEMINI_API_KEY" in st.secrets:
-    api_key = st.secrets["GEMINI_API_KEY"].strip('\'" ')
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-1.5-flash')
-else:
-    model = None
-
-# 3. 사이드바 구성 (파일 업로드)
+# 2. 사이드바 구성 (파일 업로드)
 with st.sidebar:
     st.markdown("### 📊 데이터 컨트롤 타워")
     st.divider()
@@ -29,7 +20,7 @@ with st.sidebar:
     st.markdown("##### Naver DataLab CSV 파일 업로드")
     uploaded_csv = st.file_uploader("CSV Upload", type=["csv"], key="csv_main", label_visibility="collapsed")
 
-# 4. 엑셀 시트 파싱 및 주차 리스트 추출
+# 3. 엑셀 시트 파싱 및 주차 리스트 추출
 available_weeks = ["5.17~5.23", "5.10~5.16", "5.03~5.09"] 
 
 if uploaded_excel is not None:
@@ -38,7 +29,7 @@ if uploaded_excel is not None:
     if sheet_names:
         available_weeks = sheet_names[::-1] 
 
-# 5. 상단 헤더 및 필터 (기본값: 1주 전)
+# 4. 상단 헤더 및 필터 (기본값: 1주 전)
 col_title, col_week = st.columns([3, 1])
 with col_title:
     st.title("ETF Monitoring AI Agent")
@@ -46,7 +37,7 @@ with col_week:
     default_idx = 1 if len(available_weeks) > 1 else 0
     selected_week = st.selectbox("주차 (최대 6개월 전까지 선택 가능):", options=available_weeks, index=default_idx)
 
-# 6. 하위 탭 메뉴 생성
+# 5. 하위 탭 메뉴 생성
 tab_names = [
     "[Weekly Info.]", "[ETF 순매수 등락, 수익률]", "[뉴스, 검색량, 종토방 분석]", 
     "[주간 거래대금 추이]", "[진행 이벤트]", "[AI 분석 및 인사이트]", "[ETF 운용 현황]"
@@ -70,35 +61,9 @@ def load_and_clean_excel(file, sheet_name):
     return df
 
 # =========================================================================
-# --- Tab 0: [Weekly Info.] ---
+# --- Tab 0: [Weekly Info.] (뉴스 요약 삭제, 데이터 및 테마 차트 유지) ---
 # =========================================================================
 with tabs[0]:
-    st.markdown("### 📰 주요 ISSUE TOP 3 <span style='font-size:12px; color:gray;'>(Gemini AI 자동 스크랩)</span>", unsafe_allow_html=True)
-    
-    @st.cache_data(show_spinner="Gemini가 시장 이슈를 분석 중입니다...")
-    def get_weekly_issues(week_str):
-        if model:
-            try:
-                prompt = f"{week_str} 주차의 대한민국 ETF 시장, 주식 시장 관련 핵심 뉴스 이슈 3가지 요약해줘. 형식: '제목: [이슈제목]\n- [내용1]\n- [내용2]' (구분자 '---')"
-                response = model.generate_content(prompt)
-                return response.text.split('---')
-            except Exception as e:
-                return [f"제목: API 연동 에러\n- {str(e)}", "제목: -\n- -", "제목: -\n- -"]
-        return ["제목: API 키 미설정\n- 확인 요망", "제목: -\n- -", "제목: -\n- -"]
-
-    issues = get_weekly_issues(selected_week)
-    cols_issue = st.columns(3)
-    for idx, col in enumerate(cols_issue):
-        with col:
-            with st.container(border=True):
-                if idx < len(issues):
-                    lines = issues[idx].strip().split('\n')
-                    title = lines[0].replace("제목:", "").strip() if lines[0].startswith("제목:") else "주요 이슈"
-                    st.markdown(f"**🎯 {title}**")
-                    for line in lines[1:]:
-                        st.markdown(f"<span style='font-size:14px; color:#333;'>{line}</span>", unsafe_allow_html=True)
-    st.divider()
-
     df_source = pd.DataFrame()
     if uploaded_excel is not None:
         try:
@@ -150,6 +115,8 @@ with tabs[0]:
                 fig_theme = px.bar(df_theme, x="대표테마", y=target_subject)
                 fig_theme.update_layout(height=300, template="plotly_dark")
                 st.plotly_chart(fig_theme, use_container_width=True)
+        else:
+            st.info("업로드하신 엑셀 파일에 '대표테마' 열(Column)이 존재하지 않아 테마 분석을 건너뜁니다.")
 
 # =========================================================================
 # --- Tab 1: [ETF 순매수 등락, 수익률] ---
@@ -224,7 +191,6 @@ with tabs[1]:
     st.divider()
     
     st.markdown("### 🎯 주간 수익률 vs. 투자자별 순매수 증감률 산점도")
-    st.caption("선택 주차와 직전 주차를 비교한 순매수 증감률과 수익률의 관계를 4사분면으로 시각화합니다.")
 
     col_subject_tab2_scatter, _ = st.columns([2, 8])
     with col_subject_tab2_scatter:
@@ -257,10 +223,8 @@ with tabs[1]:
                     
                     df_merged['주간 수익률(%)'] = np.round(returns, 2)
                     df_scatter = df_merged.dropna()
-            else:
-                st.warning("선택하신 주차가 가장 오래된 데이터라 직전 주차와 비교할 수 없습니다.")
         except Exception as e:
-            st.error(f"산점도 데이터 계산 중 오류 발생: {e}")
+            st.error(f"데이터 연산 중 오류 발생: {e}")
             
     if df_scatter.empty and uploaded_excel is None:
         mock_scatter = {
@@ -367,59 +331,31 @@ with tabs[3]:
                 st.plotly_chart(fig_line, use_container_width=True)
 
 # =========================================================================
-# --- Tab 5: [AI 분석 및 인사이트] ---
+# --- Tab 5: [AI 분석용 프롬프트 생성기] (수정 완료) ---
 # =========================================================================
 with tabs[5]:
-    col_ai_title, col_ai_btn = st.columns([8, 2])
-    with col_ai_title:
-        st.markdown("### 🧠 AI Analysis & Insights")
-        st.caption("버튼을 누르면 Gemini AI가 대시보드의 데이터 흐름을 기반으로 마케팅 핵심 인사이트를 요약 도출합니다.")
-    with col_ai_btn:
-        if st.button("Gemini로 시작하기", use_container_width=True, key="gemini_start_btn"):
-            if model:
-                with st.spinner("Gemini가 데이터를 분석하여 인사이트를 도출하고 있습니다..."):
-                    try:
-                        data_context = df_scatter.head(15).to_string() if not df_scatter.empty else "기본 가상 데이터"
-                        prompt = f"""
-                        너는 KODEX 상품기획 및 마케팅을 담당하는 최고 책임자야. 
-                        다음 주차의 자금 유입 증감 및 수익률 연동 데이터를 바탕으로 마케팅 관점의 인사이트 보고서를 한글로 작성해줘:
-                        {data_context}
-                        
-                        반드시 아래 3가지 제목을 포함하여, 각 섹션을 '///' 기호로 구분해서 출력해줘. (각각 3~4문장 분량)
-                        1. Executive Summary
-                        2. Signal Interpretation
-                        3. Next Month Watchlist
-                        """
-                        response = model.generate_content(prompt)
-                        st.session_state.ai_insights = response.text.split('///')
-                    except Exception as e:
-                        st.session_state.ai_insights = [f"AI 연동 에러 발생: {e}"] * 3
-            else:
-                st.session_state.ai_insights = ["API 키 세팅이 누락되었습니다. Secrets 창을 확인해 주세요."] * 3
+    st.markdown("### 🧠 AI 분석용 프롬프트 자동 생성기")
+    st.caption("API 연동 오류 스트레스 없이, 대시보드의 최신 데이터를 결합한 최적의 프롬프트를 복사하여 유료 AI(ChatGPT, Claude 등)에 직접 붙여넣어 완벽한 인사이트를 도출하세요.")
 
-    st.divider()
-
-    if "ai_insights" in st.session_state and len(st.session_state.ai_insights) == 3:
-        insights = st.session_state.ai_insights
-        
-        st.markdown("**Executive Summary**")
-        with st.container(border=True):
-            st.markdown(insights[0].replace("1. Executive Summary", "").strip())
-            
-        st.markdown("**Signal Interpretation**")
-        with st.container(border=True):
-            st.markdown(insights[1].replace("2. Signal Interpretation", "").strip())
-            
-        st.markdown("**Next Month Watchlist**")
-        with st.container(border=True):
-            st.markdown(insights[2].replace("3. Next Month Watchlist", "").strip())
+    if not df_scatter.empty:
+        # AI가 읽기 쉽게 핵심 데이터(수익률, 증감률) 상위 20개 추출
+        data_context = df_scatter.head(20).to_string(index=False)
     else:
-        st.markdown("**Executive Summary**")
-        with st.container(border=True):
-            st.markdown("<br><br><br>", unsafe_allow_html=True)
-        st.markdown("**Signal Interpretation**")
-        with st.container(border=True):
-            st.markdown("<br><br><br>", unsafe_allow_html=True)
-        st.markdown("**Next Month Watchlist**")
-        with st.container(border=True):
-            st.markdown("<br><br><br>", unsafe_allow_html=True)
+        data_context = "데이터가 없습니다. 좌측에 엑셀 파일을 업로드해주세요."
+
+    prompt_text = f"""너는 KODEX 상품기획 및 마케팅을 담당하는 최고 책임자(CMO)야.
+다음은 {selected_week} 주차의 주요 ETF 자금 유입(순매수 증감률) 및 주간 수익률 데이터야.
+
+[ETF 데이터]
+{data_context}
+
+이 데이터를 바탕으로 전문가다운 마케팅 인사이트 보고서를 한글로 작성해줘.
+반드시 아래 3가지 제목을 포함해서 논리적이고 깊이 있게 분석해야 해.
+
+1. Executive Summary (시장 자금 흐름의 핵심 요약)
+2. Signal Interpretation (특징적인 수익률/순매수 움직임을 보이는 종목 분석)
+3. Next Month Watchlist (다음 달 마케팅/세일즈 역량을 집중해야 할 ETF 추천 및 명확한 이유)
+"""
+
+    st.code(prompt_text, language="text")
+    st.info("👆 우측 상단의 'Copy' 버튼을 눌러 복사한 뒤, 사용 중이신 AI 모델 대화창에 그대로 붙여넣으세요.")
