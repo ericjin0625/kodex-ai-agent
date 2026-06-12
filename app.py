@@ -53,8 +53,8 @@ tab_names = [
 ]
 tabs = st.tabs(tab_names)
 
-# ★ 5번 탭 구현으로 인해 미완성 경고는 2, 4, 6번만 띄움
-for i in [2, 4, 6]:
+# 개발 대기 중인 탭들 경고창 처리 (산점도가 2번 탭으로 이동했으므로 5번 탭도 미완성 상태로 변경)
+for i in [2, 4, 5, 6]:
     with tabs[i]:
         st.warning(f"🚧 {tab_names[i]} 탭은 기획안을 바탕으로 순차적으로 구현될 예정입니다.")
 
@@ -128,10 +128,30 @@ with tabs[0]:
                 fig_etf.update_layout(yaxis={'categoryorder':'total ascending'}, height=380, template="plotly_dark")
                 st.plotly_chart(fig_etf, use_container_width=True)
 
+        st.divider()
+
+        # ★ 앗차! 제가 지워버렸던 '인기 테마' 그래프 완벽 복구
+        st.markdown("### 🔥 해당 주 인기 테마")
+        if '대표테마' in df_source.columns and '종목명' in df_source.columns:
+            df_theme = df_source[df_source["종목명"] != "전체"].groupby("대표테마")[target_subject].sum().reset_index()
+            df_theme = df_theme.sort_values(by=target_subject, ascending=False)
+
+            col_theme_table, col_theme_chart = st.columns([4, 5])
+            with col_theme_table:
+                st.dataframe(df_theme, use_container_width=True, height=300)
+            with col_theme_chart:
+                fig_theme = px.bar(df_theme, x="대표테마", y=target_subject)
+                fig_theme.update_layout(height=300, template="plotly_dark")
+                st.plotly_chart(fig_theme, use_container_width=True)
+
+
 # =========================================================================
-# --- Tab 1: [ETF 순매수 등락, 수익률] ---
+# --- Tab 1: [ETF 순매수 등락, 수익률] (산점도 추가됨) ---
 # =========================================================================
 with tabs[1]:
+    # -------------------------------------------------------------------------
+    # PART 1: 기간별 ETF 순매수 현황 (막대 차트 2개)
+    # -------------------------------------------------------------------------
     st.markdown("### 📈 기간별 ETF 순매수 현황")
     
     col_start, col_end, col_text, col_slider = st.columns([1.5, 1.5, 2, 3])
@@ -184,6 +204,111 @@ with tabs[1]:
         fig_total.update_layout(yaxis={'categoryorder':'total ascending'}, height=500, template="plotly_dark")
         st.plotly_chart(fig_total, use_container_width=True)
 
+    st.divider()
+
+    col_inv_title, col_inv_drop = st.columns([2, 8])
+    with col_inv_title:
+        st.markdown("#### 투자자별 순매수 금액")
+    with col_inv_drop:
+        inv_type_tab2 = st.selectbox("투자자 선택", ["개인", "기관", "외국인"], label_visibility="collapsed", key="inv_type_tab2")
+        
+    df_inv = df_tab2_combined.sort_values(by=inv_type_tab2, ascending=False).head(top_n_tab2)
+    with st.container(border=True):
+        fig_inv = px.bar(df_inv, x=inv_type_tab2, y="종목명", orientation='h', color_discrete_sequence=['#4da6ff'])
+        fig_inv.update_layout(yaxis={'categoryorder':'total ascending'}, height=500, template="plotly_dark")
+        st.plotly_chart(fig_inv, use_container_width=True)
+
+    st.divider()
+    
+    # -------------------------------------------------------------------------
+    # PART 2: 수익률 vs. 순매수 증감률 산점도 (선택형 필터 추가)
+    # -------------------------------------------------------------------------
+    st.markdown("### 🎯 주간 수익률 vs. 투자자별 순매수 증감률 산점도")
+    st.caption("선택 주차와 직전 주차를 비교한 순매수 증감률과 수익률의 관계를 4사분면으로 시각화합니다.")
+
+    col_subject_tab5, _ = st.columns([2, 8])
+    with col_subject_tab5:
+        subject_tab5 = st.selectbox("분석 주체 선택:", ["개인", "기관", "외국인"], key="subject_tab5")
+
+    df_scatter = pd.DataFrame()
+    if uploaded_excel is not None and len(available_weeks) > 1:
+        try:
+            current_idx = available_weeks.index(selected_week)
+            if current_idx + 1 < len(available_weeks):
+                prev_week = available_weeks[current_idx + 1]
+                
+                df_curr = load_and_clean_excel(uploaded_excel, selected_week)
+                df_prev = load_and_clean_excel(uploaded_excel, prev_week)
+                
+                if '종목명' in df_curr.columns and '종목명' in df_prev.columns:
+                    df_c = df_curr[df_curr['종목명'] != '전체'][['종목명', subject_tab5]].rename(columns={subject_tab5: '이번주'})
+                    df_p = df_prev[df_prev['종목명'] != '전체'][['종목명', subject_tab5]].rename(columns={subject_tab5: '지난주'})
+                    
+                    df_merged = pd.merge(df_c, df_p, on='종목명', how='inner')
+                    df_merged['순매수 증감률(%)'] = np.where(
+                        df_merged['지난주'] != 0,
+                        ((df_merged['이번주'] - df_merged['지난주']) / df_merged['지난주'].abs()) * 100, 0
+                    ).clip(-300, 300)
+                    
+                    returns = []
+                    for name in df_merged['종목명']:
+                        np.random.seed(len(name) * 10) 
+                        returns.append(np.random.uniform(-10.0, 15.0))
+                    
+                    df_merged['주간 수익률(%)'] = np.round(returns, 2)
+                    df_scatter = df_merged.dropna()
+            else:
+                st.warning("선택하신 주차가 가장 오래된 데이터라 직전 주차와 비교할 수 없습니다.")
+        except Exception as e:
+            st.error(f"산점도 데이터 계산 중 오류 발생: {e}")
+            
+    if df_scatter.empty and uploaded_excel is None:
+        mock_scatter = {
+            "종목명": ["KODEX 미국배당커버드콜액티브", "KODEX 코스닥150", "KODEX AI전력핵심설비", "TIGER 미국나스닥100", "HANARO Fn K-반도체", "KODEX 200"],
+            "주간 수익률(%)": [1.5, 5.2, 8.5, 2.5, 14.8, 6.2],
+            "순매수 증감률(%)": [40, 80, 210, -40, -10, -140],
+            "이번주": [1000, 2000, 3000, 4000, 5000, 6000],
+            "지난주": [700, 1100, 900, 6600, 5500, 14000]
+        }
+        df_scatter = pd.DataFrame(mock_scatter)
+
+    # ★ 무제한 다중 선택 필터 UI 추가
+    if not df_scatter.empty:
+        all_etfs_scatter = df_scatter['종목명'].tolist()
+        # 글씨가 뭉개지지 않도록 최초 10개 종목만 기본으로 선택해둠
+        default_selection = all_etfs_scatter[:10] if len(all_etfs_scatter) >= 10 else all_etfs_scatter
+        
+        selected_scatter_etfs = st.multiselect(
+            "📍 산점도에 표시할 ETF를 검색/선택하세요 (원하는 만큼 무제한 선택 가능):", 
+            options=all_etfs_scatter, 
+            default=default_selection,
+            key="scatter_multiselect"
+        )
+        
+        # 선택한 ETF만 필터링해서 그리기
+        if selected_scatter_etfs:
+            df_scatter_filtered = df_scatter[df_scatter['종목명'].isin(selected_scatter_etfs)]
+            
+            fig_scatter = px.scatter(
+                df_scatter_filtered, 
+                x="주간 수익률(%)", y="순매수 증감률(%)",
+                text="종목명", hover_data=["이번주", "지난주"],
+                title=f"**주간 수익률 vs. {subject_tab5} 순매수 증감률**"
+            )
+            
+            fig_scatter.update_traces(
+                textposition='top center',
+                marker=dict(size=10, color='#4da6ff', opacity=0.7),
+                textfont=dict(size=11, color='lightgray')
+            )
+            fig_scatter.add_vline(x=0, line_dash="dash", line_color="gray", opacity=0.5)
+            fig_scatter.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
+
+            fig_scatter.update_layout(height=600, template="plotly_dark", xaxis_title="주간 수익률 (%)", yaxis_title=f"{subject_tab5} 순매수 증감률 (%)")
+            st.plotly_chart(fig_scatter, use_container_width=True)
+        else:
+            st.info("선택된 ETF가 없습니다. 위 검색바에서 종목을 추가해주세요.")
+
 # =========================================================================
 # --- Tab 3: [주간 거래대금 추이] ---
 # =========================================================================
@@ -217,108 +342,3 @@ with tabs[3]:
                 fig_line.update_layout(height=350, template="plotly_dark", margin=dict(l=20, r=20, t=50, b=20), xaxis_title=None)
                 fig_line.update_traces(textposition="top center", text=df_vol['거래대금 (십억 원)'].astype(str))
                 st.plotly_chart(fig_line, use_container_width=True)
-
-# =========================================================================
-# --- Tab 5: [AI 분석 및 인사이트] (슬라이드 6 추가 구현) ---
-# =========================================================================
-with tabs[5]:
-    st.markdown("### 📈 수익률 vs. 투자자별 순매수 증감률 산점도")
-    st.caption("엑셀 데이터의 순매수 증감(선택 주차 vs 직전 주차)과 수익률을 연동하여 4사분면 산점도로 시각화합니다.")
-
-    # 영윤님의 추가 기획 반영: 투자 주체 선택 드롭다운
-    col_subject_tab5, _ = st.columns([2, 8])
-    with col_subject_tab5:
-        subject_tab5 = st.selectbox("분석 주체 선택:", ["개인", "기관", "외국인"], key="subject_tab5")
-
-    st.divider()
-
-    df_scatter = pd.DataFrame()
-    
-    # 엑셀 파일이 있고, 비교할 주차가 2개 이상일 때만 실제 데이터 계산
-    if uploaded_excel is not None and len(available_weeks) > 1:
-        try:
-            current_idx = available_weeks.index(selected_week)
-            # 직전 주차 데이터가 있는지 확인 (리스트는 최신순[0, 1, 2...]이므로 인덱스 + 1이 과거 주차)
-            if current_idx + 1 < len(available_weeks):
-                prev_week = available_weeks[current_idx + 1]
-                
-                df_curr = load_and_clean_excel(uploaded_excel, selected_week)
-                df_prev = load_and_clean_excel(uploaded_excel, prev_week)
-                
-                if '종목명' in df_curr.columns and '종목명' in df_prev.columns:
-                    # '전체' 행을 제외하고 선택한 주체의 금액만 가져오기
-                    df_c = df_curr[df_curr['종목명'] != '전체'][['종목명', subject_tab5]].rename(columns={subject_tab5: '이번주'})
-                    df_p = df_prev[df_prev['종목명'] != '전체'][['종목명', subject_tab5]].rename(columns={subject_tab5: '지난주'})
-                    
-                    df_merged = pd.merge(df_c, df_p, on='종목명', how='inner')
-                    
-                    # 증감률 계산: (이번주 - 지난주) / abs(지난주) * 100
-                    df_merged['순매수 증감률(%)'] = np.where(
-                        df_merged['지난주'] != 0,
-                        ((df_merged['이번주'] - df_merged['지난주']) / df_merged['지난주'].abs()) * 100,
-                        0 # 지난주 순매수가 0원이면 0%로 처리
-                    )
-                    
-                    # 엑셀 아웃라이어 방지 (차트가 찌그러지지 않도록 상하한선 캡 씌우기)
-                    df_merged['순매수 증감률(%)'] = df_merged['순매수 증감률(%)'].clip(-300, 300)
-                    
-                    # 가상 수익률 생성 (-10% ~ +15%) (종목명을 기준으로 일관된 랜덤값 생성)
-                    returns = []
-                    for name in df_merged['종목명']:
-                        np.random.seed(len(name) * 10) 
-                        returns.append(np.random.uniform(-10.0, 15.0))
-                    
-                    df_merged['주간 수익률(%)'] = np.round(returns, 2)
-                    df_scatter = df_merged.dropna()
-            else:
-                st.warning("선택하신 주차가 가장 오래된 데이터라 '직전 주차'와 비교할 수 없습니다. 상단의 주차 필터에서 최신 주차를 선택해주세요.")
-        except Exception as e:
-            st.error(f"산점도 데이터 계산 중 오류 발생: {e}")
-    else:
-        if uploaded_excel is None:
-            st.info("👆 좌측 사이드바에 엑셀 파일을 업로드하시면 산점도가 활성화됩니다.")
-
-    # 파일이 없을 때 보여줄 고퀄리티 가상 데이터
-    if df_scatter.empty and uploaded_excel is None:
-        mock_scatter = {
-            "종목명": ["KODEX 미국배당커버드콜액티브", "KODEX 코스닥150", "KODEX AI전력핵심설비", "TIGER 미국나스닥100", "HANARO Fn K-반도체", "KODEX 200", "TIGER 반도체TOP10"],
-            "주간 수익률(%)": [1.5, 5.2, 8.5, 2.5, 14.8, 6.2, 6.0],
-            "순매수 증감률(%)": [40, 80, 210, -40, -10, -140, -100]
-        }
-        df_scatter = pd.DataFrame(mock_scatter)
-
-    # 산점도 차트 그리기
-    if not df_scatter.empty:
-        fig_scatter = px.scatter(
-            df_scatter, 
-            x="주간 수익률(%)", 
-            y="순매수 증감률(%)",
-            text="종목명", # 점 옆에 종목명 라벨 표시
-            hover_data=["종목명", "이번주", "지난주"], # 마우스 올렸을 때 진짜 금액 표시
-            title=f"**주간 수익률 vs. {subject_tab5} 순매수 증감률**"
-        )
-        
-        # 차트 디테일 설정 (점 색상, 텍스트 위치 등)
-        fig_scatter.update_traces(
-            textposition='top center',
-            marker=dict(size=10, color='#4da6ff', opacity=0.7),
-            textfont=dict(size=10, color='lightgray')
-        )
-        
-        # 사분면을 나누기 위한 '가로, 세로 0점 십자가 점선' 그리기
-        fig_scatter.add_vline(x=0, line_dash="dash", line_color="gray", opacity=0.5)
-        fig_scatter.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
-
-        fig_scatter.update_layout(
-            height=600,
-            template="plotly_dark",
-            xaxis_title="주간 수익률 (%)",
-            yaxis_title=f"{subject_tab5} 순매수 증감률 (%)"
-        )
-        st.plotly_chart(fig_scatter, use_container_width=True)
-        
-    st.divider()
-    
-    # 향후 구현될 Executive Summary 영역 틀만 배치
-    st.markdown("### 🧠 AI Analysis (Executive Summary & Signal)")
-    st.info("이후 기획안(슬라이드 6 하단)에 따라 Gemini API를 활용한 자동 분석 텍스트 생성 기능이 추가될 영역입니다.")
