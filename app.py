@@ -53,7 +53,116 @@ tabs = st.tabs(tab_names)
 
 for i in range(1, len(tab_names)):
     with tabs[i]:
-        st.warning(f"🚧 {tab_names[i]} 탭은 기획안을 바탕으로 순차적으로 구현될 예정입니다.")
+# -------------------------------------------------------------------------
+    # 슬라이드 2: 기간별 순매수 증감 및 순위 
+    # -------------------------------------------------------------------------
+    st.markdown("### 📈 기간별 ETF 순매수 현황")
+    
+    # UI 컨트롤러 배치 (시작 주차, 종료 주차, TOP N 슬라이더)
+    col_start, col_end, col_text, col_slider = st.columns([1.5, 1.5, 2, 3])
+    with col_start:
+        # 과거 데이터가 위로 오도록 리스트 순서 반전
+        start_week = st.selectbox("시작 주차:", options=available_weeks[::-1], index=0, key="start_week")
+    with col_end:
+        end_week = st.selectbox("종료 주차:", options=available_weeks, index=0, key="end_week")
+    with col_text:
+        st.markdown(f"<p style='margin-top: 30px; font-weight: bold;'>부터 &nbsp;&nbsp; {end_week} 까지의</p>", unsafe_allow_html=True)
+    with col_slider:
+        top_n_tab2 = st.slider("TOP N개 ETF 순매수 순위:", min_value=10, max_value=100, value=50, step=10, key="top_n_tab2", label_visibility="collapsed")
+        st.markdown(f"<p style='text-align:right; color:red; font-weight:bold; margin-top:-10px;'>{top_n_tab2}</p>", unsafe_allow_html=True)
+    
+    st.divider()
+
+    # 다중 주차 데이터 병합 로직
+    df_tab2_combined = pd.DataFrame()
+    
+    if uploaded_excel is not None:
+        try:
+            # 선택된 기간 사이의 시트들 찾기 (최신이 0번 인덱스임)
+            start_idx = available_weeks.index(start_week) if start_week in available_weeks else -1
+            end_idx = available_weeks.index(end_week) if end_week in available_weeks else -1
+            
+            # 정상적인 과거->현재 방향인지 체크
+            if start_idx != -1 and end_idx != -1 and start_idx >= end_idx:
+                target_sheets = available_weeks[end_idx:start_idx+1]
+                
+                all_sheets_data = []
+                for sheet in target_sheets:
+                    temp_df = pd.read_excel(uploaded_excel, sheet_name=sheet)
+                    temp_df.columns = temp_df.columns.str.strip()
+                    
+                    # 콤마, 하이픈 제거 및 숫자 변환
+                    for col in ["개인", "기관", "외국인"]:
+                        if col in temp_df.columns:
+                            clean_val = temp_df[col].astype(str).str.replace(',', '', regex=False).str.replace('-', '0', regex=False)
+                            temp_df[col] = pd.to_numeric(clean_val, errors='coerce').fillna(0)
+                    
+                    if '종목명' in temp_df.columns:
+                        temp_df = temp_df[temp_df['종목명'] != '전체'] # 전체(합계) 행 제외
+                        temp_df['전체순매수'] = temp_df.get('개인', 0) + temp_df.get('기관', 0) + temp_df.get('외국인', 0)
+                        all_sheets_data.append(temp_df[['종목명', '전체순매수', '개인', '기관', '외국인']])
+                
+                if all_sheets_data:
+                    # 여러 주차 데이터를 종목명 기준으로 모두 합산
+                    df_tab2_combined = pd.concat(all_sheets_data).groupby('종목명').sum().reset_index()
+            else:
+                st.warning("시작 주차가 종료 주차보다 과거여야 합니다.")
+        except Exception as e:
+            st.error(f"데이터 병합 중 오류 발생: {e}")
+    
+    # 엑셀 파일이 없거나 병합에 실패했을 때 보여줄 가상 데이터 (UI 확인용)
+    if df_tab2_combined.empty:
+        mock_data_tab2 = {
+            "종목명": ["TIGER SK하이닉스단일종목레버리지", "KODEX SK하이닉스단일종목레버리지", "TIGER 미국우량테크", "SOL AI반도체TOP2플러스", "KODEX 삼성전자단일종목레버리지", "TIGER 삼성전자단일종목레버리지", "KODEX 코스닥150레버리지", "KODEX 200"],
+            "전체순매수": [4000000000, 3800000000, 2500000000, 2100000000, 1800000000, 1500000000, 1200000000, 900000000],
+            "개인": [3500000000, 3200000000, 1500000000, 1800000000, 1200000000, 1100000000, 800000000, 400000000],
+            "기관": [200000000, 300000000, 500000000, 200000000, 400000000, 300000000, 200000000, 300000000],
+            "외국인": [300000000, 300000000, 500000000, 100000000, 200000000, 100000000, 200000000, 200000000]
+        }
+        df_tab2_combined = pd.DataFrame(mock_data_tab2)
+
+    # -------------------------------------------------------------------------
+    # 1. 전체 순매수 금액 차트 렌더링
+    # -------------------------------------------------------------------------
+    st.markdown("#### 전체 순매수 금액")
+    df_total = df_tab2_combined.sort_values(by="전체순매수", ascending=False).head(top_n_tab2)
+    
+    with st.container(border=True):
+        fig_total = px.bar(
+            df_total, x="전체순매수", y="종목명", orientation='h',
+            color_discrete_sequence=['#4da6ff'] # 슬라이드와 동일한 파란색 테마
+        )
+        fig_total.update_layout(
+            yaxis={'categoryorder':'total ascending'}, 
+            height=500, template="plotly_dark",
+            xaxis_title="change", yaxis_title=None
+        )
+        st.plotly_chart(fig_total, use_container_width=True)
+        
+    st.divider()
+
+    # -------------------------------------------------------------------------
+    # 2. 투자자별 순매수 금액 차트 렌더링
+    # -------------------------------------------------------------------------
+    col_inv_title, col_inv_drop = st.columns([2, 8])
+    with col_inv_title:
+        st.markdown("#### 투자자별 순매수 금액")
+    with col_inv_drop:
+        inv_type_tab2 = st.selectbox("투자자 선택", ["개인", "기관", "외국인"], label_visibility="collapsed", key="inv_type_tab2")
+        
+    df_inv = df_tab2_combined.sort_values(by=inv_type_tab2, ascending=False).head(top_n_tab2)
+    
+    with st.container(border=True):
+        fig_inv = px.bar(
+            df_inv, x=inv_type_tab2, y="종목명", orientation='h',
+            color_discrete_sequence=['#4da6ff']
+        )
+        fig_inv.update_layout(
+            yaxis={'categoryorder':'total ascending'}, 
+            height=500, template="plotly_dark",
+            xaxis_title="change", yaxis_title=None
+        )
+        st.plotly_chart(fig_inv, use_container_width=True)
 
 # =========================================================================
 # --- Tab 0: [Weekly Info.] ---
