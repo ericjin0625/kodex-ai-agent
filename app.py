@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np  # ★ 이 필수 코드가 빠져서 에러가 났던 거야. 복구 완료!
 import plotly.express as px
 import FinanceDataReader as fdr
 import requests
@@ -9,7 +10,7 @@ from datetime import datetime, timedelta
 # 1. 페이지 레이아웃 및 기본 테마 설정
 st.set_page_config(page_title="ETF Monitoring AI Agent", layout="wide")
 
-# 2. 실시간 데이터 파싱 함수 (가짜 데이터 대체용)
+# 2. 실시간 데이터 파싱 함수
 @st.cache_data(ttl=3600)
 def get_realtime_news(keyword="ETF"):
     url = f"https://search.naver.com/search.naver?where=news&query={keyword}&sm=tab_opt&sort=1"
@@ -31,12 +32,10 @@ def get_realtime_news(keyword="ETF"):
 
 @st.cache_data(ttl=86400)
 def get_etf_mapping():
-    # KRX ETF 전체 목록을 가져와 이름과 종목코드(Symbol) 매핑
     df = fdr.StockListing('ETF/KR')
     return dict(zip(df['Name'], df['Symbol']))
 
 def get_real_returns(symbols_dict, etf_names):
-    # 선택된 ETF들의 최근 2주간 가격을 기반으로 실제 주간 수익률 계산
     end_date = datetime.today()
     start_date = end_date - timedelta(days=14)
     returns_dict = {}
@@ -47,7 +46,6 @@ def get_real_returns(symbols_dict, etf_names):
             try:
                 df = fdr.DataReader(symbol, start_date, end_date)
                 if len(df) >= 5:
-                    # 최근 종가와 5영업일(약 1주일) 전 종가 비교
                     current_price = df['Close'].iloc[-1]
                     past_price = df['Close'].iloc[-5]
                     yield_pct = ((current_price - past_price) / past_price) * 100
@@ -105,8 +103,11 @@ def load_and_clean_excel(file, sheet_name):
             df[col] = pd.to_numeric(clean_val, errors='coerce').fillna(0)
     return df
 
+# 전역 변수로 초기화 (에러 방지)
+df_scatter = pd.DataFrame()
+
 # =========================================================================
-# --- Tab 0: [Weekly Info.] (정량적 데이터만 유지, 이슈 요약은 삭제) ---
+# --- Tab 0: [Weekly Info.] ---
 # =========================================================================
 with tabs[0]:
     df_source = pd.DataFrame()
@@ -157,7 +158,7 @@ with tabs[0]:
         st.info("좌측 사이드바에 엑셀 데이터를 업로드해주세요.")
 
 # =========================================================================
-# --- Tab 1: [ETF 순매수 등락, 수익률] (실시간 수익률 연동 산점도) ---
+# --- Tab 1: [ETF 순매수 등락, 수익률] ---
 # =========================================================================
 with tabs[1]:
     st.markdown("### 📈 기간별 ETF 순매수 현황")
@@ -219,7 +220,6 @@ with tabs[1]:
 
         st.divider()
         
-        # --- 실제 수익률 반영 산점도 ---
         st.markdown("### 🎯 주간 수익률 vs. 투자자별 순매수 증감률 산점도 (실시간 데이터 연동)")
         
         col_subject_tab2_scatter, _ = st.columns([2, 8])
@@ -227,7 +227,7 @@ with tabs[1]:
             subject_tab2_scatter = st.selectbox("분석 주체 선택:", ["개인", "기관", "외국인"], key="subject_tab2_scatter")
 
         if len(available_weeks) > 1:
-            with st.spinner("KRX 실시간 주식 데이터를 연동하여 실제 수익률을 계산 중입니다... (약 10초 소요)"):
+            with st.spinner("KRX 실시간 주식 데이터를 연동하여 실제 수익률을 계산 중입니다... (데이터 양에 따라 10초 이상 소요될 수 있습니다)"):
                 current_idx = available_weeks.index(selected_week)
                 if current_idx + 1 < len(available_weeks):
                     prev_week = available_weeks[current_idx + 1]
@@ -245,7 +245,6 @@ with tabs[1]:
                             ((df_merged['이번주'] - df_merged['지난주']) / df_merged['지난주'].abs()) * 100, 0
                         ).clip(-300, 300)
                         
-                        # ★ 가짜 랜덤 데이터 제거 및 실제 데이터 삽입
                         symbols_mapping = get_etf_mapping()
                         real_returns = get_real_returns(symbols_mapping, df_merged['종목명'].tolist())
                         df_merged['주간 수익률(%)'] = df_merged['종목명'].map(real_returns)
@@ -283,7 +282,7 @@ with tabs[1]:
                     st.warning("직전 주차 데이터가 없어 증감률을 비교할 수 없습니다.")
 
 # =========================================================================
-# --- Tab 2: [뉴스, 검색량, 종토방 분석] (실시간 네이버 뉴스 연동) ---
+# --- Tab 2: [뉴스, 검색량, 종토방 분석] ---
 # =========================================================================
 with tabs[2]:
     st.markdown("### 📰 실시간 ETF 마켓 뉴스 <span style='font-size:12px; color:gray;'>(Naver News 자동 크롤링)</span>", unsafe_allow_html=True)
@@ -303,7 +302,7 @@ with tabs[2]:
         st.warning("🚧 실시간 종목토론방 감성 분석 로직 연동 중입니다.")
 
 # =========================================================================
-# --- Tab 3: [주간 거래대금 추이] (실제 KRX 거래대금 연동) ---
+# --- Tab 3: [주간 거래대금 추이] ---
 # =========================================================================
 with tabs[3]:
     st.markdown("### 📊 선택 ETF 실제 주간 거래대금 추이 (최대 12개)")
@@ -325,7 +324,7 @@ with tabs[3]:
                 cols = st.columns(2)
                 symbols_mapping = get_etf_mapping()
                 end_date = datetime.today()
-                start_date = end_date - timedelta(weeks=8) # 최근 8주 데이터
+                start_date = end_date - timedelta(weeks=8) 
                 
                 for i, etf_name in enumerate(selected_etfs):
                     with cols[i % 2]:
@@ -333,7 +332,6 @@ with tabs[3]:
                         if symbol:
                             try:
                                 df_hist = fdr.DataReader(symbol, start_date, end_date)
-                                # 주 단위(W)로 거래량(Volume) 혹은 거래대금 합산 처리
                                 df_weekly = df_hist['Volume'].resample('W').sum().reset_index()
                                 df_weekly.columns = ['주 시작일', '거래량']
                                 
@@ -348,15 +346,14 @@ with tabs[3]:
         st.info("좌측 사이드바에 데이터를 업로드해주세요.")
 
 # =========================================================================
-# --- Tab 5: [AI 분석용 프롬프트 생성기] (에러 차단용 복붙 코드) ---
+# --- Tab 5: [AI 분석용 프롬프트 생성기] ---
 # =========================================================================
 with tabs[5]:
     st.markdown("### 🧠 AI 분석용 프롬프트 자동 생성기")
     st.caption("실시간으로 계산된 완벽한 데이터를 복사하여, 사용 중인 유료 AI(ChatGPT, Claude 등)에 직접 붙여넣어 완벽한 인사이트를 도출하세요.")
 
     data_context = "데이터가 생성되지 않았습니다. [ETF 순매수 등락, 수익률] 탭에서 산점도를 먼저 확인해주세요."
-    if 'df_scatter' in locals() and not df_scatter.empty:
-        # AI가 읽기 쉽도록 상위 20개 종목 데이터만 추출
+    if not df_scatter.empty:
         data_context = df_scatter.sort_values(by='주간 수익률(%)', ascending=False).head(20).to_string(index=False)
 
     prompt_text = f"""너는 KODEX 상품기획 및 마케팅을 담당하는 최고 책임자(CMO)야.
