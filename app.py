@@ -10,37 +10,63 @@ from datetime import datetime, timedelta
 # 1. 페이지 레이아웃 및 기본 테마 설정
 st.set_page_config(page_title="ETF Monitoring AI Agent", layout="wide")
 
-# 2. 실시간 데이터 파싱 함수 (뉴스 3줄 요약 + 링크 추가)
+# 2. 실시간 데이터 파싱 함수 (기사 본문 3줄 요약 + 하이퍼링크 제목 적용)
 @st.cache_data(ttl=3600)
 def get_realtime_news(keyword="ETF"):
-    url = f"https://news.google.com/rss/search?q={keyword}+when:7d&hl=ko&gl=KR&ceid=KR:ko"
+    # 네이버 뉴스 검색을 통해 실제 '본문 미리보기(Snippet)'를 가져옵니다.
+    url = f"https://search.naver.com/search.naver?where=news&query={keyword}&sm=tab_opt&sort=1"
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"}
+    
     try:
-        res = requests.get(url, timeout=5)
-        soup = BeautifulSoup(res.text, 'xml')
+        res = requests.get(url, headers=headers, timeout=5)
+        soup = BeautifulSoup(res.text, 'html.parser')
         news_list = []
-        for item in soup.find_all('item')[:5]:
-            title = item.find('title').text
-            pubDate = item.find('pubDate').text[5:16] # 날짜 추출
-            source = item.find('source').text
-            link = item.find('link').text # 기사 원본 링크
+        
+        # 뉴스 컨테이너 5개 추출
+        items = soup.find_all("div", class_="news_wrap")[:5]
+        
+        for item in items:
+            # 제목 & 링크 추출
+            tit_tag = item.find("a", class_="news_tit")
+            if not tit_tag: continue
+            title = tit_tag.get("title") or tit_tag.text
+            link = tit_tag.get("href")
             
-            # 구글 뉴스 설명(description)에서 순수 텍스트만 추출
-            desc_html = item.find('description').text
-            desc_text = BeautifulSoup(desc_html, 'html.parser').get_text(separator=' ', strip=True)
+            # 출처 (언론사) 추출
+            press_tag = item.find("a", class_="info press")
+            source = press_tag.text.replace("언론사 선정", "").strip() if press_tag else "알 수 없음"
             
-            # "다."를 기준으로 문장을 쪼개어 최대 3개의 불릿 포인트로 생성
-            sentences = [s.strip() + "다." for s in desc_text.split("다.") if len(s.strip()) > 5]
-            bullets = "\n".join([f"• {s}" for s in sentences[:3]]) if sentences else f"• {desc_text}"
+            # 날짜 추출
+            info_tags = item.find_all("span", class_="info")
+            date = info_tags[-1].text if info_tags else ""
+            
+            # 본문 요약 텍스트 추출
+            dsc_tag = item.find("div", class_="news_dsc")
+            snippet = dsc_tag.text.strip() if dsc_tag else ""
+            
+            # '다.'를 기준으로 문장을 쪼개서 최대 3개의 불릿 포인트(•)로 생성
+            sentences = [s.strip() + "다." for s in snippet.split("다.") if len(s.strip()) > 3]
+            if not sentences and snippet:
+                sentences = [snippet]  # '다.'로 안 끝나는 기사 예외 처리
+                
+            bullets = "\n".join([f"• {s}" for s in sentences[:3]]) if sentences else "• 본문 요약을 제공하지 않는 기사입니다."
+            
+            # 기사 제목을 마크다운 하이퍼링크 형식으로 변환 [텍스트](URL)
+            md_title = f"[{title}]({link})"
             
             news_list.append({
-                "게시일 / 출처": f"{pubDate} / {source}", 
-                "제목": title, 
-                "핵심 요약": bullets,
-                "링크": link
+                "게시일 / 출처": f"{date} / {source}", 
+                "제목": md_title, 
+                "본문 핵심 요약": bullets
             })
+            
+        if not news_list:
+            return pd.DataFrame([{"게시일 / 출처": "-", "제목": "뉴스 검색 결과가 없습니다.", "본문 핵심 요약": "-"}])
+            
         return pd.DataFrame(news_list)
+        
     except Exception as e:
-        return pd.DataFrame([{"게시일 / 출처": "오류", "제목": "실시간 뉴스를 불러올 수 없습니다.", "핵심 요약": str(e), "링크": ""}])
+        return pd.DataFrame([{"게시일 / 출처": "오류", "제목": "실시간 뉴스를 불러올 수 없습니다.", "본문 핵심 요약": str(e)}])
 
 @st.cache_data(ttl=86400)
 def get_etf_mapping():
@@ -292,24 +318,20 @@ with tabs[1]:
                 st.warning("직전 주차 데이터가 없어 증감률을 비교할 수 없습니다.")
 
 # =========================================================================
-# --- Tab 2: [뉴스, 검색량, 종토방 분석] (3줄 요약 + 클릭 링크 구현) ---
+# --- Tab 2: [뉴스, 검색량, 종토방 분석] ---
 # =========================================================================
 with tabs[2]:
-    st.markdown("### 📰 실시간 ETF 마켓 뉴스 <span style='font-size:12px; color:gray;'>(Google News 자동 크롤링)</span>", unsafe_allow_html=True)
+    st.markdown("### 📰 실시간 ETF 마켓 뉴스 <span style='font-size:12px; color:gray;'>(Naver News 자동 크롤링)</span>", unsafe_allow_html=True)
     
-    with st.spinner("최신 뉴스 데이터를 0.1초 만에 수집하고 있습니다..."):
+    with st.spinner("최신 뉴스 데이터를 수집하고 있습니다..."):
         df_real_news = get_realtime_news("ETF")
         
-        # st.dataframe의 column_config를 사용해 링크 열을 클릭 가능하게 렌더링
+        # 제목을 클릭 가능한 하이퍼링크로 설정하고, 본문 요약은 넓게 표시
         st.dataframe(
             df_real_news,
             column_config={
-                "링크": st.column_config.LinkColumn(
-                    "기사 이동", display_text="기사 읽기 🔗"
-                ),
-                "핵심 요약": st.column_config.TextColumn(
-                    "핵심 요약", width="large"
-                )
+                "제목": st.column_config.TextColumn("기사 제목 (클릭 시 이동)", width="medium"),
+                "본문 핵심 요약": st.column_config.TextColumn("본문 핵심 요약", width="large")
             },
             use_container_width=True,
             hide_index=True
