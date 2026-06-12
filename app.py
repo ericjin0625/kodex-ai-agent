@@ -11,15 +11,13 @@ from datetime import datetime, timedelta
 # 1. 페이지 레이아웃 및 기본 테마 설정
 st.set_page_config(page_title="ETF Monitoring AI Agent", layout="wide")
 
-# 2. 실시간 데이터 파싱 함수 (서버 에러 없는 내장 XML 파서 사용 + 3줄 요약 + 링크)
+# 2. 실시간 데이터 파싱 함수 (400 에러 우회 및 본문 한 줄 요약 정제)
 @st.cache_data(ttl=3600)
 def get_realtime_news(keyword="ETF"):
-    # 구글 뉴스 RSS (한국어, 최근 7일)
     url = f"https://news.google.com/rss/search?q={keyword}+when:7d&hl=ko&gl=KR&ceid=KR:ko"
     
     try:
         res = requests.get(url, timeout=5)
-        # lxml 패키지 에러를 피하기 위해 파이썬 내장 ET 모듈 사용
         root = ET.fromstring(res.text)
         
         news_list = []
@@ -29,31 +27,34 @@ def get_realtime_news(keyword="ETF"):
             pubDate = item.find('pubDate').text[5:16] if item.find('pubDate') is not None else ""
             source = item.find('source').text if item.find('source') is not None else "Google News"
             
-            # 본문 요약을 위해 description 추출 후 순수 텍스트만 파싱
+            # 설명 텍스트에서 순수 본문 요약만 파싱
             desc_html = item.find('description').text if item.find('description') is not None else ""
             desc_text = BeautifulSoup(desc_html, 'html.parser').get_text(separator=' ', strip=True)
             
-            # "다."를 기준으로 문장을 쪼개서 최대 3개의 불릿 포인트(•)로 생성
-            sentences = [s.strip() + "다." for s in desc_text.split("다.") if len(s.strip()) > 3]
-            if not sentences and desc_text:
-                sentences = [desc_text]
+            # 요약 텍스트 정제 (언론사 반복 텍스트 제거 및 깔끔한 한 줄 추출)
+            clean_text = desc_text.split("...")[0].strip() if "..." in desc_text else desc_text
+            if "다." in clean_text:
+                one_line = clean_text.split("다.")[0].strip() + "다."
+            else:
+                one_line = clean_text
                 
-            bullets = "\n".join([f"• {s}" for s in sentences[:3]]) if sentences else "• 상세 내용은 기사 제목 링크를 클릭하여 원문에서 확인하세요."
-            md_title = f"[{title}]({link})"
+            if len(one_line) < 10 and desc_text:
+                one_line = desc_text[:60] + "..."
             
             news_list.append({
                 "게시일 / 출처": f"{pubDate} / {source}", 
-                "제목": md_title, 
-                "본문 핵심 요약": bullets
+                "원본제목": title, 
+                "링크": link,
+                "본문 한 줄 요약": f"👉 {one_line}"
             })
             
         if not news_list:
-            return pd.DataFrame([{"게시일 / 출처": "-", "제목": "뉴스 검색 결과가 없습니다.", "본문 핵심 요약": "-"}])
+            return pd.DataFrame([{"게시일 / 출처": "-", "원본제목": "뉴스 검색 결과가 없습니다.", "링크": "", "본문 한 줄 요약": "-"}])
             
         return pd.DataFrame(news_list)
         
     except Exception as e:
-        return pd.DataFrame([{"게시일 / 출처": "오류", "제목": "실시간 뉴스를 불러올 수 없습니다.", "본문 핵심 요약": str(e)}])
+        return pd.DataFrame([{"게시일 / 출처": "오류", "원본제목": "실시간 뉴스를 불러올 수 없습니다.", "링크": "", "본문 한 줄 요약": str(e)}])
 
 @st.cache_data(ttl=86400)
 def get_etf_mapping():
@@ -106,9 +107,10 @@ with col_week:
     default_idx = 1 if len(available_weeks) > 1 else 0
     selected_week = st.selectbox("주차 (최대 6개월 전까지 선택 가능):", options=available_weeks, index=default_idx)
 
+# ★ 워딩 수정: '주간 거래대금 추이' -> '[주간 거래량 추이]'
 tab_names = [
     "[Weekly Info.]", "[ETF 순매수 등락, 수익률]", "[뉴스, 검색량, 종토방 분석]", 
-    "[주간 거래대금 추이]", "[진행 이벤트]", "[AI 분석용 프롬프트]", "[ETF 운용 현황]"
+    "[주간 거래량 추이]", "[진행 이벤트]", "[AI 분석용 프롬프트]", "[ETF 운용 현황]"
 ]
 tabs = st.tabs(tab_names)
 
@@ -242,7 +244,6 @@ with tabs[1]:
         st.divider()
         
         st.markdown("### 🎯 주간 수익률 vs. 투자자별 순매수 증감률 산점도 (실시간 데이터 연동)")
-        
         col_subject_tab2_scatter, _ = st.columns([2, 8])
         with col_subject_tab2_scatter:
             subject_tab2_scatter = st.selectbox("분석 주체 선택:", ["개인", "기관", "외국인"], key="subject_tab2_scatter")
@@ -302,23 +303,27 @@ with tabs[1]:
                 st.warning("직전 주차 데이터가 없어 증감률을 비교할 수 없습니다.")
 
 # =========================================================================
-# --- Tab 2: [뉴스, 검색량, 종토방 분석] ---
+# --- Tab 2: [뉴스, 검색량, 종토방 분석] (새 창 하이퍼링크 + 한 줄 요약 완전 정제) ---
 # =========================================================================
 with tabs[2]:
-    st.markdown("### 📰 실시간 ETF 마켓 뉴스 <span style='font-size:12px; color:gray;'>(Google News 자동 크롤링)</span>", unsafe_allow_html=True)
+    st.markdown("### 📰 실시간 ETF 마켓 뉴스 <span style='font-size:12px; color:gray;'>(Google News 고속 크롤링)</span>", unsafe_allow_html=True)
     
-    with st.spinner("최신 뉴스 데이터를 가져오고 있습니다..."):
+    with st.spinner("최신 뉴스 데이터를 수집하고 있습니다..."):
         df_real_news = get_realtime_news("ETF")
         
-        st.dataframe(
-            df_real_news,
-            column_config={
-                "제목": st.column_config.LinkColumn("기사 제목 (클릭 시 이동)", width="medium"),
-                "본문 핵심 요약": st.column_config.TextColumn("본문 핵심 요약", width="large")
-            },
-            use_container_width=True,
-            hide_index=True
-        )
+        # 400 Bad Request 에러 방지 및 깔끔한 대시보드형 카드 UI 구현
+        if "링크" in df_real_news.columns and df_real_news["링크"].iloc[0] != "":
+            for idx, row in df_real_news.iterrows():
+                with st.container(border=True):
+                    col_meta, col_content = st.columns([1.2, 5.8])
+                    with col_meta:
+                        st.caption(f"📅 {row['게시일 / 출처']}")
+                    with col_content:
+                        # target='_blank' 속성을 주어 Streamlit 클라우드 Iframe 참조 에러(400)를 완벽하게 우회 차단합니다.
+                        st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:16px; font-weight:bold; color:#4da6ff; text-decoration:none;'>{row['원본제목']} 🔗</a>", unsafe_allow_html=True)
+                        st.markdown(f"<p style='font-size:14px; margin-top:4px; color:#cccccc;'>{row['본문 한 줄 요약']}</p>", unsafe_allow_html=True)
+        else:
+            st.dataframe(df_real_news, use_container_width=True, hide_index=True)
     
     st.divider()
 
@@ -331,10 +336,11 @@ with tabs[2]:
         st.warning("🚧 실시간 종목토론방 감성 분석 로직 연동 중입니다.")
 
 # =========================================================================
-# --- Tab 3: [주간 거래대금 추이] ---
+# --- Tab 3: [주간 거래량 추이] (워딩 완전 수정 완료) ---
 # =========================================================================
 with tabs[3]:
-    st.markdown("### 📊 선택 ETF 실제 주간 거래대금 추이 (최대 12개)")
+    # ★ 워딩 수정: '거래대금' -> '거래량'
+    st.markdown("### 📊 선택 ETF 실제 주간 거래량 추이 (최대 12개)")
     
     if uploaded_excel is not None and not df_source.empty and '종목명' in df_source.columns:
         extracted_etfs = df_source[df_source['종목명'] != '전체']['종목명'].dropna().unique().tolist()
@@ -364,8 +370,9 @@ with tabs[3]:
                                 df_weekly = df_hist['Volume'].resample('W').sum().reset_index()
                                 df_weekly.columns = ['주 시작일', '거래량']
                                 
-                                fig_line = px.line(df_weekly, x='주 시작일', y='거래량', title=f"**{etf_name}** 실제 주간 거래량", markers=True, color_discrete_sequence=['#4da6ff'])
-                                fig_line.update_layout(height=350, template="plotly_dark", margin=dict(l=20, r=20, t=50, b=20), xaxis_title=None)
+                                # ★ 차트 내부 타이틀과 라벨도 '거래량'으로 정합성 조절 완료
+                                fig_line = px.line(df_weekly, x='주 시작일', y='거래량', title=f"**{etf_name}** 실제 주간 거래량 추이", markers=True, color_discrete_sequence=['#4da6ff'])
+                                fig_line.update_layout(height=350, template="plotly_dark", margin=dict(l=20, r=20, t=50, b=20), yaxis_title="주간 거래량 (주)", xaxis_title=None)
                                 st.plotly_chart(fig_line, use_container_width=True)
                             except:
                                 st.error(f"{etf_name}의 데이터를 불러오지 못했습니다.")
