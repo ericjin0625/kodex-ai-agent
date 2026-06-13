@@ -459,7 +459,7 @@ with tabs[5]:
     
     with st.spinner("KRX 전체 상장 ETF 데이터를 분석 중입니다... (약 5~10초 소요)"):
         try:
-            # 1. KRX 상장 ETF 전체 목록 불러오기 (MarCap 포함)
+            # 1. KRX 상장 ETF 전체 목록 불러오기
             df_all_etf = fdr.StockListing('ETF/KR')
             
             # 2. 종목명 첫 단어를 '브랜드'로 추출
@@ -472,10 +472,10 @@ with tabs[5]:
             # 4. AI 자동 테마 분류기 적용
             df_top_brands['분류_테마'] = df_top_brands['Name'].apply(assign_auto_theme)
             
-            # ★ 5. AUM(순자산총액) 억원 단위로 환산
-            df_top_brands['AUM(억원)'] = df_top_brands['MarCap'] / 100000000
+            # ★ 5. AUM(순자산총액) 데이터 적용 (오류 원인 해결: ETF/KR 데이터의 MarCap은 이미 억원 단위임)
+            df_top_brands['AUM(억원)'] = df_top_brands['MarCap'].fillna(0)
             
-            # ★ 6. 브랜드 vs 테마 교차 매트릭스 생성 (값: AUM 합계)
+            # 6. 브랜드 vs 테마 교차 매트릭스 생성 (값: AUM 합계)
             pivot_df = pd.pivot_table(
                 df_top_brands,
                 values='AUM(억원)',
@@ -485,7 +485,7 @@ with tabs[5]:
                 fill_value=0
             )
             
-            # ★ 7. 열 순서를 KODEX, TIGER 우선으로 강제 고정
+            # 7. 열 순서를 KODEX, TIGER 우선으로 강제 고정
             ordered_cols = [col for col in target_brands if col in pivot_df.columns]
             pivot_df = pivot_df[ordered_cols]
             
