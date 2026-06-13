@@ -87,7 +87,6 @@ with st.sidebar:
     st.divider()
     uploaded_excel = st.file_uploader("ETF 순매수 엑셀 업로드", type=["xlsx", "xls"], key="excel_main")
     st.divider()
-    # 확장자 csv, xlsx, xls 모두 허용
     uploaded_dl = st.file_uploader("DataLab 데이터 업로드 (CSV/Excel)", type=["csv", "xlsx", "xls"], key="dl_main")
 
 # 4. 엑셀 시트 파싱
@@ -129,7 +128,7 @@ df_scatter = pd.DataFrame()
 st.session_state['dl_summary'] = "DataLab 데이터가 업로드되지 않았습니다."
 
 # =========================================================================
-# --- Tab 0: [Weekly Info.] ---
+# --- Tab 0: [Weekly Info.] (트리맵 적용 완료) ---
 # =========================================================================
 with tabs[0]:
     df_source = pd.DataFrame()
@@ -162,17 +161,27 @@ with tabs[0]:
 
         st.divider()
 
-        st.markdown("### 🔥 해당 주 인기 테마")
+        st.markdown("### 🔥 해당 주 인기 테마 (순매수 유입 기준)")
         if '대표테마' in df_source.columns and '종목명' in df_source.columns:
-            df_theme = df_source[df_source["종목명"] != "전체"].groupby("대표테마")[target_subject].sum().reset_index()
+            # 1. 면적을 그리기 위해 순매수가 양수(>0)인 '진짜 인기 테마'만 필터링합니다.
+            df_theme_pos = df_source[(df_source["종목명"] != "전체") & (df_source[target_subject] > 0)]
+            df_theme = df_theme_pos.groupby("대표테마")[target_subject].sum().reset_index()
             df_theme = df_theme.sort_values(by=target_subject, ascending=False)
 
-            col_theme_table, col_theme_chart = st.columns([4, 5])
+            col_theme_table, col_theme_chart = st.columns([3, 7])
             with col_theme_table:
-                st.dataframe(df_theme, use_container_width=True, height=300)
+                st.dataframe(df_theme, use_container_width=True, height=400)
             with col_theme_chart:
-                fig_theme = px.bar(df_theme, x="대표테마", y=target_subject)
-                fig_theme.update_layout(height=300, template="plotly_dark")
+                # 2. px.bar 대신 px.treemap을 사용하여 타일 형태의 면적형 차트를 생성합니다.
+                fig_theme = px.treemap(
+                    df_theme, 
+                    path=['대표테마'], 
+                    values=target_subject,
+                    color=target_subject,
+                    color_continuous_scale='Blues'
+                )
+                fig_theme.update_traces(textinfo="label+percent parent")
+                fig_theme.update_layout(height=400, margin=dict(t=10, l=10, r=10, b=10), template="plotly_dark")
                 st.plotly_chart(fig_theme, use_container_width=True)
         else:
             st.info("업로드하신 엑셀 파일에 '대표테마' 열(Column)이 존재하지 않아 테마 분석을 건너뜁니다.")
@@ -301,7 +310,7 @@ with tabs[1]:
                 st.warning("직전 주차 데이터가 없어 증감률을 비교할 수 없습니다.")
 
 # =========================================================================
-# --- Tab 2: [뉴스 & 검색량 트렌드] (CSV / Excel 자동 호환 파싱) ---
+# --- Tab 2: [뉴스 & 검색량 트렌드] ---
 # =========================================================================
 with tabs[2]:
     col_news, col_trend = st.columns([4, 6])
@@ -327,39 +336,29 @@ with tabs[2]:
         
         if uploaded_dl is not None:
             try:
-                # 1. 파일 확장자에 따라 판다스 읽기 함수(read_csv / read_excel) 자동 분기
                 file_ext = uploaded_dl.name.split('.')[-1].lower()
                 
                 if file_ext == 'csv':
-                    # CSV 파일일 경우 한글 인코딩(cp949) 적용
                     df_dl = pd.read_csv(uploaded_dl, skiprows=6, encoding='cp949')
                 elif file_ext in ['xlsx', 'xls']:
-                    # 엑셀 파일일 경우 기본 엔진 사용
                     df_dl = pd.read_excel(uploaded_dl, skiprows=6)
                 else:
                     st.error("지원하지 않는 파일 형식입니다. CSV나 Excel 파일을 업로드해주세요.")
                     df_dl = pd.DataFrame()
 
                 if not df_dl.empty:
-                    # 2. 첫 번째 열(기준 날짜) 추출
                     master_date = df_dl.iloc[:, 0]
-                    
-                    # 3. '날짜'나 'Unnamed'라는 이름이 들어간 잉여 컬럼들을 걷어내고 실제 종목명/키워드 컬럼만 추출
                     value_cols = [col for col in df_dl.columns if '날짜' not in col and 'Unnamed' not in col]
                     
-                    # 4. 분석용 통합 데이터프레임 병합
                     clean_df = pd.DataFrame({'날짜': master_date})
                     for col in value_cols:
                         clean_df[col] = df_dl[col]
                     clean_df['날짜'] = pd.to_datetime(clean_df['날짜'])
                     
-                    # --- AI 에이전트 프롬프트용 데이터 요약 (최근 14일 일평균 추출) ---
                     recent_14d_mean = clean_df.tail(14).mean(numeric_only=True).round(1)
                     dl_summary_text = "\n".join([f"- {idx}: {val}" for idx, val in recent_14d_mean.items()])
                     st.session_state['dl_summary'] = dl_summary_text
-                    # -----------------------------------------------------------------
 
-                    # 5. Plotly 꺾은선 차트를 그리기 위해 넓은 데이터를 길게(melt) 변환
                     df_melted = clean_df.melt(id_vars=['날짜'], var_name='종목명', value_name='검색량')
                     
                     fig_trend = px.line(
