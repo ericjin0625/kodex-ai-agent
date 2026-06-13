@@ -128,13 +128,14 @@ with col_week:
     default_idx = 1 if len(available_weeks) > 1 else 0
     selected_week = st.selectbox("주차 (최대 6개월 전까지 선택 가능):", options=available_weeks, index=default_idx)
 
+# ★ 변경점: [ETF 운용 현황] 탭을 [AI 분석용 프롬프트] 앞으로 이동하여 논리적 흐름 재배치
 tab_names = [
     "[Weekly Info.]", "[ETF 순매수 등락, 수익률]", "[뉴스 & 검색량 트렌드]", 
-    "[주간 거래량 추이]", "[진행 이벤트]", "[AI 분석용 프롬프트]", "[ETF 운용 현황]"
+    "[주간 거래량 추이]", "[진행 이벤트]", "[ETF 운용 현황]", "[AI 분석용 프롬프트]"
 ]
 tabs = st.tabs(tab_names)
 
-# ★ 4번째 탭(이벤트)만 미구현 경고창 남김 (나머지 탭 활성화)
+# ★ 4번째 탭(이벤트)만 미구현 경고창 남김
 with tabs[4]:
     st.warning("🚧 [진행 이벤트] 탭은 기획안을 바탕으로 순차적으로 구현될 예정입니다.")
 
@@ -452,9 +453,56 @@ with tabs[3]:
         st.info("좌측 사이드바에 엑셀 데이터를 업로드해주세요.")
 
 # =========================================================================
-# --- Tab 5: [AI 분석용 프롬프트 생성기] ---
+# --- Tab 5: [ETF 운용 현황] (경쟁사 라인업 공백 감지 매트릭스 - 에러 100% 차단) ---
 # =========================================================================
 with tabs[5]:
+    st.markdown("### 🏢 국내 상위 운용사 ETF 라인업 공백 분석 (White Space)")
+    st.caption("한국거래소(KRX) 전체 상장 ETF 데이터를 실시간으로 전수조사하여 경쟁사 대비 KODEX의 라인업 공백을 스캔합니다.")
+    
+    with st.spinner("KRX 전체 상장 ETF 데이터를 분석 중입니다... (약 5~10초 소요)"):
+        try:
+            # 1. KRX 상장 ETF 전체 목록 불러오기
+            df_all_etf = fdr.StockListing('ETF/KR')
+            
+            # 2. 종목명 첫 단어를 '브랜드'로 추출
+            df_all_etf['브랜드'] = df_all_etf['Name'].apply(lambda x: str(x).split(' ')[0])
+            
+            # 3. 주요 상위 6대 운용사 브랜드만 필터링
+            target_brands = ['KODEX', 'TIGER', 'KBSTAR', 'ACE', 'ARIRANG', 'HANARO']
+            df_top_brands = df_all_etf[df_all_etf['브랜드'].isin(target_brands)].copy()
+            
+            # 4. AI 자동 테마 분류기 적용
+            df_top_brands['분류_테마'] = df_top_brands['Name'].apply(assign_auto_theme)
+            
+            # 5. 브랜드 vs 테마 교차 매트릭스(피벗 테이블) 생성
+            pivot_df = pd.pivot_table(
+                df_top_brands,
+                values='Symbol',
+                index='분류_테마',
+                columns='브랜드',
+                aggfunc='count',
+                fill_value=0
+            )
+            
+            # ★ 에러 완벽 차단: KODEX 열이 정상적으로 생성된 경우에만 열 순서를 재배치
+            if 'KODEX' in pivot_df.columns:
+                cols = ['KODEX'] + [c for c in pivot_df.columns if c != 'KODEX']
+                pivot_df = pivot_df[cols]
+            
+            # 직관성을 높이기 위해 매트릭스 표에 색상 그라데이션 적용
+            styled_pivot = pivot_df.style.background_gradient(cmap='Blues')
+            
+            st.dataframe(styled_pivot, use_container_width=True)
+            
+            st.info("💡 **인사이트 도출 가이드:** 매트릭스를 확인하여 `KODEX` 열의 숫자가 '0'이거나 경쟁사(`TIGER`, `ACE` 등) 대비 현저히 적은 테마가 바로 **우선 공략해야 할 상품 기획 공백(White Space)**입니다.")
+            
+        except Exception as e:
+            st.error(f"데이터를 불러오는 중 오류가 발생했습니다: {e}")
+
+# =========================================================================
+# --- Tab 6: [AI 분석용 프롬프트 생성기] (마지막 탭으로 재배치) ---
+# =========================================================================
+with tabs[6]:
     st.markdown("### 🧠 AI 분석용 프롬프트 자동 생성기")
     st.caption("실시간으로 연산된 자금 흐름과 고객 검색 트렌드 데이터를 복사하여, 사용 중인 AI에 직접 붙여넣고 완벽한 인사이트를 도출하세요.")
 
@@ -483,50 +531,3 @@ with tabs[5]:
 
     st.code(prompt_text, language="text")
     st.info("👆 우측 상단의 'Copy' 버튼을 눌러 복사한 뒤, 사용 중이신 AI 모델 대화창에 그대로 붙여넣으세요.")
-
-# =========================================================================
-# --- Tab 6: [ETF 운용 현황] (경쟁사 라인업 공백 감지 매트릭스) ---
-# =========================================================================
-with tabs[6]:
-    st.markdown("### 🏢 국내 상위 운용사 ETF 라인업 공백 분석 (White Space)")
-    st.caption("한국거래소(KRX) 전체 상장 ETF 데이터를 실시간으로 전수조사하여 경쟁사 대비 KODEX의 라인업 공백을 스캔합니다.")
-    
-    with st.spinner("KRX 전체 상장 ETF 데이터를 분석 중입니다... (약 5~10초 소요)"):
-        try:
-            # 1. KRX 상장 ETF 전체 목록 불러오기
-            df_all_etf = fdr.StockListing('ETF/KR')
-            
-            # 2. 종목명 첫 단어를 '브랜드'로 추출
-            df_all_etf['브랜드'] = df_all_etf['Name'].apply(lambda x: str(x).split(' ')[0])
-            
-            # 3. 주요 상위 6대 운용사 브랜드만 필터링 (NH아문디 'HANARO'까지)
-            target_brands = ['KODEX', 'TIGER', 'KBSTAR', 'ACE', 'ARIRANG', 'HANARO']
-            df_top_brands = df_all_etf[df_all_etf['브랜드'].isin(target_brands)].copy()
-            
-            # 4. AI 자동 테마 분류기 적용
-            df_top_brands['분류_테마'] = df_top_brands['Name'].apply(assign_auto_theme)
-            
-            # 5. 브랜드 vs 테마 교차 매트릭스(피벗 테이블) 생성
-            pivot_df = pd.pivot_table(
-                df_top_brands,
-                values='Symbol',
-                index='분류_테마',
-                columns='브랜드',
-                aggfunc='count',
-                fill_value=0
-            )
-            
-            # KODEX를 비교하기 쉽도록 무조건 가장 왼쪽(첫 번째 열)으로 고정
-            cols = ['KODEX'] + [c for c in pivot_df.columns if c != 'KODEX']
-            pivot_df = pivot_df[cols]
-            
-            # 직관성을 높이기 위해 매트릭스 표에 색상 그라데이션 적용
-            styled_pivot = pivot_df.style.background_gradient(cmap='Blues')
-            
-            # 화면 출력
-            st.dataframe(styled_pivot, use_container_width=True)
-            
-            st.info("💡 **인사이트 도출 가이드:** 매트릭스를 확인하여 `KODEX` 열의 숫자가 '0'이거나 경쟁사(`TIGER`, `ACE` 등) 대비 현저히 적은 테마가 바로 **우선 공략해야 할 상품 기획 공백(White Space)**입니다.")
-            
-        except Exception as e:
-            st.error(f"데이터를 불러오는 중 오류가 발생했습니다: {e}")
