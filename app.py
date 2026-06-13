@@ -134,9 +134,9 @@ tab_names = [
 ]
 tabs = st.tabs(tab_names)
 
-for i in [4, 6]:
-    with tabs[i]:
-        st.warning(f"🚧 {tab_names[i]} 탭은 기획안을 바탕으로 순차적으로 구현될 예정입니다.")
+# ★ 4번째 탭(이벤트)만 미구현 경고창 남김 (나머지 탭 활성화)
+with tabs[4]:
+    st.warning("🚧 [진행 이벤트] 탭은 기획안을 바탕으로 순차적으로 구현될 예정입니다.")
 
 @st.cache_data
 def load_and_clean_excel(file, sheet_name):
@@ -194,7 +194,6 @@ with tabs[0]:
             df_theme = df_theme_pos.groupby('AI_자동_테마')[target_subject].sum().reset_index()
             df_theme = df_theme.sort_values(by=target_subject, ascending=False)
 
-            # ★ 변경점: 강제 7개 제한을 완전히 삭제하고, 슬라이더의 top_n 값을 100% 그대로 적용합니다.
             if len(df_theme) > top_n:
                 df_top = df_theme.head(top_n)
                 others_val = df_theme.iloc[top_n:][target_subject].sum()
@@ -205,7 +204,6 @@ with tabs[0]:
 
             col_theme_table, col_theme_chart = st.columns([3, 7])
             with col_theme_table:
-                # 표에도 top_n 개수만큼의 데이터(+기타)가 정확히 일치하여 출력됩니다.
                 st.dataframe(df_pie_data, use_container_width=True, height=400, hide_index=True)
             with col_theme_chart:
                 fig_pie = px.pie(
@@ -464,7 +462,7 @@ with tabs[5]:
     if 'df_scatter' in locals() and not df_scatter.empty:
         data_context = df_scatter.sort_values(by='주간 수익률(%)', ascending=False).head(20).to_string(index=False)
 
-    dl_context = st.session_state['dl_summary']
+    dl_context = st.session_state.get('dl_summary', "데이터랩 정보가 없습니다.")
 
     prompt_text = f"""너는 KODEX 상품기획 및 마케팅을 담당하는 최고 책임자(CMO)야.
 다음은 {selected_week} 주차의 실제 자금 유입(순매수 증감률) 데이터와 최근 타겟 고객층의 포털 검색 트렌드 수치야.
@@ -485,3 +483,50 @@ with tabs[5]:
 
     st.code(prompt_text, language="text")
     st.info("👆 우측 상단의 'Copy' 버튼을 눌러 복사한 뒤, 사용 중이신 AI 모델 대화창에 그대로 붙여넣으세요.")
+
+# =========================================================================
+# --- Tab 6: [ETF 운용 현황] (경쟁사 라인업 공백 감지 매트릭스) ---
+# =========================================================================
+with tabs[6]:
+    st.markdown("### 🏢 국내 상위 운용사 ETF 라인업 공백 분석 (White Space)")
+    st.caption("한국거래소(KRX) 전체 상장 ETF 데이터를 실시간으로 전수조사하여 경쟁사 대비 KODEX의 라인업 공백을 스캔합니다.")
+    
+    with st.spinner("KRX 전체 상장 ETF 데이터를 분석 중입니다... (약 5~10초 소요)"):
+        try:
+            # 1. KRX 상장 ETF 전체 목록 불러오기
+            df_all_etf = fdr.StockListing('ETF/KR')
+            
+            # 2. 종목명 첫 단어를 '브랜드'로 추출
+            df_all_etf['브랜드'] = df_all_etf['Name'].apply(lambda x: str(x).split(' ')[0])
+            
+            # 3. 주요 상위 6대 운용사 브랜드만 필터링 (NH아문디 'HANARO'까지)
+            target_brands = ['KODEX', 'TIGER', 'KBSTAR', 'ACE', 'ARIRANG', 'HANARO']
+            df_top_brands = df_all_etf[df_all_etf['브랜드'].isin(target_brands)].copy()
+            
+            # 4. AI 자동 테마 분류기 적용
+            df_top_brands['분류_테마'] = df_top_brands['Name'].apply(assign_auto_theme)
+            
+            # 5. 브랜드 vs 테마 교차 매트릭스(피벗 테이블) 생성
+            pivot_df = pd.pivot_table(
+                df_top_brands,
+                values='Symbol',
+                index='분류_테마',
+                columns='브랜드',
+                aggfunc='count',
+                fill_value=0
+            )
+            
+            # KODEX를 비교하기 쉽도록 무조건 가장 왼쪽(첫 번째 열)으로 고정
+            cols = ['KODEX'] + [c for c in pivot_df.columns if c != 'KODEX']
+            pivot_df = pivot_df[cols]
+            
+            # 직관성을 높이기 위해 매트릭스 표에 색상 그라데이션 적용
+            styled_pivot = pivot_df.style.background_gradient(cmap='Blues')
+            
+            # 화면 출력
+            st.dataframe(styled_pivot, use_container_width=True)
+            
+            st.info("💡 **인사이트 도출 가이드:** 매트릭스를 확인하여 `KODEX` 열의 숫자가 '0'이거나 경쟁사(`TIGER`, `ACE` 등) 대비 현저히 적은 테마가 바로 **우선 공략해야 할 상품 기획 공백(White Space)**입니다.")
+            
+        except Exception as e:
+            st.error(f"데이터를 불러오는 중 오류가 발생했습니다: {e}")
