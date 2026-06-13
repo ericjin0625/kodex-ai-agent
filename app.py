@@ -451,31 +451,27 @@ with tabs[3]:
         st.info("좌측 사이드바에 엑셀 데이터를 업로드해주세요.")
 
 # =========================================================================
-# --- Tab 5: [ETF 운용 현황] (AUM 기반 경쟁사 라인업 매트릭스) ---
+# --- Tab 5: [ETF 운용 현황] (AUM 및 과거 순매수 트렌드 분석) ---
 # =========================================================================
+target_brands = ['KODEX', 'TIGER', 'KBSTAR', 'ACE', 'ARIRANG', 'HANARO']
+
 with tabs[5]:
     st.markdown("### 🏢 국내 상위 운용사 테마별 AUM 현황 (단위: 억원)")
     st.caption("한국거래소(KRX) 실시간 데이터를 바탕으로 상위 운용사 간의 순자산총액(AUM) 규모를 비교하여 시장 장악력과 공백을 스캔합니다.")
     
+    pivot_df = pd.DataFrame()
     with st.spinner("KRX 전체 상장 ETF 데이터를 분석 중입니다... (약 5~10초 소요)"):
         try:
-            # 1. KRX 상장 ETF 전체 목록 불러오기
+            # 1. KRX 상장 ETF 목록 (MarCap 포함)
             df_all_etf = fdr.StockListing('ETF/KR')
-            
-            # 2. 종목명 첫 단어를 '브랜드'로 추출
             df_all_etf['브랜드'] = df_all_etf['Name'].apply(lambda x: str(x).split(' ')[0])
             
-            # 3. 주요 상위 6대 운용사 브랜드만 필터링
-            target_brands = ['KODEX', 'TIGER', 'KBSTAR', 'ACE', 'ARIRANG', 'HANARO']
+            # 2. 브랜드 필터링 및 테마 자동 분류
             df_top_brands = df_all_etf[df_all_etf['브랜드'].isin(target_brands)].copy()
-            
-            # 4. AI 자동 테마 분류기 적용
             df_top_brands['분류_테마'] = df_top_brands['Name'].apply(assign_auto_theme)
             
-            # ★ 5. AUM(순자산총액) 데이터 적용 (오류 원인 해결: ETF/KR 데이터의 MarCap은 이미 억원 단위임)
+            # 3. AUM 매트릭스 생성
             df_top_brands['AUM(억원)'] = df_top_brands['MarCap'].fillna(0)
-            
-            # 6. 브랜드 vs 테마 교차 매트릭스 생성 (값: AUM 합계)
             pivot_df = pd.pivot_table(
                 df_top_brands,
                 values='AUM(억원)',
@@ -485,19 +481,87 @@ with tabs[5]:
                 fill_value=0
             )
             
-            # 7. 열 순서를 KODEX, TIGER 우선으로 강제 고정
+            # 4. 열 순서 KODEX 우선 강제 고정 및 정수 변환
             ordered_cols = [col for col in target_brands if col in pivot_df.columns]
-            pivot_df = pivot_df[ordered_cols]
+            pivot_df = pivot_df[ordered_cols].astype(int)
             
-            # 소수점 제거 후 정수형 변환하여 보기 쉽게 출력
-            pivot_df = pivot_df.astype(int)
-            
-            st.dataframe(pivot_df, use_container_width=True)
+            # ★ 콤마(,) 포맷팅 적용하여 가시성 향상
+            st.dataframe(pivot_df.style.format("{:,}"), use_container_width=True)
             
             st.info("💡 **인사이트 도출 가이드:** KODEX와 TIGER의 AUM 규모를 직접적으로 비교하여, 실질적인 고객 자금이 유출/유입되는 '진짜 위협'이나 '수익성 높은 블루오션'을 파악하세요.")
             
         except Exception as e:
             st.error(f"데이터를 불러오는 중 오류가 발생했습니다: {e}")
+
+    st.divider()
+
+    # ==========================================
+    # ★ 신규 추가: 테마별 운용사 순매수 과거 트렌드
+    # ==========================================
+    st.markdown("### 📈 테마별 운용사 전체 순매수 트렌드 (과거 추이)")
+    st.caption("※ 업로드하신 엑셀 파일의 과거 주차 데이터를 역추적하여 운용사별 실질적인 자금 유입 흐름을 분석합니다.")
+    
+    if uploaded_excel is not None:
+        col_theme, col_weeks = st.columns(2)
+        with col_theme:
+            # 매트릭스 표에 있는 테마 목록을 드롭다운 옵션으로 가져옵니다.
+            all_themes = list(pivot_df.index) if not pivot_df.empty else ['🤖 AI & 반도체', '💰 배당 & 커버드콜']
+            selected_theme = st.selectbox("분석할 테마 선택:", all_themes)
+        with col_weeks:
+            # 엑셀 파일에 존재하는 시트(주차) 수만큼 최대 n주를 설정합니다.
+            max_w = len(available_weeks)
+            n_weeks = st.slider("조회할 과거 주차 (N주):", min_value=1, max_value=max_w, value=min(4, max_w))
+            
+        # 선택한 N주 만큼의 데이터를 시간순(오래된 순 -> 최신 순)으로 정렬합니다.
+        target_weeks = available_weeks[:n_weeks][::-1]
+        trend_data = []
+        
+        with st.spinner("과거 주차 데이터를 분석하고 있습니다..."):
+            for w in target_weeks:
+                try:
+                    # 각 주차별 엑셀 시트 읽기
+                    temp_df = load_and_clean_excel(uploaded_excel, w)
+                    if '종목명' in temp_df.columns:
+                        temp_df = temp_df[temp_df['종목명'] != '전체'].copy()
+                        temp_df['브랜드'] = temp_df['종목명'].apply(lambda x: str(x).split(' ')[0])
+                        # KODEX, TIGER 등 타겟 운용사만 남기기
+                        temp_df = temp_df[temp_df['브랜드'].isin(target_brands)]
+                        temp_df['분류_테마'] = temp_df['종목명'].apply(assign_auto_theme)
+                        
+                        # 선택한 테마 필터링
+                        theme_df = temp_df[temp_df['분류_테마'] == selected_theme].copy()
+                        
+                        # 전체 순매수 (개인+기관+외국인 합산)
+                        theme_df['순매수합계'] = theme_df.get('개인', 0) + theme_df.get('기관', 0) + theme_df.get('외국인', 0)
+                        
+                        # 브랜드별로 합계 계산
+                        brand_sum = theme_df.groupby('브랜드')['순매수합계'].sum().reset_index()
+                        brand_sum['주차'] = w
+                        trend_data.append(brand_sum)
+                except Exception:
+                    pass
+                    
+        if trend_data:
+            df_trend = pd.concat(trend_data)
+            if not df_trend.empty:
+                # 꺾은선 그래프 렌더링
+                fig_trend = px.line(
+                    df_trend, 
+                    x='주차', 
+                    y='순매수합계', 
+                    color='브랜드', 
+                    markers=True,
+                    template="plotly_dark", 
+                    color_discrete_sequence=px.colors.qualitative.Set2
+                )
+                fig_trend.update_layout(height=400, margin=dict(l=20, r=20, t=50, b=20), yaxis_title="전체 순매수 합계", xaxis_title=None)
+                st.plotly_chart(fig_trend, use_container_width=True)
+            else:
+                st.warning("선택하신 테마의 해당 기간 순매수 데이터가 없습니다.")
+        else:
+            st.warning("과거 주차 데이터를 분석할 수 없습니다. 파일 양식을 확인해 주세요.")
+    else:
+        st.info("👈 좌측 사이드바에 엑셀 데이터를 업로드하시면 트렌드 그래프가 나타납니다.")
 
 # =========================================================================
 # --- Tab 6: [AI 분석용 프롬프트 생성기] ---
