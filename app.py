@@ -468,4 +468,22 @@ with tabs[5]:
 
     dl_context = st.session_state['dl_summary']
 
-    prompt_text = f"""너는 KODEX 상품기획
+    prompt_text = f"""너는 KODEX 상품기획 및 마케팅을 담당하는 최고 책임자(CMO)야.
+다음은 {selected_week} 주차의 실제 자금 유입(순매수 증감률) 데이터와 최근 타겟 고객층의 포털 검색 트렌드 수치야.
+
+[1. ETF 자금 흐름 및 수익률 데이터]
+{data_context}
+
+[2. 타겟 연령층 대상 최근 14일간 일평균 검색비율 (네이버 데이터랩, 최대 100 기준)]
+{dl_context}
+
+이 데이터를 종합하여 전문가다운 마케팅 인사이트 보고서를 한글로 작성해줘.
+반드시 아래 3가지 제목을 포함해서 논리적이고 깊이 있게 분석해야 해.
+
+1. Executive Summary (자금 흐름과 검색 트렌드의 상관관계 요약)
+2. Signal Interpretation (고객 검색 수요와 실제 수익률 간의 격차나 기회 포착)
+3. Next Month Watchlist (다음 달 마케팅/세일즈 역량을 집중해야 할 ETF 추천 및 명확한 이유)
+"""
+
+    st.code(prompt_text, language="text")
+    st.info("👆 우측 상단의 'Copy' 버튼을 눌러 복사한 뒤, 사용 중이신 AI 모델 대화창에 그대로 붙여넣으세요.")
