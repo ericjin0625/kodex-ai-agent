@@ -128,14 +128,13 @@ with col_week:
     default_idx = 1 if len(available_weeks) > 1 else 0
     selected_week = st.selectbox("주차 (최대 6개월 전까지 선택 가능):", options=available_weeks, index=default_idx)
 
-# ★ 변경점: [ETF 운용 현황] 탭을 [AI 분석용 프롬프트] 앞으로 이동하여 논리적 흐름 재배치
+# ★ 탭 순서 논리적 재배치 (운용 현황을 프롬프트 앞으로)
 tab_names = [
     "[Weekly Info.]", "[ETF 순매수 등락, 수익률]", "[뉴스 & 검색량 트렌드]", 
     "[주간 거래량 추이]", "[진행 이벤트]", "[ETF 운용 현황]", "[AI 분석용 프롬프트]"
 ]
 tabs = st.tabs(tab_names)
 
-# ★ 4번째 탭(이벤트)만 미구현 경고창 남김
 with tabs[4]:
     st.warning("🚧 [진행 이벤트] 탭은 기획안을 바탕으로 순차적으로 구현될 예정입니다.")
 
@@ -453,7 +452,7 @@ with tabs[3]:
         st.info("좌측 사이드바에 엑셀 데이터를 업로드해주세요.")
 
 # =========================================================================
-# --- Tab 5: [ETF 운용 현황] (경쟁사 라인업 공백 감지 매트릭스 - 에러 100% 차단) ---
+# --- Tab 5: [ETF 운용 현황] (경쟁사 라인업 공백 감지 매트릭스 - 스타일링 오류 제거 완료) ---
 # =========================================================================
 with tabs[5]:
     st.markdown("### 🏢 국내 상위 운용사 ETF 라인업 공백 분석 (White Space)")
@@ -484,15 +483,13 @@ with tabs[5]:
                 fill_value=0
             )
             
-            # ★ 에러 완벽 차단: KODEX 열이 정상적으로 생성된 경우에만 열 순서를 재배치
+            # KODEX 열이 정상적으로 생성된 경우에만 열 순서를 재배치
             if 'KODEX' in pivot_df.columns:
                 cols = ['KODEX'] + [c for c in pivot_df.columns if c != 'KODEX']
                 pivot_df = pivot_df[cols]
             
-            # 직관성을 높이기 위해 매트릭스 표에 색상 그라데이션 적용
-            styled_pivot = pivot_df.style.background_gradient(cmap='Blues')
-            
-            st.dataframe(styled_pivot, use_container_width=True)
+            # ★ 에러 원인이었던 .style.background_gradient 코드를 완전히 제거하고 안전한 표 형태로 출력합니다.
+            st.dataframe(pivot_df, use_container_width=True)
             
             st.info("💡 **인사이트 도출 가이드:** 매트릭스를 확인하여 `KODEX` 열의 숫자가 '0'이거나 경쟁사(`TIGER`, `ACE` 등) 대비 현저히 적은 테마가 바로 **우선 공략해야 할 상품 기획 공백(White Space)**입니다.")
             
@@ -500,7 +497,7 @@ with tabs[5]:
             st.error(f"데이터를 불러오는 중 오류가 발생했습니다: {e}")
 
 # =========================================================================
-# --- Tab 6: [AI 분석용 프롬프트 생성기] (마지막 탭으로 재배치) ---
+# --- Tab 6: [AI 분석용 프롬프트 생성기] ---
 # =========================================================================
 with tabs[6]:
     st.markdown("### 🧠 AI 분석용 프롬프트 자동 생성기")
