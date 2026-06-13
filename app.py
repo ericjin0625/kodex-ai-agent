@@ -152,7 +152,7 @@ df_scatter = pd.DataFrame()
 st.session_state['dl_summary'] = "DataLab 데이터가 업로드되지 않았습니다."
 
 # =========================================================================
-# --- Tab 0: [Weekly Info.] (AI 자동 테마 파이 차트) ---
+# --- Tab 0: [Weekly Info.] ---
 # =========================================================================
 with tabs[0]:
     df_source = pd.DataFrame()
@@ -177,7 +177,8 @@ with tabs[0]:
 
             col_table, col_chart = st.columns([4, 5])
             with col_table:
-                st.dataframe(df_filtered[["종목명", target_subject]], use_container_width=True, height=380)
+                # ★ 변경점: hide_index=True 추가
+                st.dataframe(df_filtered[["종목명", target_subject]], use_container_width=True, height=380, hide_index=True)
             with col_chart:
                 fig_etf = px.bar(df_filtered, x=target_subject, y="종목명", orientation='h')
                 fig_etf.update_layout(yaxis={'categoryorder':'total ascending'}, height=380, template="plotly_dark")
@@ -188,17 +189,13 @@ with tabs[0]:
         st.markdown("### 🔥 AI 자동 분류 테마 비중 (순매수 유입 기준)")
         
         if '종목명' in df_source.columns:
-            # 1. 엑셀에 테마 열이 없어도, 종목명을 기반으로 AI 테마를 자동 생성합니다.
             df_source['AI_자동_테마'] = df_source['종목명'].apply(assign_auto_theme)
             
-            # 순매수가 양수(>0)인 자금 유입 종목만 필터링
             df_theme_pos = df_source[(df_source["종목명"] != "전체") & (df_source[target_subject] > 0)]
             df_theme = df_theme_pos.groupby('AI_자동_테마')[target_subject].sum().reset_index()
             df_theme = df_theme.sort_values(by=target_subject, ascending=False)
 
-            # 2. 제안해주신 로직: TOP N개만 살리고 나머지는 '기타'로 병합
-            # 위 슬라이더의 top_n 값을 그대로 연동합니다. (테마 개수가 적을 수 있으므로 n=5~7 내외로 고정해도 좋습니다)
-            pie_limit = min(top_n, 7) # 파이 차트가 너무 잘게 쪼개지지 않도록 최대 7개 조각으로 제한
+            pie_limit = min(top_n, 7)
             
             if len(df_theme) > pie_limit:
                 df_top = df_theme.head(pie_limit)
@@ -210,14 +207,14 @@ with tabs[0]:
 
             col_theme_table, col_theme_chart = st.columns([3, 7])
             with col_theme_table:
-                st.dataframe(df_theme, use_container_width=True, height=400)
+                # ★ 변경점: hide_index=True 추가
+                st.dataframe(df_theme, use_container_width=True, height=400, hide_index=True)
             with col_theme_chart:
-                # 3. 가운데가 뚫린 세련된 도넛 형태의 파이 차트 렌더링
                 fig_pie = px.pie(
                     df_pie_data, 
                     names='AI_자동_테마', 
                     values=target_subject,
-                    hole=0.4, # 도넛 형태
+                    hole=0.4, 
                     color_discrete_sequence=px.colors.sequential.Blues_r
                 )
                 fig_pie.update_traces(textposition='inside', textinfo='percent+label', textfont_size=13, marker=dict(line=dict(color='#000000', width=1)))
@@ -466,27 +463,9 @@ with tabs[5]:
     st.caption("실시간으로 연산된 자금 흐름과 고객 검색 트렌드 데이터를 복사하여, 사용 중인 AI에 직접 붙여넣고 완벽한 인사이트를 도출하세요.")
 
     data_context = "자금 흐름 데이터가 생성되지 않았습니다. [ETF 순매수 등락, 수익률] 탭에서 종목을 먼저 선택해주세요."
-    if 'df_scatter' in locals() and not df_scatter.empty:
+    if not df_scatter.empty:
         data_context = df_scatter.sort_values(by='주간 수익률(%)', ascending=False).head(20).to_string(index=False)
 
     dl_context = st.session_state['dl_summary']
 
-    prompt_text = f"""너는 KODEX 상품기획 및 마케팅을 담당하는 최고 책임자(CMO)야.
-다음은 {selected_week} 주차의 실제 자금 유입(순매수 증감률) 데이터와 최근 타겟 고객층의 포털 검색 트렌드 수치야.
-
-[1. ETF 자금 흐름 및 수익률 데이터]
-{data_context}
-
-[2. 타겟 연령층 대상 최근 14일간 일평균 검색비율 (네이버 데이터랩, 최대 100 기준)]
-{dl_context}
-
-이 데이터를 종합하여 전문가다운 마케팅 인사이트 보고서를 한글로 작성해줘.
-반드시 아래 3가지 제목을 포함해서 논리적이고 깊이 있게 분석해야 해.
-
-1. Executive Summary (자금 흐름과 검색 트렌드의 상관관계 요약)
-2. Signal Interpretation (고객 검색 수요와 실제 수익률 간의 격차나 기회 포착)
-3. Next Month Watchlist (다음 달 마케팅/세일즈 역량을 집중해야 할 ETF 추천 및 명확한 이유)
-"""
-
-    st.code(prompt_text, language="text")
-    st.info("👆 우측 상단의 'Copy' 버튼을 눌러 복사한 뒤, 사용 중이신 AI 모델 대화창에 그대로 붙여넣으세요.")
+    prompt_text = f"""너는 KODEX 상품기획
