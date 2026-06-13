@@ -456,21 +456,22 @@ with tabs[3]:
 target_brands = ['KODEX', 'TIGER', 'KBSTAR', 'ACE', 'ARIRANG', 'HANARO']
 
 with tabs[5]:
-    st.markdown("### 🏢 국내 상위 운용사 테마별 AUM 현황 (단위: 억원)")
+    # ★ AUM 표의 시점이 '현재 실시간 기준'임을 제목에 명시
+    st.markdown("### 🏢 국내 상위 운용사 테마별 AUM 현황 (현재 실시간 기준 / 단위: 억원)")
     st.caption("한국거래소(KRX) 실시간 데이터를 바탕으로 상위 운용사 간의 순자산총액(AUM) 규모를 비교하여 시장 장악력과 공백을 스캔합니다.")
+    
+    # ★ 오해 방지 안내 문구 추가
+    st.info("※ AUM 데이터는 파이썬 라이브러리 한계상 과거 특정 주차가 아닌 '조회 시점(오늘)'의 최신 시가총액을 보여줍니다. 과거 자금 흐름은 아래의 엑셀 기반 꺾은선 차트를 참고해 주세요.")
     
     pivot_df = pd.DataFrame()
     with st.spinner("KRX 전체 상장 ETF 데이터를 분석 중입니다... (약 5~10초 소요)"):
         try:
-            # 1. KRX 상장 ETF 목록 (MarCap 포함)
             df_all_etf = fdr.StockListing('ETF/KR')
             df_all_etf['브랜드'] = df_all_etf['Name'].apply(lambda x: str(x).split(' ')[0])
             
-            # 2. 브랜드 필터링 및 테마 자동 분류
             df_top_brands = df_all_etf[df_all_etf['브랜드'].isin(target_brands)].copy()
             df_top_brands['분류_테마'] = df_top_brands['Name'].apply(assign_auto_theme)
             
-            # 3. AUM 매트릭스 생성
             df_top_brands['AUM(억원)'] = df_top_brands['MarCap'].fillna(0)
             pivot_df = pd.pivot_table(
                 df_top_brands,
@@ -481,60 +482,44 @@ with tabs[5]:
                 fill_value=0
             )
             
-            # 4. 열 순서 KODEX 우선 강제 고정 및 정수 변환
             ordered_cols = [col for col in target_brands if col in pivot_df.columns]
             pivot_df = pivot_df[ordered_cols].astype(int)
             
-            # ★ 콤마(,) 포맷팅 적용하여 가시성 향상
             st.dataframe(pivot_df.style.format("{:,}"), use_container_width=True)
-            
-            st.info("💡 **인사이트 도출 가이드:** KODEX와 TIGER의 AUM 규모를 직접적으로 비교하여, 실질적인 고객 자금이 유출/유입되는 '진짜 위협'이나 '수익성 높은 블루오션'을 파악하세요.")
             
         except Exception as e:
             st.error(f"데이터를 불러오는 중 오류가 발생했습니다: {e}")
 
     st.divider()
 
-    # ==========================================
-    # ★ 신규 추가: 테마별 운용사 순매수 과거 트렌드
-    # ==========================================
     st.markdown("### 📈 테마별 운용사 전체 순매수 트렌드 (과거 추이)")
     st.caption("※ 업로드하신 엑셀 파일의 과거 주차 데이터를 역추적하여 운용사별 실질적인 자금 유입 흐름을 분석합니다.")
     
     if uploaded_excel is not None:
         col_theme, col_weeks = st.columns(2)
         with col_theme:
-            # 매트릭스 표에 있는 테마 목록을 드롭다운 옵션으로 가져옵니다.
             all_themes = list(pivot_df.index) if not pivot_df.empty else ['🤖 AI & 반도체', '💰 배당 & 커버드콜']
             selected_theme = st.selectbox("분석할 테마 선택:", all_themes)
         with col_weeks:
-            # 엑셀 파일에 존재하는 시트(주차) 수만큼 최대 n주를 설정합니다.
             max_w = len(available_weeks)
             n_weeks = st.slider("조회할 과거 주차 (N주):", min_value=1, max_value=max_w, value=min(4, max_w))
             
-        # 선택한 N주 만큼의 데이터를 시간순(오래된 순 -> 최신 순)으로 정렬합니다.
         target_weeks = available_weeks[:n_weeks][::-1]
         trend_data = []
         
         with st.spinner("과거 주차 데이터를 분석하고 있습니다..."):
             for w in target_weeks:
                 try:
-                    # 각 주차별 엑셀 시트 읽기
                     temp_df = load_and_clean_excel(uploaded_excel, w)
                     if '종목명' in temp_df.columns:
                         temp_df = temp_df[temp_df['종목명'] != '전체'].copy()
                         temp_df['브랜드'] = temp_df['종목명'].apply(lambda x: str(x).split(' ')[0])
-                        # KODEX, TIGER 등 타겟 운용사만 남기기
                         temp_df = temp_df[temp_df['브랜드'].isin(target_brands)]
                         temp_df['분류_테마'] = temp_df['종목명'].apply(assign_auto_theme)
                         
-                        # 선택한 테마 필터링
                         theme_df = temp_df[temp_df['분류_테마'] == selected_theme].copy()
-                        
-                        # 전체 순매수 (개인+기관+외국인 합산)
                         theme_df['순매수합계'] = theme_df.get('개인', 0) + theme_df.get('기관', 0) + theme_df.get('외국인', 0)
                         
-                        # 브랜드별로 합계 계산
                         brand_sum = theme_df.groupby('브랜드')['순매수합계'].sum().reset_index()
                         brand_sum['주차'] = w
                         trend_data.append(brand_sum)
@@ -544,7 +529,6 @@ with tabs[5]:
         if trend_data:
             df_trend = pd.concat(trend_data)
             if not df_trend.empty:
-                # 꺾은선 그래프 렌더링
                 fig_trend = px.line(
                     df_trend, 
                     x='주차', 
