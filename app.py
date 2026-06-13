@@ -177,7 +177,6 @@ with tabs[0]:
 
             col_table, col_chart = st.columns([4, 5])
             with col_table:
-                # ★ 변경점: hide_index=True 추가
                 st.dataframe(df_filtered[["종목명", target_subject]], use_container_width=True, height=380, hide_index=True)
             with col_chart:
                 fig_etf = px.bar(df_filtered, x=target_subject, y="종목명", orientation='h')
@@ -195,11 +194,10 @@ with tabs[0]:
             df_theme = df_theme_pos.groupby('AI_자동_테마')[target_subject].sum().reset_index()
             df_theme = df_theme.sort_values(by=target_subject, ascending=False)
 
-            pie_limit = min(top_n, 7)
-            
-            if len(df_theme) > pie_limit:
-                df_top = df_theme.head(pie_limit)
-                others_val = df_theme.iloc[pie_limit:][target_subject].sum()
+            # ★ 변경점: 강제 7개 제한을 완전히 삭제하고, 슬라이더의 top_n 값을 100% 그대로 적용합니다.
+            if len(df_theme) > top_n:
+                df_top = df_theme.head(top_n)
+                others_val = df_theme.iloc[top_n:][target_subject].sum()
                 df_others = pd.DataFrame([{'AI_자동_테마': "🧩 기타 합산 (Others)", target_subject: others_val}])
                 df_pie_data = pd.concat([df_top, df_others], ignore_index=True)
             else:
@@ -207,8 +205,8 @@ with tabs[0]:
 
             col_theme_table, col_theme_chart = st.columns([3, 7])
             with col_theme_table:
-                # ★ 변경점: hide_index=True 추가
-                st.dataframe(df_theme, use_container_width=True, height=400, hide_index=True)
+                # 표에도 top_n 개수만큼의 데이터(+기타)가 정확히 일치하여 출력됩니다.
+                st.dataframe(df_pie_data, use_container_width=True, height=400, hide_index=True)
             with col_theme_chart:
                 fig_pie = px.pie(
                     df_pie_data, 
@@ -463,7 +461,7 @@ with tabs[5]:
     st.caption("실시간으로 연산된 자금 흐름과 고객 검색 트렌드 데이터를 복사하여, 사용 중인 AI에 직접 붙여넣고 완벽한 인사이트를 도출하세요.")
 
     data_context = "자금 흐름 데이터가 생성되지 않았습니다. [ETF 순매수 등락, 수익률] 탭에서 종목을 먼저 선택해주세요."
-    if not df_scatter.empty:
+    if 'df_scatter' in locals() and not df_scatter.empty:
         data_context = df_scatter.sort_values(by='주간 수익률(%)', ascending=False).head(20).to_string(index=False)
 
     dl_context = st.session_state['dl_summary']
