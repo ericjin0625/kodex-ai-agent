@@ -81,13 +81,14 @@ def get_real_returns(symbols_dict, etf_names):
             returns_dict[name] = 0.0
     return returns_dict
 
-# 3. 사이드바 구성
+# 3. 사이드바 구성 (CSV 및 엑셀 모두 허용)
 with st.sidebar:
     st.markdown("### 📊 데이터 컨트롤 타워")
     st.divider()
     uploaded_excel = st.file_uploader("ETF 순매수 엑셀 업로드", type=["xlsx", "xls"], key="excel_main")
     st.divider()
-    uploaded_csv = st.file_uploader("DataLab CSV 업로드 (경쟁사 비교용)", type=["csv"], key="csv_main")
+    # 확장자 csv, xlsx, xls 모두 허용
+    uploaded_dl = st.file_uploader("DataLab 데이터 업로드 (CSV/Excel)", type=["csv", "xlsx", "xls"], key="dl_main")
 
 # 4. 엑셀 시트 파싱
 available_weeks = ["5.17~5.23", "5.10~5.16", "5.03~5.09"] 
@@ -300,7 +301,7 @@ with tabs[1]:
                 st.warning("직전 주차 데이터가 없어 증감률을 비교할 수 없습니다.")
 
 # =========================================================================
-# --- Tab 2: [뉴스 & 검색량 트렌드] (DataLab CSV 완벽 파싱 및 AI 변수 저장) ---
+# --- Tab 2: [뉴스 & 검색량 트렌드] (CSV / Excel 자동 호환 파싱) ---
 # =========================================================================
 with tabs[2]:
     col_news, col_trend = st.columns([4, 6])
@@ -322,48 +323,59 @@ with tabs[2]:
                 
     with col_trend:
         st.markdown("### 📊 키워드 트렌드 요약 및 검색비율 추이")
-        st.caption("Naver DataLab CSV 연동 차트")
+        st.caption("Naver DataLab 연동 차트")
         
-        if uploaded_csv is not None:
+        if uploaded_dl is not None:
             try:
-                # 1. 메타데이터 6줄을 스킵하고 본 데이터부터 파싱
-                df_dl = pd.read_csv(uploaded_csv, skiprows=6, encoding='cp949')
+                # 1. 파일 확장자에 따라 판다스 읽기 함수(read_csv / read_excel) 자동 분기
+                file_ext = uploaded_dl.name.split('.')[-1].lower()
                 
-                # 2. 첫 번째 열(기준 날짜) 추출
-                master_date = df_dl.iloc[:, 0]
-                
-                # 3. '날짜'나 'Unnamed'라는 이름이 들어간 잉여 컬럼들을 걷어내고 실제 종목명 컬럼만 추출
-                value_cols = [col for col in df_dl.columns if '날짜' not in col and 'Unnamed' not in col]
-                
-                # 4. 분석용 통합 데이터프레임 병합
-                clean_df = pd.DataFrame({'날짜': master_date})
-                for col in value_cols:
-                    clean_df[col] = df_dl[col]
-                clean_df['날짜'] = pd.to_datetime(clean_df['날짜'])
-                
-                # --- AI 에이전트 프롬프트용 데이터 요약 (최근 14일 일평균 추출) ---
-                recent_14d_mean = clean_df.tail(14).mean(numeric_only=True).round(1)
-                dl_summary_text = "\n".join([f"- {idx}: {val}" for idx, val in recent_14d_mean.items()])
-                st.session_state['dl_summary'] = dl_summary_text
-                # -----------------------------------------------------------------
+                if file_ext == 'csv':
+                    # CSV 파일일 경우 한글 인코딩(cp949) 적용
+                    df_dl = pd.read_csv(uploaded_dl, skiprows=6, encoding='cp949')
+                elif file_ext in ['xlsx', 'xls']:
+                    # 엑셀 파일일 경우 기본 엔진 사용
+                    df_dl = pd.read_excel(uploaded_dl, skiprows=6)
+                else:
+                    st.error("지원하지 않는 파일 형식입니다. CSV나 Excel 파일을 업로드해주세요.")
+                    df_dl = pd.DataFrame()
 
-                # 5. Plotly 꺾은선 차트를 그리기 위해 넓은 데이터를 길게(melt) 변환
-                df_melted = clean_df.melt(id_vars=['날짜'], var_name='종목명', value_name='검색량')
-                
-                fig_trend = px.line(
-                    df_melted, 
-                    x='날짜', 
-                    y='검색량', 
-                    color='종목명',
-                    template="plotly_dark"
-                )
-                fig_trend.update_layout(height=450, margin=dict(l=20, r=20, t=20, b=20), xaxis_title=None, yaxis_title="상대적 검색량 (최대 100)")
-                st.plotly_chart(fig_trend, use_container_width=True)
+                if not df_dl.empty:
+                    # 2. 첫 번째 열(기준 날짜) 추출
+                    master_date = df_dl.iloc[:, 0]
+                    
+                    # 3. '날짜'나 'Unnamed'라는 이름이 들어간 잉여 컬럼들을 걷어내고 실제 종목명/키워드 컬럼만 추출
+                    value_cols = [col for col in df_dl.columns if '날짜' not in col and 'Unnamed' not in col]
+                    
+                    # 4. 분석용 통합 데이터프레임 병합
+                    clean_df = pd.DataFrame({'날짜': master_date})
+                    for col in value_cols:
+                        clean_df[col] = df_dl[col]
+                    clean_df['날짜'] = pd.to_datetime(clean_df['날짜'])
+                    
+                    # --- AI 에이전트 프롬프트용 데이터 요약 (최근 14일 일평균 추출) ---
+                    recent_14d_mean = clean_df.tail(14).mean(numeric_only=True).round(1)
+                    dl_summary_text = "\n".join([f"- {idx}: {val}" for idx, val in recent_14d_mean.items()])
+                    st.session_state['dl_summary'] = dl_summary_text
+                    # -----------------------------------------------------------------
+
+                    # 5. Plotly 꺾은선 차트를 그리기 위해 넓은 데이터를 길게(melt) 변환
+                    df_melted = clean_df.melt(id_vars=['날짜'], var_name='종목명', value_name='검색량')
+                    
+                    fig_trend = px.line(
+                        df_melted, 
+                        x='날짜', 
+                        y='검색량', 
+                        color='종목명',
+                        template="plotly_dark"
+                    )
+                    fig_trend.update_layout(height=450, margin=dict(l=20, r=20, t=20, b=20), xaxis_title=None, yaxis_title="상대적 검색량 (최대 100)")
+                    st.plotly_chart(fig_trend, use_container_width=True)
                 
             except Exception as e:
-                st.error(f"CSV 파일 처리 중 오류가 발생했습니다. 네이버 데이터랩 원본 파일이 맞는지 확인해주세요: {e}")
+                st.error(f"파일 처리 중 오류가 발생했습니다. 네이버 데이터랩 원본 파일이 맞는지 확인해주세요: {e}")
         else:
-            st.info("👈 좌측 사이드바에 Naver DataLab CSV 파일을 업로드하시면 비교 트렌드 차트가 나타납니다.")
+            st.info("👈 좌측 사이드바에 Naver DataLab 파일(CSV/Excel)을 업로드하시면 비교 트렌드 차트가 나타납니다.")
 
 # =========================================================================
 # --- Tab 3: [주간 거래량 추이] ---
@@ -410,7 +422,7 @@ with tabs[3]:
         st.info("좌측 사이드바에 엑셀 데이터를 업로드해주세요.")
 
 # =========================================================================
-# --- Tab 5: [AI 분석용 프롬프트 생성기] (데이터랩 요약수치 자동 주입) ---
+# --- Tab 5: [AI 분석용 프롬프트 생성기] ---
 # =========================================================================
 with tabs[5]:
     st.markdown("### 🧠 AI 분석용 프롬프트 자동 생성기")
@@ -420,7 +432,6 @@ with tabs[5]:
     if not df_scatter.empty:
         data_context = df_scatter.sort_values(by='주간 수익률(%)', ascending=False).head(20).to_string(index=False)
 
-    # 데이터랩 요약값 렌더링
     dl_context = st.session_state['dl_summary']
 
     prompt_text = f"""너는 KODEX 상품기획 및 마케팅을 담당하는 최고 책임자(CMO)야.
