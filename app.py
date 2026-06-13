@@ -327,7 +327,7 @@ with tabs[2]:
         if uploaded_csv is not None:
             try:
                 # 1. 메타데이터 6줄을 스킵하고 본 데이터부터 파싱
-                df_dl = pd.read_csv(uploaded_csv, skiprows=6)
+                df_dl = pd.read_csv(uploaded_csv, skiprows=6, encoding='cp949')
                 
                 # 2. 첫 번째 열(기준 날짜) 추출
                 master_date = df_dl.iloc[:, 0]
