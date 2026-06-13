@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 st.set_page_config(page_title="ETF Monitoring AI Agent", layout="wide")
 
 # ==========================================
-# ★ AI 테마 자동 분류 로직 (엑셀에 테마 열이 없어도 자동 인식)
+# ★ AI 테마 자동 분류 로직
 # ==========================================
 def assign_auto_theme(etf_name):
     name = str(etf_name).upper().replace(" ", "")
@@ -128,7 +128,6 @@ with col_week:
     default_idx = 1 if len(available_weeks) > 1 else 0
     selected_week = st.selectbox("주차 (최대 6개월 전까지 선택 가능):", options=available_weeks, index=default_idx)
 
-# ★ 탭 순서 논리적 재배치 (운용 현황을 프롬프트 앞으로)
 tab_names = [
     "[Weekly Info.]", "[ETF 순매수 등락, 수익률]", "[뉴스 & 검색량 트렌드]", 
     "[주간 거래량 추이]", "[진행 이벤트]", "[ETF 운용 현황]", "[AI 분석용 프롬프트]"
@@ -452,15 +451,15 @@ with tabs[3]:
         st.info("좌측 사이드바에 엑셀 데이터를 업로드해주세요.")
 
 # =========================================================================
-# --- Tab 5: [ETF 운용 현황] (경쟁사 라인업 공백 감지 매트릭스 - 스타일링 오류 제거 완료) ---
+# --- Tab 5: [ETF 운용 현황] (AUM 기반 경쟁사 라인업 매트릭스) ---
 # =========================================================================
 with tabs[5]:
-    st.markdown("### 🏢 국내 상위 운용사 ETF 라인업 공백 분석 (White Space)")
-    st.caption("한국거래소(KRX) 전체 상장 ETF 데이터를 실시간으로 전수조사하여 경쟁사 대비 KODEX의 라인업 공백을 스캔합니다.")
+    st.markdown("### 🏢 국내 상위 운용사 테마별 AUM 현황 (단위: 억원)")
+    st.caption("한국거래소(KRX) 실시간 데이터를 바탕으로 상위 운용사 간의 순자산총액(AUM) 규모를 비교하여 시장 장악력과 공백을 스캔합니다.")
     
     with st.spinner("KRX 전체 상장 ETF 데이터를 분석 중입니다... (약 5~10초 소요)"):
         try:
-            # 1. KRX 상장 ETF 전체 목록 불러오기
+            # 1. KRX 상장 ETF 전체 목록 불러오기 (MarCap 포함)
             df_all_etf = fdr.StockListing('ETF/KR')
             
             # 2. 종목명 첫 단어를 '브랜드'로 추출
@@ -473,25 +472,29 @@ with tabs[5]:
             # 4. AI 자동 테마 분류기 적용
             df_top_brands['분류_테마'] = df_top_brands['Name'].apply(assign_auto_theme)
             
-            # 5. 브랜드 vs 테마 교차 매트릭스(피벗 테이블) 생성
+            # ★ 5. AUM(순자산총액) 억원 단위로 환산
+            df_top_brands['AUM(억원)'] = df_top_brands['MarCap'] / 100000000
+            
+            # ★ 6. 브랜드 vs 테마 교차 매트릭스 생성 (값: AUM 합계)
             pivot_df = pd.pivot_table(
                 df_top_brands,
-                values='Symbol',
+                values='AUM(억원)',
                 index='분류_테마',
                 columns='브랜드',
-                aggfunc='count',
+                aggfunc='sum',
                 fill_value=0
             )
             
-            # KODEX 열이 정상적으로 생성된 경우에만 열 순서를 재배치
-            if 'KODEX' in pivot_df.columns:
-                cols = ['KODEX'] + [c for c in pivot_df.columns if c != 'KODEX']
-                pivot_df = pivot_df[cols]
+            # ★ 7. 열 순서를 KODEX, TIGER 우선으로 강제 고정
+            ordered_cols = [col for col in target_brands if col in pivot_df.columns]
+            pivot_df = pivot_df[ordered_cols]
             
-            # ★ 에러 원인이었던 .style.background_gradient 코드를 완전히 제거하고 안전한 표 형태로 출력합니다.
+            # 소수점 제거 후 정수형 변환하여 보기 쉽게 출력
+            pivot_df = pivot_df.astype(int)
+            
             st.dataframe(pivot_df, use_container_width=True)
             
-            st.info("💡 **인사이트 도출 가이드:** 매트릭스를 확인하여 `KODEX` 열의 숫자가 '0'이거나 경쟁사(`TIGER`, `ACE` 등) 대비 현저히 적은 테마가 바로 **우선 공략해야 할 상품 기획 공백(White Space)**입니다.")
+            st.info("💡 **인사이트 도출 가이드:** KODEX와 TIGER의 AUM 규모를 직접적으로 비교하여, 실질적인 고객 자금이 유출/유입되는 '진짜 위협'이나 '수익성 높은 블루오션'을 파악하세요.")
             
         except Exception as e:
             st.error(f"데이터를 불러오는 중 오류가 발생했습니다: {e}")
