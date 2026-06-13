@@ -11,11 +11,10 @@ from datetime import datetime, timedelta
 # 1. 페이지 레이아웃 및 기본 테마 설정
 st.set_page_config(page_title="ETF Monitoring AI Agent", layout="wide")
 
-# 2. 실시간 데이터 파싱 함수
+# 2. 실시간 데이터 파싱 함수 (뉴스 연동)
 @st.cache_data(ttl=3600)
 def get_realtime_news(keyword="ETF"):
     url = f"https://news.google.com/rss/search?q={keyword}+when:7d&hl=ko&gl=KR&ceid=KR:ko"
-    
     try:
         res = requests.get(url, timeout=5)
         root = ET.fromstring(res.text)
@@ -86,9 +85,9 @@ def get_real_returns(symbols_dict, etf_names):
 with st.sidebar:
     st.markdown("### 📊 데이터 컨트롤 타워")
     st.divider()
-    uploaded_excel = st.file_uploader("Excel Upload", type=["xlsx", "xls"], key="excel_main", label_visibility="collapsed")
+    uploaded_excel = st.file_uploader("ETF 순매수 엑셀 업로드", type=["xlsx", "xls"], key="excel_main")
     st.divider()
-    uploaded_csv = st.file_uploader("CSV Upload", type=["csv"], key="csv_main", label_visibility="collapsed")
+    uploaded_csv = st.file_uploader("DataLab CSV 업로드 (경쟁사 비교용)", type=["csv"], key="csv_main")
 
 # 4. 엑셀 시트 파싱
 available_weeks = ["5.17~5.23", "5.10~5.16", "5.03~5.09"] 
@@ -106,7 +105,7 @@ with col_week:
     selected_week = st.selectbox("주차 (최대 6개월 전까지 선택 가능):", options=available_weeks, index=default_idx)
 
 tab_names = [
-    "[Weekly Info.]", "[ETF 순매수 등락, 수익률]", "[뉴스, 검색량, 종토방 분석]", 
+    "[Weekly Info.]", "[ETF 순매수 등락, 수익률]", "[뉴스 & 검색량 트렌드]", 
     "[주간 거래량 추이]", "[진행 이벤트]", "[AI 분석용 프롬프트]", "[ETF 운용 현황]"
 ]
 tabs = st.tabs(tab_names)
@@ -126,6 +125,7 @@ def load_and_clean_excel(file, sheet_name):
     return df
 
 df_scatter = pd.DataFrame()
+st.session_state['dl_summary'] = "DataLab 데이터가 업로드되지 않았습니다."
 
 # =========================================================================
 # --- Tab 0: [Weekly Info.] ---
@@ -267,7 +267,7 @@ with tabs[1]:
                     default_selection = all_etfs_scatter[:10] if len(all_etfs_scatter) >= 10 else all_etfs_scatter
                     
                     selected_scatter_etfs = st.multiselect(
-                        "📍 산점도에 표시할 ETF를 검색/선택하세요 (선택된 종목만 실시간 수익률을 고속으로 가져옵니다):", 
+                        "📍 산점도에 표시할 ETF를 검색/선택하세요:", 
                         options=all_etfs_scatter, 
                         default=default_selection,
                         key="scatter_multiselect_tab2"
@@ -300,75 +300,70 @@ with tabs[1]:
                 st.warning("직전 주차 데이터가 없어 증감률을 비교할 수 없습니다.")
 
 # =========================================================================
-# --- Tab 2: [뉴스, 검색량, 종토방 분석] (DataLab CSV 연동 완료) ---
+# --- Tab 2: [뉴스 & 검색량 트렌드] (DataLab CSV 완벽 파싱 및 AI 변수 저장) ---
 # =========================================================================
 with tabs[2]:
-    st.markdown("### 📰 실시간 ETF 마켓 뉴스 <span style='font-size:12px; color:gray;'>(Google News 고속 크롤링)</span>", unsafe_allow_html=True)
+    col_news, col_trend = st.columns([4, 6])
     
-    with st.spinner("최신 뉴스 데이터를 수집하고 있습니다..."):
-        df_real_news = get_realtime_news("ETF")
-        
-        if "링크" in df_real_news.columns and df_real_news["링크"].iloc[0] != "":
-            for idx, row in df_real_news.iterrows():
-                with st.container(border=True):
-                    col_meta, col_content = st.columns([1.2, 5.8])
-                    with col_meta:
+    with col_news:
+        st.markdown("### 📰 실시간 ETF 마켓 뉴스")
+        st.caption("Google News 자동 크롤링")
+        with st.spinner("최신 뉴스 데이터를 수집하고 있습니다..."):
+            df_real_news = get_realtime_news("ETF")
+            
+            if "링크" in df_real_news.columns and df_real_news["링크"].iloc[0] != "":
+                for idx, row in df_real_news.iterrows():
+                    with st.container(border=True):
                         st.caption(f"📅 {row['게시일 / 출처']}")
-                    with col_content:
-                        st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:16px; font-weight:bold; color:#4da6ff; text-decoration:none;'>{row['원본제목']} 🔗</a>", unsafe_allow_html=True)
-                        st.markdown(f"<p style='font-size:14px; margin-top:4px; color:#cccccc;'>{row['본문 한 줄 요약']}</p>", unsafe_allow_html=True)
-        else:
-            st.dataframe(df_real_news, use_container_width=True, hide_index=True)
-    
-    st.divider()
-
-    col_wip1, col_wip2 = st.columns(2)
-    with col_wip1:
+                        st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:15px; font-weight:bold; color:#4da6ff; text-decoration:none;'>{row['원본제목']} 🔗</a>", unsafe_allow_html=True)
+                        st.markdown(f"<p style='font-size:13px; margin-top:4px; color:#cccccc;'>{row['본문 한 줄 요약']}</p>", unsafe_allow_html=True)
+            else:
+                st.dataframe(df_real_news, use_container_width=True, hide_index=True)
+                
+    with col_trend:
         st.markdown("### 📊 키워드 트렌드 요약 및 검색비율 추이")
+        st.caption("Naver DataLab CSV 연동 차트")
         
-        # DataLab CSV 파일 병합 및 시각화 로직
         if uploaded_csv is not None:
             try:
-                # 상위 6줄 무시하고 데이터 읽기
+                # 1. 메타데이터 6줄을 스킵하고 본 데이터부터 파싱
                 df_dl = pd.read_csv(uploaded_csv, skiprows=6)
                 
-                # 첫 번째 열을 마스터 '날짜' 기준으로 삼음
+                # 2. 첫 번째 열(기준 날짜) 추출
                 master_date = df_dl.iloc[:, 0]
                 
-                # 값 컬럼 추출 ('날짜'나 'Unnamed'가 포함되지 않은 실제 종목명 컬럼)
+                # 3. '날짜'나 'Unnamed'라는 이름이 들어간 잉여 컬럼들을 걷어내고 실제 종목명 컬럼만 추출
                 value_cols = [col for col in df_dl.columns if '날짜' not in col and 'Unnamed' not in col]
                 
-                # 정리된 DataFrame 조립
+                # 4. 분석용 통합 데이터프레임 병합
                 clean_df = pd.DataFrame({'날짜': master_date})
                 for col in value_cols:
                     clean_df[col] = df_dl[col]
-                
-                # 날짜 형식 변환
                 clean_df['날짜'] = pd.to_datetime(clean_df['날짜'])
                 
-                # Plotly 시각화를 위해 넓은 데이터를 길게(melt) 변환
+                # --- AI 에이전트 프롬프트용 데이터 요약 (최근 14일 일평균 추출) ---
+                recent_14d_mean = clean_df.tail(14).mean(numeric_only=True).round(1)
+                dl_summary_text = "\n".join([f"- {idx}: {val}" for idx, val in recent_14d_mean.items()])
+                st.session_state['dl_summary'] = dl_summary_text
+                # -----------------------------------------------------------------
+
+                # 5. Plotly 꺾은선 차트를 그리기 위해 넓은 데이터를 길게(melt) 변환
                 df_melted = clean_df.melt(id_vars=['날짜'], var_name='종목명', value_name='검색량')
                 
-                # 꺾은선 차트 그리기
                 fig_trend = px.line(
                     df_melted, 
                     x='날짜', 
                     y='검색량', 
                     color='종목명',
-                    title="선택된 연령군의 ETF 검색 트렌드 (Naver DataLab)",
                     template="plotly_dark"
                 )
-                fig_trend.update_layout(height=400, margin=dict(l=20, r=20, t=50, b=20), xaxis_title=None, yaxis_title="상대적 검색량")
+                fig_trend.update_layout(height=450, margin=dict(l=20, r=20, t=20, b=20), xaxis_title=None, yaxis_title="상대적 검색량 (최대 100)")
                 st.plotly_chart(fig_trend, use_container_width=True)
                 
             except Exception as e:
-                st.error(f"CSV 파일 처리 중 오류가 발생했습니다. 파일 형식을 확인해주세요: {e}")
+                st.error(f"CSV 파일 처리 중 오류가 발생했습니다. 네이버 데이터랩 원본 파일이 맞는지 확인해주세요: {e}")
         else:
-            st.info("좌측 사이드바에 Naver DataLab CSV 파일을 업로드하시면 트렌드 차트가 나타납니다.")
-            
-    with col_wip2:
-        st.markdown("### 💬 종목토론방 분석")
-        st.warning("🚧 실시간 종목토론방 감성 분석 로직 연동 중입니다.")
+            st.info("👈 좌측 사이드바에 Naver DataLab CSV 파일을 업로드하시면 비교 트렌드 차트가 나타납니다.")
 
 # =========================================================================
 # --- Tab 3: [주간 거래량 추이] ---
@@ -412,30 +407,36 @@ with tabs[3]:
                         else:
                             st.warning(f"{etf_name}에 해당하는 종목 코드를 찾을 수 없습니다.")
     else:
-        st.info("좌측 사이드바에 데이터를 업로드해주세요.")
+        st.info("좌측 사이드바에 엑셀 데이터를 업로드해주세요.")
 
 # =========================================================================
-# --- Tab 5: [AI 분석용 프롬프트 생성기] ---
+# --- Tab 5: [AI 분석용 프롬프트 생성기] (데이터랩 요약수치 자동 주입) ---
 # =========================================================================
 with tabs[5]:
     st.markdown("### 🧠 AI 분석용 프롬프트 자동 생성기")
-    st.caption("실시간으로 계산된 완벽한 데이터를 복사하여, 사용 중인 유료 AI(ChatGPT, Claude 등)에 직접 붙여넣어 완벽한 인사이트를 도출하세요.")
+    st.caption("실시간으로 연산된 자금 흐름과 고객 검색 트렌드 데이터를 복사하여, 사용 중인 AI에 직접 붙여넣고 완벽한 인사이트를 도출하세요.")
 
-    data_context = "데이터가 생성되지 않았습니다. [ETF 순매수 등락, 수익률] 탭에서 산점도 종목을 먼저 선택해주세요."
-    if 'df_scatter' in locals() and not df_scatter.empty:
+    data_context = "자금 흐름 데이터가 생성되지 않았습니다. [ETF 순매수 등락, 수익률] 탭에서 종목을 먼저 선택해주세요."
+    if not df_scatter.empty:
         data_context = df_scatter.sort_values(by='주간 수익률(%)', ascending=False).head(20).to_string(index=False)
 
-    prompt_text = f"""너는 KODEX 상품기획 및 마케팅을 담당하는 최고 책임자(CMO)야.
-다음은 {selected_week} 주차의 주요 ETF 실제 자금 유입(순매수 증감률) 및 주간 실제 수익률 데이터야.
+    # 데이터랩 요약값 렌더링
+    dl_context = st.session_state['dl_summary']
 
-[ETF 데이터]
+    prompt_text = f"""너는 KODEX 상품기획 및 마케팅을 담당하는 최고 책임자(CMO)야.
+다음은 {selected_week} 주차의 실제 자금 유입(순매수 증감률) 데이터와 최근 타겟 고객층의 포털 검색 트렌드 수치야.
+
+[1. ETF 자금 흐름 및 수익률 데이터]
 {data_context}
 
-이 데이터를 바탕으로 전문가다운 마케팅 인사이트 보고서를 한글로 작성해줘.
+[2. 타겟 연령층 대상 최근 14일간 일평균 검색비율 (네이버 데이터랩, 최대 100 기준)]
+{dl_context}
+
+이 데이터를 종합하여 전문가다운 마케팅 인사이트 보고서를 한글로 작성해줘.
 반드시 아래 3가지 제목을 포함해서 논리적이고 깊이 있게 분석해야 해.
 
-1. Executive Summary (시장 자금 흐름의 핵심 요약)
-2. Signal Interpretation (특징적인 수익률/순매수 움직임을 보이는 종목 분석)
+1. Executive Summary (자금 흐름과 검색 트렌드의 상관관계 요약)
+2. Signal Interpretation (고객 검색 수요와 실제 수익률 간의 격차나 기회 포착)
 3. Next Month Watchlist (다음 달 마케팅/세일즈 역량을 집중해야 할 ETF 추천 및 명확한 이유)
 """
 
