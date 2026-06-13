@@ -11,6 +11,30 @@ from datetime import datetime, timedelta
 # 1. 페이지 레이아웃 및 기본 테마 설정
 st.set_page_config(page_title="ETF Monitoring AI Agent", layout="wide")
 
+# ==========================================
+# ★ AI 테마 자동 분류 로직 (엑셀에 테마 열이 없어도 자동 인식)
+# ==========================================
+def assign_auto_theme(etf_name):
+    name = str(etf_name).upper().replace(" ", "")
+    if any(kw in name for kw in ['인버스', '베어']):
+        return '📉 인버스 (하락배팅)'
+    elif any(kw in name for kw in ['레버리지', '2X']):
+        return '🚀 레버리지 (고변동성)'
+    elif any(kw in name for kw in ['배당', '커버드콜', '인컴', '고배당', 'DIV']):
+        return '💰 배당 & 커버드콜'
+    elif any(kw in name for kw in ['AI', '반도체']):
+        return '🤖 AI & 반도체'
+    elif any(kw in name for kw in ['테크', '기술주', 'TECH', '혁신', '나스닥100', '빅테크', 'FANG']):
+        return '💻 글로벌 빅테크'
+    elif any(kw in name for kw in ['S&P', '미국', '다우존스', 'MSCI']):
+        return '🇺🇸 미국 대표지수'
+    elif any(kw in name for kw in ['코스피', '코스닥', '200']):
+        return '🇰🇷 국내 대표지수'
+    elif any(kw in name for kw in ['채권', '국고채', '금리', 'KOFR', 'CD', '파킹']):
+        return '🛡️ 안전자산 (채권/금리)'
+    else:
+        return '📦 기타 섹터/테마'
+
 # 2. 실시간 데이터 파싱 함수 (뉴스 연동)
 @st.cache_data(ttl=3600)
 def get_realtime_news(keyword="ETF"):
@@ -81,7 +105,7 @@ def get_real_returns(symbols_dict, etf_names):
             returns_dict[name] = 0.0
     return returns_dict
 
-# 3. 사이드바 구성 (CSV 및 엑셀 모두 허용)
+# 3. 사이드바 구성
 with st.sidebar:
     st.markdown("### 📊 데이터 컨트롤 타워")
     st.divider()
@@ -128,7 +152,7 @@ df_scatter = pd.DataFrame()
 st.session_state['dl_summary'] = "DataLab 데이터가 업로드되지 않았습니다."
 
 # =========================================================================
-# --- Tab 0: [Weekly Info.] (유연한 컬럼 인식 및 기타 파이 차트 적용) ---
+# --- Tab 0: [Weekly Info.] (AI 자동 테마 파이 차트) ---
 # =========================================================================
 with tabs[0]:
     df_source = pd.DataFrame()
@@ -136,7 +160,7 @@ with tabs[0]:
         try:
             df_source = load_and_clean_excel(uploaded_excel, selected_week)
         except Exception as e:
-            st.error(f"오류: {e}")
+            st.error(f"엑셀을 읽는 중 오류가 발생했습니다: {e}")
 
     if not df_source.empty:
         st.markdown("### 🏆 해당 주 순매수 ETF 순위")
@@ -161,45 +185,44 @@ with tabs[0]:
 
         st.divider()
 
-        st.markdown("### 🔥 해당 주 인기 테마 (순매수 유입 비중)")
+        st.markdown("### 🔥 AI 자동 분류 테마 비중 (순매수 유입 기준)")
         
-        # 1. 엑셀 파일 내에서 '테마'라는 단어가 포함된 열을 유연하게 찾습니다.
-        theme_col = next((col for col in df_source.columns if '테마' in col), None)
-
-        if theme_col and '종목명' in df_source.columns:
-            # 양수(>0)인 인기 테마만 필터링
+        if '종목명' in df_source.columns:
+            # 1. 엑셀에 테마 열이 없어도, 종목명을 기반으로 AI 테마를 자동 생성합니다.
+            df_source['AI_자동_테마'] = df_source['종목명'].apply(assign_auto_theme)
+            
+            # 순매수가 양수(>0)인 자금 유입 종목만 필터링
             df_theme_pos = df_source[(df_source["종목명"] != "전체") & (df_source[target_subject] > 0)]
-            df_theme = df_theme_pos.groupby(theme_col)[target_subject].sum().reset_index()
+            df_theme = df_theme_pos.groupby('AI_자동_테마')[target_subject].sum().reset_index()
             df_theme = df_theme.sort_values(by=target_subject, ascending=False)
 
-            # 2. TOP N과 '기타' 조각 분리 로직
-            if len(df_theme) > top_n:
-                df_top = df_theme.head(top_n)
-                others_val = df_theme.iloc[top_n:][target_subject].sum()
-                df_others = pd.DataFrame([{theme_col: "기타 (Others)", target_subject: others_val}])
+            # 2. 제안해주신 로직: TOP N개만 살리고 나머지는 '기타'로 병합
+            # 위 슬라이더의 top_n 값을 그대로 연동합니다. (테마 개수가 적을 수 있으므로 n=5~7 내외로 고정해도 좋습니다)
+            pie_limit = min(top_n, 7) # 파이 차트가 너무 잘게 쪼개지지 않도록 최대 7개 조각으로 제한
+            
+            if len(df_theme) > pie_limit:
+                df_top = df_theme.head(pie_limit)
+                others_val = df_theme.iloc[pie_limit:][target_subject].sum()
+                df_others = pd.DataFrame([{'AI_자동_테마': "🧩 기타 합산 (Others)", target_subject: others_val}])
                 df_pie_data = pd.concat([df_top, df_others], ignore_index=True)
             else:
                 df_pie_data = df_theme
 
             col_theme_table, col_theme_chart = st.columns([3, 7])
             with col_theme_table:
-                # 표는 전체 테마 목록을 모두 보여줍니다.
                 st.dataframe(df_theme, use_container_width=True, height=400)
             with col_theme_chart:
-                # 파이 차트 (가운데가 살짝 뚫린 도넛 형태로 세련되게 렌더링)
+                # 3. 가운데가 뚫린 세련된 도넛 형태의 파이 차트 렌더링
                 fig_pie = px.pie(
                     df_pie_data, 
-                    names=theme_col, 
+                    names='AI_자동_테마', 
                     values=target_subject,
-                    hole=0.4,
+                    hole=0.4, # 도넛 형태
                     color_discrete_sequence=px.colors.sequential.Blues_r
                 )
-                # 라벨과 퍼센티지를 조각 안쪽에 함께 표시
-                fig_pie.update_traces(textposition='inside', textinfo='percent+label', textfont_size=12)
+                fig_pie.update_traces(textposition='inside', textinfo='percent+label', textfont_size=13, marker=dict(line=dict(color='#000000', width=1)))
                 fig_pie.update_layout(height=400, margin=dict(t=20, l=20, r=20, b=20), template="plotly_dark", showlegend=False)
                 st.plotly_chart(fig_pie, use_container_width=True)
-        else:
-            st.info("업로드하신 엑셀 파일의 첫 줄에 '테마'라는 단어가 포함된 열(Column)이 존재하지 않아 테마 분석을 건너뜁니다.")
     else:
         st.info("좌측 사이드바에 엑셀 데이터를 업로드해주세요.")
 
@@ -397,4 +420,73 @@ with tabs[2]:
 with tabs[3]:
     st.markdown("### 📊 선택 ETF 실제 주간 거래량 추이 (최대 12개)")
     
-    if uploaded_excel is not None and
+    if uploaded_excel is not None and not df_source.empty and '종목명' in df_source.columns:
+        extracted_etfs = df_source[df_source['종목명'] != '전체']['종목명'].dropna().unique().tolist()
+        
+        selected_etfs = st.multiselect(
+            "검색 및 선택 (아래 빈칸을 클릭하거나 타이핑하세요):", 
+            options=extracted_etfs, 
+            default=extracted_etfs[:4] if len(extracted_etfs) >= 4 else extracted_etfs, 
+            max_selections=12
+        )
+        
+        st.divider()
+
+        if selected_etfs:
+            with st.spinner("한국거래소(KRX)에서 선택 종목의 실제 거래 데이터를 불러오는 중입니다..."):
+                cols = st.columns(2)
+                symbols_mapping = get_etf_mapping()
+                end_date = datetime.today()
+                start_date = end_date - timedelta(weeks=8) 
+                
+                for i, etf_name in enumerate(selected_etfs):
+                    with cols[i % 2]:
+                        symbol = symbols_mapping.get(etf_name)
+                        if symbol:
+                            try:
+                                df_hist = fdr.DataReader(symbol, start_date, end_date)
+                                df_weekly = df_hist['Volume'].resample('W').sum().reset_index()
+                                df_weekly.columns = ['주 시작일', '거래량']
+                                
+                                fig_line = px.line(df_weekly, x='주 시작일', y='거래량', title=f"**{etf_name}** 실제 주간 거래량 추이", markers=True, color_discrete_sequence=['#4da6ff'])
+                                fig_line.update_layout(height=350, template="plotly_dark", margin=dict(l=20, r=20, t=50, b=20), yaxis_title="주간 거래량 (주)", xaxis_title=None)
+                                st.plotly_chart(fig_line, use_container_width=True)
+                            except:
+                                st.error(f"{etf_name}의 데이터를 불러오지 못했습니다.")
+                        else:
+                            st.warning(f"{etf_name}에 해당하는 종목 코드를 찾을 수 없습니다.")
+    else:
+        st.info("좌측 사이드바에 엑셀 데이터를 업로드해주세요.")
+
+# =========================================================================
+# --- Tab 5: [AI 분석용 프롬프트 생성기] ---
+# =========================================================================
+with tabs[5]:
+    st.markdown("### 🧠 AI 분석용 프롬프트 자동 생성기")
+    st.caption("실시간으로 연산된 자금 흐름과 고객 검색 트렌드 데이터를 복사하여, 사용 중인 AI에 직접 붙여넣고 완벽한 인사이트를 도출하세요.")
+
+    data_context = "자금 흐름 데이터가 생성되지 않았습니다. [ETF 순매수 등락, 수익률] 탭에서 종목을 먼저 선택해주세요."
+    if 'df_scatter' in locals() and not df_scatter.empty:
+        data_context = df_scatter.sort_values(by='주간 수익률(%)', ascending=False).head(20).to_string(index=False)
+
+    dl_context = st.session_state['dl_summary']
+
+    prompt_text = f"""너는 KODEX 상품기획 및 마케팅을 담당하는 최고 책임자(CMO)야.
+다음은 {selected_week} 주차의 실제 자금 유입(순매수 증감률) 데이터와 최근 타겟 고객층의 포털 검색 트렌드 수치야.
+
+[1. ETF 자금 흐름 및 수익률 데이터]
+{data_context}
+
+[2. 타겟 연령층 대상 최근 14일간 일평균 검색비율 (네이버 데이터랩, 최대 100 기준)]
+{dl_context}
+
+이 데이터를 종합하여 전문가다운 마케팅 인사이트 보고서를 한글로 작성해줘.
+반드시 아래 3가지 제목을 포함해서 논리적이고 깊이 있게 분석해야 해.
+
+1. Executive Summary (자금 흐름과 검색 트렌드의 상관관계 요약)
+2. Signal Interpretation (고객 검색 수요와 실제 수익률 간의 격차나 기회 포착)
+3. Next Month Watchlist (다음 달 마케팅/세일즈 역량을 집중해야 할 ETF 추천 및 명확한 이유)
+"""
+
+    st.code(prompt_text, language="text")
+    st.info("👆 우측 상단의 'Copy' 버튼을 눌러 복사한 뒤, 사용 중이신 AI 모델 대화창에 그대로 붙여넣으세요.")
