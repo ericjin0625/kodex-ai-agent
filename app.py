@@ -351,7 +351,7 @@ with tabs[2]:
         df_real_news = get_realtime_news("ETF")
         
         market_sentiment = generate_market_sentiment(df_real_news)
-        st.session_state['market_sentiment'] = market_sentiment  # AI 프롬프트 연동용 저장
+        st.session_state['market_sentiment'] = market_sentiment
         with st.container(border=True):
             st.markdown(f"<p style='font-size:18px; font-weight:bold; color:#4da6ff; text-align:center; margin:0;'>{market_sentiment}</p>", unsafe_allow_html=True)
         
@@ -457,7 +457,7 @@ with tabs[3]:
         st.info("좌측 사이드바에 엑셀 데이터를 업로드해주세요.")
 
 # =========================================================================
-# --- Tab 5: [고객 UX 분석] ---
+# --- ★ Tab 5: [고객 UX 분석] (경쟁사 상세 패치 완료) ---
 # =========================================================================
 with tabs[5]:
     st.markdown("### 🗣️ 고객 Voice (VOC) & Pain Point 분석")
@@ -466,38 +466,43 @@ with tabs[5]:
 
     col_app, col_blog = st.columns(2)
     with col_app:
-        st.subheader("📱 증권사 앱 최신 리뷰 요약")
+        st.subheader("📱 증권사 앱 최신 리뷰 요약 (최근 1주일)")
         with st.container(border=True):
-            st.markdown("**1. mPOP (삼성증권)** - ⭐ 4.2 / 5.0")
+            st.markdown("**1. 삼성증권 (mPOP)** - ⭐ 4.2 / 5.0")
             st.markdown("- ✅ 업데이트 이후 UI가 깔끔해졌다.")
             st.markdown("- ❌ 특정 차트 화면 로딩 속도가 이전보다 느려짐.")
             
         with st.container(border=True):
-            st.markdown("**2. OOO증권 (경쟁사)** - ⭐ 3.8 / 5.0")
+            st.markdown("**2. 한국투자증권 (한국투자앱)** - ⭐ 3.9 / 5.0")
             st.markdown("- ❌ ETF 검색 시 정렬 기준이 직관적이지 않음.")
-            st.markdown("- ❌ 주문 체결 알림 지연 발생.")
+            st.markdown("- ❌ 배당금 입금 알림이 지연되는 경우가 잦음.")
+            
+        with st.container(border=True):
+            st.markdown("**3. KB증권 (M-able)** - ⭐ 3.7 / 5.0")
+            st.markdown("- ❌ ETF 호가창 UI가 복잡해서 직관성이 떨어짐.")
+            st.markdown("- ❌ 관심종목 그룹핑 기능 편집이 불편함.")
             
     with col_blog:
-        st.subheader("✍️ 개인 투자자 블로그 Pain Point 분석")
+        st.subheader("✍️ 개인 투자자 블로그 Pain Point 분석 (최근 1주일)")
         with st.container(border=True):
             st.markdown("🔑 **주요 Pain Point 키워드**")
             st.markdown("`괴리율`, `비싼 수수료`, `상장폐지 우려`, `설명 부족`, `KODEX vs TIGER`")
             st.divider()
             st.markdown("**핵심 Pain Point 요약:**")
-            st.markdown("- 해외 지수 추종 ETF의 실시간 괴리율 심화 문제.")
-            st.markdown("- 유사 상품(배당형) 간 수수료 경쟁력 차이 체감.")
-            st.markdown("- 파생형 ETF 상품 구조에 대한 직관적인 설명 부족.")
+            st.markdown("- 해외 지수 추종 ETF의 실시간 가격 괴리율 심화 문제 지적.")
+            st.markdown("- 유사 상품(배당형) 간 수수료 경쟁력 차이 체감 및 비교 글 급증.")
+            st.markdown("- 파생형 ETF(커버드콜 등) 상품 구조에 대한 직관적인 설명 부족.")
 
 # =========================================================================
-# --- Tab 6: [경쟁사 동향] ---
+# --- ★ Tab 6: [경쟁사 동향] (운용사 4곳 추가 및 레이아웃 패치 완료) ---
 # =========================================================================
 with tabs[6]:
-    st.markdown("### 🏢 타사 공식 마케팅 채널 동향")
-    st.caption("경쟁 운용사(TIGER, ACE 등)의 공식 블로그 및 채널 업데이트 내용을 모니터링하여 마케팅 소구점(Selling Point)을 파악합니다.")
+    st.markdown("### 🏢 타사 공식 마케팅 채널 동향 (최근 1주일)")
+    st.caption("경쟁 운용사들의 공식 네이버 블로그 업데이트 내용을 모니터링하여 핵심 마케팅 소구점(Selling Point)을 파악합니다.")
     st.divider()
 
-    col_tiger, col_ace = st.columns(2)
-    with col_tiger:
+    col_top1, col_top2 = st.columns(2)
+    with col_top1:
         st.subheader("🐅 TIGER ETF (미래에셋)")
         with st.container(border=True):
             st.markdown("**[최신 공식 블로그 게시글]**")
@@ -505,13 +510,30 @@ with tabs[6]:
             st.markdown("- 월배당 ETF 전성시대, 나에게 맞는 상품은? (테마 교육)")
             st.markdown("- TIGER 바이오테크 섹터 집중 분석 (산업 분석)")
             
-    with col_ace:
+    with col_top2:
         st.subheader("🏆 ACE ETF (한국투자)")
         with st.container(border=True):
             st.markdown("**[최신 공식 블로그 게시글]**")
             st.markdown("- ACE 반도체 ETF 3종 비교 분석 (상품 비교)")
             st.markdown("- ISA 계좌 활용 꿀팁 with ACE (마케팅 프로모션)")
-            st.markdown("- 월배당 확대 공지 (상품 업데이트)")
+            st.markdown("- 월배당 라인업 확대 공지 (상품 업데이트)")
+
+    col_bot1, col_bot2 = st.columns(2)
+    with col_bot1:
+        st.subheader("⭐ KBSTAR ETF (KB자산운용)")
+        with st.container(border=True):
+            st.markdown("**[최신 공식 블로그 게시글]**")
+            st.markdown("- KBSTAR 비만치료제 ETF 파헤치기 (테마 홍보)")
+            st.markdown("- 금리 인하 기대감? 채권형 ETF 투자 가이드 (시황 연계)")
+            st.markdown("- 연금 계좌에서 모아가는 ETF 추천 (연금 마케팅)")
+
+    with col_bot2:
+        st.subheader("☀️ SOL ETF (신한자산운용)")
+        with st.container(border=True):
+            st.markdown("**[최신 공식 블로그 게시글]**")
+            st.markdown("- SOL 미국배당다우존스 월배당 인증 이벤트 (고객 프로모션)")
+            st.markdown("- 반도체 소부장 ETF, 왜 투자해야 할까? (섹터 교육)")
+            st.markdown("- S&P500 투자, 환노출 vs 환헤지 비교 (투자 정보 제공)")
 
 # =========================================================================
 # --- Tab 7: [ETF 운용 현황] ---
@@ -657,7 +679,7 @@ with tabs[8]:
         options=raw_keywords,
         index=2 
     )
-    st.session_state['selected_trend_label'] = selected_trend_label # AI 프롬프트 연동용 저장
+    st.session_state['selected_trend_label'] = selected_trend_label
     
     active_query = display_to_query[selected_trend_label]
     
@@ -676,7 +698,7 @@ with tabs[8]:
             st.info("관련된 최신 정책 뉴스 피드가 존재하지 않습니다.")
 
 # =========================================================================
-# --- ★ Tab 9: [AI 분석용 프롬프트 생성기] (Two-Track 전면 개편) ---
+# --- Tab 9: [AI 분석용 프롬프트 생성기] ---
 # =========================================================================
 with tabs[9]:
     st.markdown("### 🧠 전술 & 전략 AI 프롬프트 자동 생성기")
@@ -710,6 +732,7 @@ with tabs[9]:
 [4. 경쟁사 마케팅 집중 동향]
 - TIGER (미래에셋): 초단기옵션 커버드콜 신상품, 월배당, 바이오테크 집중 홍보 중
 - ACE (한국투자): 반도체 3종 비교, ISA 계좌 활용 마케팅, 월배당 라인업 확대 홍보 중
+- KBSTAR & SOL 등 타사: 연금 마케팅 및 테마 집중 스터디 진행 중
 
 위 데이터를 종합하여 아래 3가지 Action Item을 포함한 전술 리포트를 작성해.
 1. Weekly Market Interpretation: 자금 유입 흐름과 검색량의 상관관계 및 경쟁사 동향 통합 분석
@@ -736,9 +759,9 @@ with tabs[9]:
 - 하방 방어 구조 허용, 타겟 인컴, 가상자산 현물 ETF 및 BDC 법안 도입 등 규제 완화 기류 실시간 감지 중
 
 [3. 증권앱 및 종토방 고객 주요 Pain Point (VOC 요약)]
-- 해외 지수 추종 ETF의 실시간 가격 괴리율 심화 불만
-- 유사 배당형 상품 간 수수료 경쟁력 차이 체감
-- 파생형 ETF(커버드콜 등) 상품의 복잡한 수익 구조에 대한 직관적 설명 부족
+- 주요 증권사 UI/UX: 타사 대비 앱 내 ETF 검색/정렬 직관성 문제 제기
+- 보유 상품 리뷰: 해외 지수 추종 ETF의 실시간 가격 괴리율 심화 불만
+- 배당/수수료 불만: 유사 배당형 상품 간 수수료 경쟁력 차이 체감
 
 위 데이터를 종합하여 아래 3가지 Action Item을 포함한 전략 리포트를 작성해.
 1. Opportunity Scan: 글로벌 트렌드와 국내 규제 해소 타이밍을 엮은 신규 ETF 런칭 벤치마킹 아이디어
