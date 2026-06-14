@@ -35,7 +35,7 @@ def assign_auto_theme(etf_name):
     else:
         return '📦 기타 섹터/테마'
 
-# 2. 실시간 데이터 파싱 함수 (뉴스 연동 - ★ 한줄 요약 로직 제거 및 뼈대 최적화)
+# 2. 실시간 데이터 파싱 함수 (뉴스 연동 - 한줄 요약 로직 제거)
 @st.cache_data(ttl=3600)
 def get_realtime_news(keyword="ETF"):
     url = f"https://news.google.com/rss/search?q={keyword}+when:7d&hl=ko&gl=KR&ceid=KR:ko"
@@ -342,7 +342,7 @@ with tabs[1]:
                 st.warning("직전 주차 데이터가 없어 증감률을 비교할 수 없습니다.")
 
 # =========================================================================
-# --- Tab 2: [뉴스 & 검색량 트렌드] (★ "👉 요약" 코드 제거 패치 완료) ---
+# --- Tab 2: [뉴스 & 검색량 트렌드] ---
 # =========================================================================
 with tabs[2]:
     st.markdown("### 📰 실시간 마켓 센티먼트 및 뉴스 요약")
@@ -351,6 +351,7 @@ with tabs[2]:
         df_real_news = get_realtime_news("ETF")
         
         market_sentiment = generate_market_sentiment(df_real_news)
+        st.session_state['market_sentiment'] = market_sentiment  # AI 프롬프트 연동용 저장
         with st.container(border=True):
             st.markdown(f"<p style='font-size:18px; font-weight:bold; color:#4da6ff; text-align:center; margin:0;'>{market_sentiment}</p>", unsafe_allow_html=True)
         
@@ -361,7 +362,6 @@ with tabs[2]:
                 with st.container(border=True):
                     st.caption(f"📅 {row['게시일 / 출처']}")
                     st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:15px; font-weight:bold; color:#4da6ff; text-decoration:none;'>{row['원본제목']} 🔗</a>", unsafe_allow_html=True)
-                    # ★ 요약 파트 완전 도려냄
         else:
             st.dataframe(df_real_news, use_container_width=True, hide_index=True)
                 
@@ -524,6 +524,7 @@ with tabs[7]:
     pivot_df = pd.DataFrame()
     with st.spinner("KRX 전체 상장 ETF 데이터를 분석 중입니다... (약 5~10초 소요)"):
         try:
+            target_brands = ['KODEX', 'TIGER', 'KBSTAR', 'ACE', 'ARIRANG', 'HANARO']
             df_all_etf = fdr.StockListing('ETF/KR')
             df_all_etf['브랜드'] = df_all_etf['Name'].apply(lambda x: str(x).split(' ')[0])
             
@@ -606,13 +607,12 @@ with tabs[7]:
         st.info("👈 좌측 사이드바에 엑셀 데이터를 업로드하시면 트렌드 그래프가 나타납니다.")
 
 # =========================================================================
-# --- Tab 8: [글로벌 공백 & 정책 동향] (★ 동적 드롭다운 & 뉴스 요약 제거) ---
+# --- Tab 8: [글로벌 공백 & 정책 동향] ---
 # =========================================================================
 with tabs[8]:
     st.markdown("### 🇺🇸 글로벌 혁신 구조 공백 분석 (US Mega Trends vs KODEX)")
     st.caption("미국 ETF 시장에서 최근 자금 유입이 폭발하고 있는 '금융 혁신 구조'와 KODEX 라인업을 교차 대조하여 선점 기회를 발굴합니다.")
     
-    # 1. 상단 마켓 트렌드 마스터 프레임 설정
     raw_keywords = [
         "🎯 타겟 인컴 (Defined Outcome / 버퍼형)", 
         "⚡ 0DTE 초단기 옵션 커버드콜", 
@@ -639,7 +639,6 @@ with tabs[8]:
     st.info("💡 **인사이트 도출 가이드:** '공백' 상태인 혁신 구조는 즉각적인 상품 기획 회의 안건으로 상정하고, '규제 한계' 상태인 테마는 하단의 규제 동향 뉴스 피드를 통해 당국의 해소 타이밍을 엿봐야 합니다.")
     st.divider()
 
-    # ★ 2. 동적 드롭다운 세팅 (표의 키워드 추출용 가시성 텍스트 매핑)
     st.markdown("### ⚖️ 규제 및 정책 시그널 집중 모니터링 (Regulatory Signals)")
     st.caption("국내 공백의 주요 원인인 '규제 장벽' 해소 타이밍을 선제적으로 포착하기 위해 금융위 법안 및 당국 기류를 실시간 스크랩합니다.")
     
@@ -651,26 +650,22 @@ with tabs[8]:
         "하방 방어형 버퍼 ETF"
     ]
     
-    # 드롭바 매핑 사전 구축
     display_to_query = dict(zip(raw_keywords, cleaned_options))
     
-    # UI 배치용 드롭다운 렌더링
     selected_trend_label = st.selectbox(
         "🔍 분석 및 실시간 뉴스 크롤링을 진행할 미국 혁신 테마 선택:",
         options=raw_keywords,
-        index=2 # 기본값: 가상자산 현물
+        index=2 
     )
+    st.session_state['selected_trend_label'] = selected_trend_label # AI 프롬프트 연동용 저장
     
-    # 선택된 라벨에 대한 쿼리 자동 바인딩
     active_query = display_to_query[selected_trend_label]
     
-    # 3. 실시간 크롤링 연동 및 렌더링 (★ 손가락 요약 완전 제거 및 카드 가독성 확보)
     st.markdown(f"#### 📡 `[실시간 연동]` {selected_trend_label} 관련 정책/규제 뉴스")
     with st.spinner(f"'{selected_trend_label}' 관련 최신 동향을 수집 중입니다..."):
         df_gap_news = get_realtime_news(active_query)
         
         if "링크" in df_gap_news.columns and df_gap_news["링크"].iloc[0] != "":
-            # 2열 격자 배치로 시각적 균형감 부여
             cols_grid = st.columns(2)
             for idx, row in df_gap_news.iterrows():
                 with cols_grid[idx % 2]:
@@ -681,34 +676,77 @@ with tabs[8]:
             st.info("관련된 최신 정책 뉴스 피드가 존재하지 않습니다.")
 
 # =========================================================================
-# --- Tab 9: [AI 분석용 프롬프트 생성기] ---
+# --- ★ Tab 9: [AI 분석용 프롬프트 생성기] (Two-Track 전면 개편) ---
 # =========================================================================
 with tabs[9]:
-    st.markdown("### 🧠 AI 분석용 프롬프트 자동 생성기")
-    st.caption("실시간으로 연산된 자금 흐름과 고객 검색 트렌드 데이터를 복사하여, 사용 중인 AI에 직접 붙여넣고 완벽한 인사이트를 도출하세요.")
+    st.markdown("### 🧠 전술 & 전략 AI 프롬프트 자동 생성기")
+    st.caption("단순한 데이터 요약을 넘어, 대시보드의 모든 인텔리전스(수급, 규제, 고객 VOC, 경쟁사)를 결합하여 실무팀에 하달할 구체적인 '행동 지침(Action Item)'을 도출합니다.")
+    st.divider()
 
-    data_context = "자금 흐름 데이터가 생성되지 않았습니다. [ETF 순매수 등락, 수익률] 탭에서 종목을 먼저 선택해주세요."
+    # 프롬프트 재료 준비
+    data_context = "자금 흐름 데이터가 생성되지 않았습니다."
     if 'df_scatter' in locals() and not df_scatter.empty:
         data_context = df_scatter.sort_values(by='주간 수익률(%)', ascending=False).head(20).to_string(index=False)
+    
+    dl_context = st.session_state.get('dl_summary', "데이터랩 정보가 부족합니다.")
+    market_sentiment = st.session_state.get('market_sentiment', "데이터 부족")
+    current_trend = st.session_state.get('selected_trend_label', "가상자산/BDC 등 핵심 트렌드")
 
-    dl_context = st.session_state.get('dl_summary', "데이터랩 정보가 없습니다.")
+    # ---------------------------------------------------------
+    # [Track 1] 주간 마케팅 & 세일즈 전술 리포트 프롬프트
+    # ---------------------------------------------------------
+    prompt_1 = f"""너는 KODEX 마케팅 및 세일즈 최고 책임자(CMO)야.
+다음 실시간 자금 흐름, 검색 트렌드, 시장 심리 및 경쟁사 동향 데이터를 바탕으로 이번 주 '주간 마케팅 & 세일즈 전술 리포트'를 작성해줘.
 
-    prompt_text = f"""너는 KODEX 상품기획 및 마케팅을 담당하는 최고 책임자(CMO)야.
-다음은 {selected_week} 주차의 실제 자금 유입(순매수 증감률) 데이터와 최근 타겟 고객층의 포털 검색 트렌드 수치야.
-
-[1. ETF 자금 흐름 및 수익률 데이터]
+[1. ETF 자금 흐름 및 수익률 데이터 (이번 주 순매수 및 증감률)]
 {data_context}
 
-[2. 타겟 연령층 대상 최근 14일간 일평균 검색비율 (네이버 데이터랩, 최대 100 기준)]
+[2. 타겟 고객 포털 검색 트렌드 (최근 14일 일평균 검색비율)]
 {dl_context}
 
-이 데이터를 종합하여 전문가다운 마케팅 인사이트 보고서를 한글로 작성해줘.
-반드시 아래 3가지 제목을 포함해서 논리적이고 깊이 있게 분석해야 해.
+[3. 오늘의 시장 심리 요약]
+{market_sentiment}
 
-1. Executive Summary (자금 흐름과 검색 트렌드의 상관관계 요약)
-2. Signal Interpretation (고객 검색 수요와 실제 수익률 간의 격차나 기회 포착)
-3. Next Month Watchlist (다음 달 마케팅/세일즈 역량을 집중해야 할 ETF 추천 및 명확한 이유)
+[4. 경쟁사 마케팅 집중 동향]
+- TIGER (미래에셋): 초단기옵션 커버드콜 신상품, 월배당, 바이오테크 집중 홍보 중
+- ACE (한국투자): 반도체 3종 비교, ISA 계좌 활용 마케팅, 월배당 라인업 확대 홍보 중
+
+위 데이터를 종합하여 아래 3가지 Action Item을 포함한 전술 리포트를 작성해.
+1. Weekly Market Interpretation: 자금 유입 흐름과 검색량의 상관관계 및 경쟁사 동향 통합 분석
+2. Sales & Marketing Focus: 수익률과 수급이 좋은 테마에 대한 디지털 마케팅 증액 포인트 및 세일즈 톡(Sales Talk) 초안
+3. Defensive Pivot Strategy: 수익률 하락 테마에 대한 마케팅 방어 논리 (분할 매수 강조 또는 방어형 ETF로의 스위칭 전략)
 """
 
-    st.code(prompt_text, language="text")
-    st.info("👆 우측 상단의 'Copy' 버튼을 눌러 복사한 뒤, 사용 중이신 AI 모델 대화창에 그대로 붙여넣으세요.")
+    st.markdown("#### 🔵 `[Track 1]` 주간 마케팅 & 세일즈 전술 리포트 (현재 시장 대응용)")
+    st.code(prompt_1, language="text")
+
+    st.divider()
+
+    # ---------------------------------------------------------
+    # [Track 2] 신상품 기획 및 시장 선점 리포트 프롬프트
+    # ---------------------------------------------------------
+    prompt_2 = f"""너는 KODEX 상품기획 및 전략 최고 책임자(CMO)야.
+다음 글로벌 ETF 트렌드 공백, 규제 정책 시그널, 그리고 고객 불편사항(VOC) 데이터를 바탕으로 '신상품 기획 및 시장 선점 리포트'를 작성해줘.
+
+[1. 미국 시장 혁신 구조 트렌드 및 KODEX 공백 현황]
+- 집중 모니터링 테마: {current_trend}
+- 현황: KODEX는 현재 해당 트렌드 영역에서 라인업이 부족하거나 규제 장벽에 막혀 있음.
+
+[2. 국내 규제 및 정책 시그널 모니터링]
+- 하방 방어 구조 허용, 타겟 인컴, 가상자산 현물 ETF 및 BDC 법안 도입 등 규제 완화 기류 실시간 감지 중
+
+[3. 증권앱 및 종토방 고객 주요 Pain Point (VOC 요약)]
+- 해외 지수 추종 ETF의 실시간 가격 괴리율 심화 불만
+- 유사 배당형 상품 간 수수료 경쟁력 차이 체감
+- 파생형 ETF(커버드콜 등) 상품의 복잡한 수익 구조에 대한 직관적 설명 부족
+
+위 데이터를 종합하여 아래 3가지 Action Item을 포함한 전략 리포트를 작성해.
+1. Opportunity Scan: 글로벌 트렌드와 국내 규제 해소 타이밍을 엮은 신규 ETF 런칭 벤치마킹 아이디어
+2. Pain Point Solving: 기존 고객의 불만(수수료, 괴리율, 설명 부족)을 선제적으로 해결할 수 있는 신상품 구조 설계안
+3. Action Plan: 상품기획팀 및 컴플라이언스(법무)팀에 즉시 전달할 차기 상품 도입 검토 지시서
+"""
+
+    st.markdown("#### 🔴 `[Track 2]` 신상품 기획 및 시장 선점 리포트 (미래 먹거리 발굴용)")
+    st.code(prompt_2, language="text")
+
+    st.info("👆 원하시는 목적의 프롬프트 우측 상단의 'Copy' 버튼을 눌러 복사한 뒤, 사용 중이신 AI 모델(ChatGPT, Claude 등) 대화창에 그대로 붙여넣으세요.")
