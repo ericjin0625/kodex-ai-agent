@@ -10,10 +10,10 @@ from datetime import datetime, timedelta
 import json 
 import time
 
-# 1. 페이지 레이아웃 및 기본 테마 설정
+# 1. 페이지 레이아웃 및 기본 테마 설정 (반드시 최상단에 위치)
 st.set_page_config(page_title="ETF Monitoring AI Agent", layout="wide", initial_sidebar_state="expanded")
 
-# 전역 데이터 변수 (탭 간 원활한 데이터 공유)
+# 전역 데이터 변수 (탭 간 원활한 데이터 100% 동기화를 위함)
 df_scatter = pd.DataFrame()
 
 # ==========================================
@@ -26,13 +26,15 @@ glassmorphism_css = """
     background: linear-gradient(135deg, #0b101e 0%, #171b3c 50%, #0f172a 100%);
     background-attachment: fixed;
 }
-/* 2. 좌측 사이드바: 반투명 유리 효과 */
+
+/* 2. 좌측 사이드바: 반투명 유리 효과 및 경계선 */
 [data-testid="stSidebar"] {
-    background: rgba(15, 23, 42, 0.5) !important;
+    background: rgba(15, 23, 42, 0.4) !important;
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border-right: 1px solid rgba(255, 255, 255, 0.05);
 }
+
 /* 3. 우측 컨트롤 타워 및 컨테이너: 은은한 글래스 광택 */
 [data-testid="stVerticalBlockBorderWrapper"] {
     background: rgba(255, 255, 255, 0.02) !important;
@@ -46,10 +48,12 @@ glassmorphism_css = """
 .stDataFrame {
     background: transparent !important;
 }
+
 /* 4. 중앙 가로형 탭(Tabs) 디자인: 둥글고 트렌디한 캡슐 알약(Pill) 스타일 */
 [data-baseweb="tab-list"] {
     gap: 8px;
     padding-bottom: 12px;
+    flex-wrap: wrap; /* 화면이 작아져도 버튼이 짤리지 않게 자동 줄바꿈 */
 }
 [data-baseweb="tab"] {
     background: rgba(255, 255, 255, 0.04) !important;
@@ -65,7 +69,8 @@ glassmorphism_css = """
     box-shadow: 0 0 12px rgba(77, 166, 255, 0.25) !important;
     font-weight: 600 !important;
 }
-/* 5. 기본 UI 강제 숨김 */
+
+/* 5. 독립 솔루션 마감을 위한 기본 UI 강제 숨김 */
 #MainMenu {visibility: hidden;}
 header {visibility: hidden;}
 footer {visibility: hidden;}
@@ -220,6 +225,7 @@ def load_and_clean_excel(file, sheet_name):
         return df
     except: return pd.DataFrame()
 
+
 # =========================================================================
 # ★ 1. 좌측 브랜딩 사이드바 (타이틀 및 로고 전용)
 # =========================================================================
@@ -236,7 +242,6 @@ with st.sidebar:
         """, unsafe_allow_html=True
     )
     
-    # 좌측 사이드바 하단에 로고 고정
     st.markdown("<p style='text-align:center; color: #64748b; font-size: 10px; letter-spacing: 2px; font-weight: 600; margin-bottom: 10px;'>POWERED BY</p>", unsafe_allow_html=True)
     try:
         st.image("20220927092603_1800954_640_640.png", use_container_width=True)
@@ -245,10 +250,11 @@ with st.sidebar:
     except:
         st.caption("삼성자산운용 x 커리어하이")
 
+
 # =========================================================================
-# ★ 2. 3단 분할 레이아웃 적용 (메인화면 78% / 여백 2% / 컨트롤타워 20%)
+# ★ 2. 3단 분할 메인 레이아웃 적용 (메인화면 78% / 여백 2% / 컨트롤타워 20%)
 # =========================================================================
-col_main, col_spacing, col_right = st.columns([3.8, 0.1, 1])
+col_main, col_spacing, col_right = st.columns([3.8, 0.1, 1.2])
 
 # ---------------------------------------------------------
 # [우측 패널] 데이터 컨트롤 센터 (항상 고정)
@@ -274,8 +280,9 @@ with col_right:
         default_idx = 1 if len(available_weeks) > 1 else 0
         selected_week = st.selectbox("📆 조회 기준 주차", options=available_weeks, index=default_idx)
 
+
 # ---------------------------------------------------------
-# [중앙 화면] 가로형 탭 복구 (데이터 100% 동기화)
+# [중앙 화면] 가로형 탭 복구 (데이터 100% 실시간 자동 연동)
 # ---------------------------------------------------------
 with col_main:
     st.session_state.setdefault('dl_summary', "DataLab 데이터가 업로드되지 않았습니다.")
@@ -447,12 +454,13 @@ with col_main:
                         
                         selected_scatter_etfs = st.multiselect("📍 산점도에 표시할 ETF를 검색/선택하세요:", options=all_etfs_scatter, default=default_selection, key="scatter_multiselect_tab2")
                         if selected_scatter_etfs:
-                            with st.spinner("실시간 수익률을 불러오는 중입니다..."):
+                            with st.spinner("선택된 종목의 실시간 수익률을 불러오는 중입니다..."):
                                 symbols_mapping = get_etf_mapping()
                                 real_returns = get_real_returns(symbols_mapping, selected_scatter_etfs)
                                 
                                 df_scatter_filtered = df_merged[df_merged['종목명'].isin(selected_scatter_etfs)].copy()
                                 df_scatter_filtered['주간 수익률(%)'] = df_scatter_filtered['종목명'].map(real_returns)
+                                # ✅ 글로벌 변수에 갱신하여 10번 프롬프트 탭에서 즉각 활용하도록 함!
                                 df_scatter = df_scatter_filtered.dropna()
                                 
                                 fig_scatter = px.scatter(df_scatter, x="주간 수익률(%)", y="순매수 증감률(%)", text="종목명", hover_data=["이번주", "지난주"], title=f"**실제 수익률 vs. {subject_tab2_scatter} 순매수 증감률**")
@@ -780,6 +788,7 @@ with col_main:
         
         st.divider()
         selected_trend_label = st.selectbox("🔍 뉴스 검색망 가동할 혁신 구조 선택:", options=raw_keywords, index=2)
+        st.session_state['selected_trend_label'] = selected_trend_label
         st.markdown(f"#### 📡 `[실시간 정책 시그널]` {selected_trend_label} 관련 완화 동향")
         with st.spinner("규제 완화 뉴스 스크랩 중..."):
             df_gap_news = get_realtime_news(selected_trend_label + " 금융위 규제", timeframe="7d")
@@ -793,19 +802,19 @@ with col_main:
             else:
                 st.info("관련된 최신 정책 뉴스 피드가 존재하지 않습니다.")
 
-    # === Tab 10: AI 분석용 프롬프트 생성기 ===
+    # === Tab 10: AI 프롬프트 생성기 ===
     with tabs[10]:
         st.markdown("### 🧠 전술 & 전략 AI 프롬프트 자동 생성기")
         st.caption("단순한 데이터 요약을 넘어, 대시보드의 모든 인텔리전스(수급, 규제, 고객 VOC, 경쟁사)를 결합하여 실무팀에 하달할 구체적인 '행동 지침(Action Item)'을 도출합니다.")
         st.divider()
 
-        # 가로형 탭이므로 다른 탭을 클릭하지 않아도 df_scatter 데이터가 이미 백그라운드에서 넘어와 있습니다!
+        # 가로형 탭이므로 다른 탭을 클릭하지 않아도 df_scatter 데이터가 무조건 백그라운드에서 한 번에 넘어옵니다!
         data_context = df_scatter.sort_values(by='주간 수익률(%)', ascending=False).head(20).to_string(index=False) if not df_scatter.empty else "데이터가 부족합니다. (우측 패널에 엑셀 데이터를 업로드해주세요.)"
         dl_context = st.session_state.get('dl_summary', "데이터랩 미연동")
         market_sentiment = st.session_state.get('market_sentiment', "혼조세 지속")
         
         try:
-            current_trend = selected_trend_label
+            current_trend = st.session_state.get('selected_trend_label', "가상자산/옵션형")
         except:
             current_trend = "가상자산/옵션형"
 
