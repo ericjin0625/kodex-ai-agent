@@ -519,9 +519,94 @@ with tabs[3]:
         st.info("좌측 사이드바에 엑셀 데이터를 업로드해주세요.")
 
 # =========================================================================
-# --- ★ Tab 4: [진행 이벤트] (반자동 성과 분석기 완벽 패치) ---
+# --- ★ Tab 4: [진행 이벤트] (분석 차트 최상단 배치 및 뉴스 스크랩 하단 배치) ---
 # =========================================================================
 with tabs[4]:
+    # --- 📊 이벤트 성과 분석기 (반자동) ---
+    st.markdown("### 📊 이벤트 성과 분석기 (수급 임팩트 트래킹)")
+    st.caption("아래 뉴스 스크랩에서 확인한 이벤트 진행 기간을 바탕으로, 자사와 타사 ETF의 실제 순매수 유입 효과(ROI)를 직관적으로 비교 분석합니다.")
+
+    if uploaded_excel is not None:
+        temp_list_df = load_and_clean_excel(uploaded_excel, available_weeks[0])
+        if '종목명' in temp_list_df.columns:
+            all_etf_names = sorted(temp_list_df[temp_list_df['종목명'] != '전체']['종목명'].dropna().unique().tolist())
+
+            col_sel1, col_sel2 = st.columns(2)
+            with col_sel1:
+                st.markdown("**1. 분석 대상 ETF 선택**")
+                
+                default_target_idx = all_etf_names.index("KODEX 200") if "KODEX 200" in all_etf_names else 0
+                default_comp_idx = all_etf_names.index("TIGER 200") if "TIGER 200" in all_etf_names else (1 if len(all_etf_names) > 1 else 0)
+                
+                target_etf = st.selectbox("🎯 Target ETF (자사):", options=all_etf_names, index=default_target_idx)
+                comp_etf = st.selectbox("⚔️ Competitor ETF (타사):", options=all_etf_names, index=default_comp_idx)
+
+            with col_sel2:
+                st.markdown("**2. 차트 조회 기간 및 이벤트 음영 설정**")
+                
+                c_a1, c_a2 = st.columns(2)
+                with c_a1:
+                    ana_start = st.selectbox("📈 전체 분석 시작 주차:", options=available_weeks[::-1], index=0)
+                with c_a2:
+                    ana_end = st.selectbox("📈 전체 분석 종료 주차:", options=available_weeks, index=0)
+
+                c_h1, c_h2 = st.columns(2)
+                with c_h1:
+                    hl_start = st.selectbox("🖍️ 이벤트 시작 주차 (하이라이트):", options=available_weeks[::-1], index=0)
+                with c_h2:
+                    hl_end = st.selectbox("🖍️ 이벤트 종료 주차 (하이라이트):", options=available_weeks, index=0)
+
+            s_idx = available_weeks.index(ana_start)
+            e_idx = available_weeks.index(ana_end)
+
+            if s_idx < e_idx:
+                target_sheets = available_weeks[s_idx:e_idx+1]
+            else:
+                target_sheets = available_weeks[e_idx:s_idx+1]
+
+            target_sheets = target_sheets[::-1] 
+
+            trend_data = []
+            with st.spinner("선택된 기간의 수급 데이터를 렌더링하고 있습니다..."):
+                for w in target_sheets:
+                    t_df = load_and_clean_excel(uploaded_excel, w)
+                    if '종목명' in t_df.columns:
+                        t_df = t_df[t_df['종목명'].isin([target_etf, comp_etf])].copy()
+                        t_df['전체순매수'] = t_df.get('개인', 0) + t_df.get('기관', 0) + t_df.get('외국인', 0)
+                        t_df['주차'] = w
+                        trend_data.append(t_df[['주차', '종목명', '전체순매수']])
+
+                if trend_data:
+                    df_trend = pd.concat(trend_data)
+                    color_map = {target_etf: '#ff4d4d', comp_etf: '#4da6ff'}
+
+                    fig_evt = px.line(
+                        df_trend, x='주차', y='전체순매수', color='종목명', markers=True,
+                        template="plotly_dark", color_discrete_map=color_map,
+                        title=f"**[{target_etf}] vs [{comp_etf}] 마케팅 성과 트래킹**"
+                    )
+
+                    try:
+                        fig_evt.add_vrect(
+                            x0=hl_start, x1=hl_end,
+                            fillcolor="rgba(255, 77, 77, 0.15)",
+                            layer="below", line_width=1, line_color="rgba(255, 77, 77, 0.5)", line_dash="dash",
+                            annotation_text="★ 이벤트 집중 마케팅 구간", annotation_position="top left",
+                            annotation_font_color="#ff4d4d"
+                        )
+                    except Exception as e:
+                        pass 
+
+                    fig_evt.update_layout(height=450, margin=dict(l=20, r=20, t=50, b=20), xaxis_title=None, yaxis_title="전체 순매수 금액 합계")
+                    st.plotly_chart(fig_evt, use_container_width=True)
+                else:
+                    st.warning("선택하신 조건에 해당하는 수급 데이터가 없습니다.")
+    else:
+        st.info("👈 좌측 사이드바에 엑셀 데이터를 업로드하시면 이벤트 성과 분석기가 즉시 활성화됩니다.")
+
+    st.divider()
+
+    # --- 🎉 운용사별 뉴스 스크랩 (하단 이동) ---
     st.markdown("### 🎉 운용사별 ETF 진행 이벤트 (뉴스 보도자료 스크랩)")
     st.caption("선택하신 날짜 구간 동안 언론에 배포된 각 운용사의 이벤트 및 신규 상장 프로모션 기사를 실시간으로 수집합니다.")
     
@@ -572,97 +657,6 @@ with tabs[4]:
                             
             if not has_any_event:
                 st.info("해당 기간 동안 검색된 이벤트나 상장 프로모션 보도자료가 없습니다.")
-
-    st.divider()
-
-    # --- 📊 이벤트 성과 분석기 (반자동) ---
-    st.markdown("### 📊 이벤트 성과 분석기 (수급 임팩트 트래킹)")
-    st.caption("위에서 확인한 이벤트 진행 기간을 바탕으로, 자사와 타사 ETF의 실제 순매수 유입 효과(ROI)를 직관적으로 비교 분석합니다.")
-
-    if uploaded_excel is not None:
-        # 안전한 종목 리스트 추출
-        temp_list_df = load_and_clean_excel(uploaded_excel, available_weeks[0])
-        if '종목명' in temp_list_df.columns:
-            all_etf_names = sorted(temp_list_df[temp_list_df['종목명'] != '전체']['종목명'].dropna().unique().tolist())
-
-            col_sel1, col_sel2 = st.columns(2)
-            with col_sel1:
-                st.markdown("**1. 분석 대상 ETF 선택**")
-                
-                # 기본값 센스있게 세팅
-                default_target_idx = all_etf_names.index("KODEX 200") if "KODEX 200" in all_etf_names else 0
-                default_comp_idx = all_etf_names.index("TIGER 200") if "TIGER 200" in all_etf_names else (1 if len(all_etf_names) > 1 else 0)
-                
-                target_etf = st.selectbox("🎯 Target ETF (자사):", options=all_etf_names, index=default_target_idx)
-                comp_etf = st.selectbox("⚔️ Competitor ETF (타사):", options=all_etf_names, index=default_comp_idx)
-
-            with col_sel2:
-                st.markdown("**2. 차트 조회 기간 및 이벤트 음영 설정**")
-                
-                c_a1, c_a2 = st.columns(2)
-                with c_a1:
-                    ana_start = st.selectbox("📈 전체 분석 시작 주차:", options=available_weeks[::-1], index=0)
-                with c_a2:
-                    ana_end = st.selectbox("📈 전체 분석 종료 주차:", options=available_weeks, index=0)
-
-                c_h1, c_h2 = st.columns(2)
-                with c_h1:
-                    hl_start = st.selectbox("🖍️ 이벤트 시작 주차 (하이라이트):", options=available_weeks[::-1], index=0)
-                with c_h2:
-                    hl_end = st.selectbox("🖍️ 이벤트 종료 주차 (하이라이트):", options=available_weeks, index=0)
-
-            # 데이터 추출 로직
-            s_idx = available_weeks.index(ana_start)
-            e_idx = available_weeks.index(ana_end)
-
-            # 역방향/정방향 리스트 슬라이싱 안전 처리
-            if s_idx < e_idx:
-                target_sheets = available_weeks[s_idx:e_idx+1]
-            else:
-                target_sheets = available_weeks[e_idx:s_idx+1]
-
-            target_sheets = target_sheets[::-1] # 과거 -> 최신 순으로 정렬
-
-            trend_data = []
-            with st.spinner("선택된 기간의 수급 데이터를 렌더링하고 있습니다..."):
-                for w in target_sheets:
-                    t_df = load_and_clean_excel(uploaded_excel, w)
-                    if '종목명' in t_df.columns:
-                        t_df = t_df[t_df['종목명'].isin([target_etf, comp_etf])].copy()
-                        t_df['전체순매수'] = t_df.get('개인', 0) + t_df.get('기관', 0) + t_df.get('외국인', 0)
-                        t_df['주차'] = w
-                        trend_data.append(t_df[['주차', '종목명', '전체순매수']])
-
-                if trend_data:
-                    df_trend = pd.concat(trend_data)
-
-                    # KODEX는 강렬한 붉은색, 타사는 푸른색으로 고정 매핑
-                    color_map = {target_etf: '#ff4d4d', comp_etf: '#4da6ff'}
-
-                    fig_evt = px.line(
-                        df_trend, x='주차', y='전체순매수', color='종목명', markers=True,
-                        template="plotly_dark", color_discrete_map=color_map,
-                        title=f"**[{target_etf}] vs [{comp_etf}] 마케팅 성과 트래킹**"
-                    )
-
-                    # 붉은색 음영 하이라이트 추가
-                    try:
-                        fig_evt.add_vrect(
-                            x0=hl_start, x1=hl_end,
-                            fillcolor="rgba(255, 77, 77, 0.15)",
-                            layer="below", line_width=1, line_color="rgba(255, 77, 77, 0.5)", line_dash="dash",
-                            annotation_text="★ 이벤트 집중 마케팅 구간", annotation_position="top left",
-                            annotation_font_color="#ff4d4d"
-                        )
-                    except Exception as e:
-                        pass # 카테고리 매핑 예외 처리
-
-                    fig_evt.update_layout(height=450, margin=dict(l=20, r=20, t=50, b=20), xaxis_title=None, yaxis_title="전체 순매수 금액 합계")
-                    st.plotly_chart(fig_evt, use_container_width=True)
-                else:
-                    st.warning("선택하신 조건에 해당하는 수급 데이터가 없습니다.")
-    else:
-        st.info("👈 좌측 사이드바에 엑셀 데이터를 업로드하시면 하단의 이벤트 성과 분석기가 즉시 활성화됩니다.")
 
 # =========================================================================
 # --- Tab 5: [고객 UX 분석] ---
