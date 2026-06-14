@@ -8,9 +8,74 @@ from bs4 import BeautifulSoup
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 import json 
+import time
 
-# 1. 페이지 레이아웃 및 기본 테마 설정
+# 1. 페이지 레이아웃 및 기본 테마 설정 (반드시 최상단에 위치)
 st.set_page_config(page_title="ETF Monitoring AI Agent", layout="wide")
+
+# ==========================================
+# ★ Glassmorphism (유리 질감) 커스텀 CSS 주입
+# ==========================================
+glassmorphism_css = """
+<style>
+/* 1. 전체 배경: 딥 네이비 & 퍼플 그라데이션 */
+.stApp {
+    background: linear-gradient(135deg, #0b101e 0%, #171b3c 50%, #0f172a 100%);
+    background-attachment: fixed;
+}
+
+/* 2. 사이드바: 반투명 유리 효과 */
+[data-testid="stSidebar"] {
+    background: rgba(15, 23, 42, 0.4) !important;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* 3. 메인 컨테이너 (st.container) 테두리: 둥근 모서리와 입체감 */
+[data-testid="stVerticalBlockBorderWrapper"] {
+    background: rgba(255, 255, 255, 0.03) !important;
+    backdrop-filter: blur(16px) !important;
+    -webkit-backdrop-filter: blur(16px) !important;
+    border-radius: 16px !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2) !important;
+    padding: 20px !important;
+}
+
+/* 4. 데이터프레임 및 차트 배경 통일 */
+.stDataFrame {
+    background: transparent !important;
+}
+
+/* 5. 탭(Tabs) 디자인: 둥글고 입체적인 네온 스타일 */
+[data-baseweb="tab-list"] {
+    gap: 8px;
+    padding-bottom: 10px;
+}
+[data-baseweb="tab"] {
+    background: rgba(255, 255, 255, 0.05) !important;
+    border-radius: 8px !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    padding: 10px 15px !important;
+    color: #cbd5e1 !important;
+}
+[data-baseweb="tab"][aria-selected="true"] {
+    background: rgba(77, 166, 255, 0.15) !important;
+    border: 1px solid rgba(77, 166, 255, 0.6) !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 10px rgba(77, 166, 255, 0.3) !important;
+    font-weight: 600 !important;
+}
+
+/* 6. 불필요한 기본 UI 숨김 (Deploy 버튼, 헤더, 푸터) */
+#MainMenu {visibility: hidden;}
+header {visibility: hidden;}
+footer {visibility: hidden;}
+.stDeployButton {display: none;}
+</style>
+"""
+st.markdown(glassmorphism_css, unsafe_allow_html=True)
 
 # ==========================================
 # ★ AI 테마 자동 분류 로직
@@ -36,7 +101,7 @@ def assign_auto_theme(etf_name):
     else:
         return '📦 기타 섹터/테마'
 
-# 2. 실시간 뉴스 파싱 함수
+# 실시간 뉴스 파싱 함수
 @st.cache_data(ttl=3600)
 def get_realtime_news(keyword="ETF", timeframe="7d", max_items=5):
     url = f"https://news.google.com/rss/search?q={keyword}+when:{timeframe}&hl=ko&gl=KR&ceid=KR:ko"
@@ -65,7 +130,7 @@ def get_realtime_news(keyword="ETF", timeframe="7d", max_items=5):
     except Exception as e:
         return pd.DataFrame([{"게시일 / 출처": "오류", "원본제목": "실시간 뉴스를 불러올 수 없습니다.", "링크": ""}])
 
-# ★ 실시간 애플 앱스토어 리뷰 파싱 함수 (빈 화면 원천 차단 패치)
+# ★ 실시간 애플 앱스토어 리뷰 파싱 함수 (기간 무제한 + 1~3점 완화로 빈 화면 원천 차단)
 @st.cache_data(ttl=1800)
 def get_apple_app_reviews():
     apps = {
@@ -76,43 +141,46 @@ def get_apple_app_reviews():
     }
     
     all_bad_reviews = []
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-    }
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
     try:
         for app_name, app_id in apps.items():
-            # 페이징이나 복잡한 파라미터를 빼고 가장 안정적인 기본 최신 50개 호출
-            url = f"https://itunes.apple.com/kr/rss/customerreviews/id={app_id}/sortBy=mostRecent/json"
+            valid_entries = []
             
-            res = requests.get(url, headers=headers, timeout=10)
-            if res.status_code != 200:
-                continue
+            # 페이지를 3페이지까지 순회하며 데이터를 최대한 확보
+            for page in range(1, 4):
+                url = f"https://itunes.apple.com/kr/rss/customerreviews/page={page}/id={app_id}/sortby=mostrecent/limit=200/json"
+                res = requests.get(url, headers=headers, timeout=10)
                 
-            data = res.json()
-            entries = data.get("feed", {}).get("entry", [])
-            
-            if isinstance(entries, dict):
-                entries = [entries]
+                if res.status_code != 200:
+                    break
+                    
+                data = res.json()
+                entries = data.get("feed", {}).get("entry", [])
                 
-            if not entries:
+                if isinstance(entries, dict):
+                    entries = [entries]
+                if not entries:
+                    break
+
+                for entry in entries:
+                    if entry.get("im:rating"):
+                        valid_entries.append(entry)
+                        
+                time.sleep(0.5) 
+
+            if not valid_entries:
                 continue
 
-            for entry in entries:
+            for entry in valid_entries:
                 try:
-                    rating_data = entry.get("im:rating")
-                    if not rating_data:
-                        continue
-                        
-                    score = int(rating_data.get("label", "5"))
+                    score = int(entry.get("im:rating", {}).get("label", "5"))
                     
-                    # 기간 제한(3개월)을 과감히 없애고, 별점 1~3점 리뷰면 무조건 가져오도록 완화
+                    # 기간 제한 완전 삭제 & 별점을 1~3점까지 완화하여 데이터 무조건 노출 보장
                     if score <= 3:
                         date_str = entry.get("updated", {}).get("label", "")[:10] 
-                        
                         content_data = entry.get("content", {})
-                        content = content_data.get("label", "내용 없음") if isinstance(content_data, dict) else str(content_data)
-                        
+                        content = content_data.get("label", "") if isinstance(content_data, dict) else str(content_data)
                         title = entry.get("title", {}).get("label", "제목 없음")
                         
                         all_bad_reviews.append({
@@ -122,15 +190,14 @@ def get_apple_app_reviews():
                             "title": title,
                             "content": content
                         })
-                except Exception:
-                    continue 
+                except:
+                    pass 
                     
-        # 전체 취합 후 최신 날짜순 정렬
         all_bad_reviews.sort(key=lambda x: x['date'], reverse=True)
-        return all_bad_reviews[:10] # 화면이 너무 길어지지 않게 최신 10개만 노출
+        return all_bad_reviews[:12] # 가장 최신 악플/불만 12개
         
     except Exception as e:
-        return [{"error": f"API 연동 중 일시적 오류가 발생했습니다: {str(e)}"}]
+        return [{"error": f"API 연동 중 오류가 발생했습니다: {str(e)}"}]
 
 # 실시간 데이터 파싱 함수 (이벤트 캘린더 전용)
 @st.cache_data(ttl=3600)
@@ -295,8 +362,15 @@ with tabs[0]:
             with col_table:
                 st.dataframe(df_filtered[["종목명", target_subject]], use_container_width=True, height=380, hide_index=True)
             with col_chart:
+                # 차트 투명 배경 적용으로 글래스모피즘 어울림 강화
                 fig_etf = px.bar(df_filtered, x=target_subject, y="종목명", orientation='h')
-                fig_etf.update_layout(yaxis={'categoryorder':'total ascending'}, height=380, template="plotly_dark")
+                fig_etf.update_layout(
+                    yaxis={'categoryorder':'total ascending'}, 
+                    height=380, 
+                    template="plotly_dark",
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)'
+                )
                 st.plotly_chart(fig_etf, use_container_width=True)
 
         st.divider()
@@ -330,7 +404,11 @@ with tabs[0]:
                     color_discrete_sequence=px.colors.sequential.Blues_r
                 )
                 fig_pie.update_traces(textposition='inside', textinfo='percent+label', textfont_size=13, marker=dict(line=dict(color='#000000', width=1)))
-                fig_pie.update_layout(height=400, margin=dict(t=20, l=20, r=20, b=20), template="plotly_dark", showlegend=False)
+                fig_pie.update_layout(
+                    height=400, margin=dict(t=20, l=20, r=20, b=20), 
+                    template="plotly_dark", showlegend=False,
+                    paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
+                )
                 st.plotly_chart(fig_pie, use_container_width=True)
     else:
         st.info("좌측 사이드바에 엑셀 데이터를 업로드해주세요.")
@@ -376,7 +454,7 @@ with tabs[1]:
         df_total = df_tab2_combined.sort_values(by="전체순매수", ascending=False).head(top_n_tab2)
         with st.container(border=True):
             fig_total = px.bar(df_total, x="전체순매수", y="종목명", orientation='h', color_discrete_sequence=['#4da6ff'])
-            fig_total.update_layout(yaxis={'categoryorder':'total ascending'}, height=500, template="plotly_dark")
+            fig_total.update_layout(yaxis={'categoryorder':'total ascending'}, height=500, template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
             st.plotly_chart(fig_total, use_container_width=True)
 
         st.divider()
@@ -390,7 +468,7 @@ with tabs[1]:
         df_inv = df_tab2_combined.sort_values(by=inv_type_tab2, ascending=False).head(top_n_tab2)
         with st.container(border=True):
             fig_inv = px.bar(df_inv, x=inv_type_tab2, y="종목명", orientation='h', color_discrete_sequence=['#4da6ff'])
-            fig_inv.update_layout(yaxis={'categoryorder':'total ascending'}, height=500, template="plotly_dark")
+            fig_inv.update_layout(yaxis={'categoryorder':'total ascending'}, height=500, template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
             st.plotly_chart(fig_inv, use_container_width=True)
 
         st.divider()
@@ -467,7 +545,7 @@ with tabs[1]:
                             )
                             fig_scatter.add_vline(x=0, line_dash="dash", line_color="gray", opacity=0.5)
                             fig_scatter.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
-                            fig_scatter.update_layout(height=600, template="plotly_dark", xaxis_title="실제 주간 수익률 (%)", yaxis_title=f"{subject_tab2_scatter} 순매수 증감률 (%)")
+                            fig_scatter.update_layout(height=600, template="plotly_dark", xaxis_title="실제 주간 수익률 (%)", yaxis_title=f"{subject_tab2_scatter} 순매수 증감률 (%)", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                             st.plotly_chart(fig_scatter, use_container_width=True)
             else:
                 st.warning("직전 주차 데이터가 없어 증감률을 비교할 수 없습니다.")
@@ -535,7 +613,7 @@ with tabs[2]:
                     color='종목명',
                     template="plotly_dark"
                 )
-                fig_trend.update_layout(height=450, margin=dict(l=20, r=20, t=20, b=20), xaxis_title=None, yaxis_title="상대적 검색량 (최대 100)")
+                fig_trend.update_layout(height=450, margin=dict(l=20, r=20, t=20, b=20), xaxis_title=None, yaxis_title="상대적 검색량 (최대 100)", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                 st.plotly_chart(fig_trend, use_container_width=True)
             
         except Exception as e:
@@ -577,7 +655,7 @@ with tabs[3]:
                                 df_weekly.columns = ['주 시작일', '거래량']
                                 
                                 fig_line = px.line(df_weekly, x='주 시작일', y='거래량', title=f"**{etf_name}** 실제 주간 거래량 추이", markers=True, color_discrete_sequence=['#4da6ff'])
-                                fig_line.update_layout(height=350, template="plotly_dark", margin=dict(l=20, r=20, t=50, b=20), yaxis_title="주간 거래량 (주)", xaxis_title=None)
+                                fig_line.update_layout(height=350, template="plotly_dark", margin=dict(l=20, r=20, t=50, b=20), yaxis_title="주간 거래량 (주)", xaxis_title=None, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                                 st.plotly_chart(fig_line, use_container_width=True)
                             except:
                                 st.error(f"{etf_name}의 데이터를 불러오지 못했습니다.")
@@ -664,7 +742,7 @@ with tabs[4]:
                     except Exception as e:
                         pass 
 
-                    fig_evt.update_layout(height=450, margin=dict(l=20, r=20, t=50, b=20), xaxis_title=None, yaxis_title="전체 순매수 금액 합계")
+                    fig_evt.update_layout(height=450, margin=dict(l=20, r=20, t=50, b=20), xaxis_title=None, yaxis_title="전체 순매수 금액 합계", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                     st.plotly_chart(fig_evt, use_container_width=True)
                 else:
                     st.warning("선택하신 조건에 해당하는 수급 데이터가 없습니다.")
@@ -725,18 +803,18 @@ with tabs[4]:
                 st.info("해당 기간 동안 검색된 이벤트나 상장 프로모션 보도자료가 없습니다.")
 
 # =========================================================================
-# --- ★ Tab 5: [고객 UX 분석] (앱스토어 제한 전면 해제 + 디시인사이드 제거 패치) ---
+# --- Tab 5: [고객 UX 분석] (앱스토어 개선 로직 + 디시 삭제) ---
 # =========================================================================
 with tabs[5]:
     st.markdown("### 🗣️ 고객 Voice (VOC) & 시스템 리스크 모니터링")
-    st.caption("외부 라이브러리 설치 없이 표준 로직으로 주요 증권앱의 최신 불만 리뷰와 언론 중대 오류 기사를 비교 모니터링합니다.")
+    st.caption("외부 라이브러리 없이 애플 앱스토어의 찐 리뷰(1~3점)와 언론 중대 오류 기사를 1:1로 비교 모니터링합니다.")
     st.divider()
 
     col_app, col_news = st.columns(2)
     
     with col_app:
         st.subheader("📱 주요 증권앱 최신 불만 리뷰 (App Store)")
-        with st.spinner("삼성, 미래, 한투 등 주요 앱스토어의 1~3점짜리 최신 날것의 리뷰를 긁어오는 중입니다..."):
+        with st.spinner("삼성, 미래, 한투 등 주요 앱스토어의 최신 불만 리뷰를 긁어오는 중입니다..."):
             bad_reviews = get_apple_app_reviews()
             
             if bad_reviews and "error" in bad_reviews[0]:
@@ -748,7 +826,7 @@ with tabs[5]:
                         st.caption(f"📅 {r['date']}")
                         st.write(f"\"{r['content']}\"")
             else:
-                st.info("최근 수집된 주요 증권앱의 별점 1~3점 리뷰가 없습니다.")
+                st.info("수집된 주요 증권앱의 별점 1~3점 리뷰가 애플 앱스토어에 없습니다.")
         
     with col_news:
         st.subheader("📰 언론 보도 증권앱/MTS 중대 오류 이슈")
@@ -812,7 +890,7 @@ with tabs[6]:
 # =========================================================================
 with tabs[7]:
     st.markdown("### 🏢 국내 ETF 운용사 AUM 시장 점유율 및 테마별 현황 (실시간 기준)")
-    st.caption("한국거래소(KRX) 실시간 데이터를 바탕으로 상위 운용사 간의 순자산총액(AUM) 규모를 비교하여 시장 장악력과 공백 스캔합니다.")
+    st.caption("한국거래소(KRX) 실시간 데이터를 바탕으로 상위 운용사 간의 순자산총액(AUM) 규모를 비교하여 시장 장악력과 공백을 스캔합니다.")
     st.info("※ AUM 데이터는 파이썬 라이브러리 한계상 과거 특정 주차가 아닌 '조회 시점(오늘)'의 최신 시가총액을 보여줍니다. 과거 자금 흐름은 아래의 엑셀 기반 꺾은선 차트를 참고해 주세요.")
     
     col_pie, col_table = st.columns([1, 2])
@@ -847,7 +925,7 @@ with tabs[7]:
                     color_discrete_sequence=px.colors.sequential.Blues_r
                 )
                 fig_market_share.update_traces(textposition='inside', textinfo='percent+label')
-                fig_market_share.update_layout(height=420, margin=dict(t=20, l=20, r=20, b=20), template="plotly_dark", showlegend=False)
+                fig_market_share.update_layout(height=420, margin=dict(t=20, l=20, r=20, b=20), template="plotly_dark", showlegend=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                 st.plotly_chart(fig_market_share, use_container_width=True)
 
             with col_table:
@@ -928,7 +1006,7 @@ with tabs[7]:
                     template="plotly_dark", 
                     color_discrete_sequence=px.colors.qualitative.Set2
                 )
-                fig_trend.update_layout(height=400, margin=dict(l=20, r=20, t=50, b=20), yaxis_title="전체 순매수 합계", xaxis_title=None)
+                fig_trend.update_layout(height=400, margin=dict(l=20, r=20, t=50, b=20), yaxis_title="전체 순매수 합계", xaxis_title=None, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                 st.plotly_chart(fig_trend, use_container_width=True)
             else:
                 st.warning("선택하신 테마의 해당 기간 순매수 데이터가 없습니다.")
@@ -1033,7 +1111,7 @@ with tabs[9]:
 [4. 경쟁사 마케팅 집중 동향]
 - TIGER (미래에셋): 초단기옵션 커버드콜 신상품, 월배당, 바이오테크 집중 홍보 중
 - ACE (한국투자): 반도체 3종 비교, ISA 계좌 활용 마케팅, 월배당 라인업 확대 홍보 중
-- RISE(KB) & SOL(신한) 등 타사: 테마 집중 스터디 및 고객 프로모션 진행 중
+- RISE(KB) & SOL(신한) 등 타사: 테마 집중 스터디 및 고객 파이프라인 진행 중
 
 위 데이터를 종합하여 아래 3가지 Action Item을 포함한 전술 리포트를 작성해.
 1. Weekly Market Interpretation: 자금 유입 흐름과 검색량의 상관관계 및 경쟁사 동향 통합 분석
