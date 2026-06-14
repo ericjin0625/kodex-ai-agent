@@ -35,7 +35,7 @@ def assign_auto_theme(etf_name):
     else:
         return '📦 기타 섹터/테마'
 
-# 2. 실시간 데이터 파싱 함수 (뉴스 연동 - 한줄 요약 로직 제거)
+# 2. 실시간 데이터 파싱 함수 (뉴스 연동)
 @st.cache_data(ttl=3600)
 def get_realtime_news(keyword="ETF", max_items=5):
     url = f"https://news.google.com/rss/search?q={keyword}+when:7d&hl=ko&gl=KR&ceid=KR:ko"
@@ -110,7 +110,7 @@ def get_real_returns(symbols_dict, etf_names):
             returns_dict[name] = 0.0
     return returns_dict
 
-# ★ 시장 센티먼트 자동 요약 AI 함수
+# 시장 센티먼트 자동 요약 AI 함수
 def generate_market_sentiment(news_df):
     if news_df.empty or news_df["원본제목"].iloc[0].startswith("'"):
         return "시장 심리를 분석할 충분한 뉴스 데이터가 없습니다."
@@ -122,15 +122,20 @@ def generate_market_sentiment(news_df):
         return "☁️ 오늘의 시장 심리 1줄 요약: 금리 우려 재점화로 인한 방어적 포트폴리오 구축 전략이 우세하며 채권 및 인버스 ETF 관심이 고조됩니다."
     return "⚖️ 오늘의 시장 심리 1줄 요약: 특별한 모멘텀 없는 혼조세 속에서 섹터별 테마별 순환매가 지속되고 있습니다."
 
-# 3. 사이드바 구성
+# 3. 사이드바 구성 
 with st.sidebar:
     st.markdown("### 📊 데이터 컨트롤 타워")
+    
+    sidebar_top = st.container()
+    
     st.divider()
     uploaded_excel = st.file_uploader("ETF 순매수 엑셀 업로드", type=["xlsx", "xls"], key="excel_main")
     st.divider()
     uploaded_dl = st.file_uploader("DataLab 데이터 업로드 (CSV/Excel)", type=["csv", "xlsx", "xls"], key="dl_main")
 
-# 4. 엑셀 시트 파싱
+st.title("ETF Monitoring AI Agent")
+
+# 4. 엑셀 시트 파싱 및 주차 연동
 available_weeks = ["5.17~5.23", "5.10~5.16", "5.03~5.09"] 
 if uploaded_excel is not None:
     xls = pd.ExcelFile(uploaded_excel)
@@ -138,10 +143,7 @@ if uploaded_excel is not None:
     if sheet_names:
         available_weeks = sheet_names[::-1] 
 
-col_title, col_week = st.columns([3, 1])
-with col_title:
-    st.title("ETF Monitoring AI Agent")
-with col_week:
+with sidebar_top:
     default_idx = 1 if len(available_weeks) > 1 else 0
     selected_week = st.selectbox("주차 (최대 6개월 전까지 선택 가능):", options=available_weeks, index=default_idx)
 
@@ -239,7 +241,7 @@ with tabs[0]:
         st.info("좌측 사이드바에 엑셀 데이터를 업로드해주세요.")
 
 # =========================================================================
-# --- ★ Tab 1: [ETF 순매수 등락, 수익률] (주차 연동 및 Numpy 회귀선 패치) ---
+# --- Tab 1: [ETF 순매수 등락, 수익률] ---
 # =========================================================================
 with tabs[1]:
     st.markdown("### 📈 기간별 ETF 순매수 현황")
@@ -340,7 +342,6 @@ with tabs[1]:
                             df_scatter_filtered['주간 수익률(%)'] = df_scatter_filtered['종목명'].map(real_returns)
                             df_scatter = df_scatter_filtered.dropna()
                             
-                            # 추가 설치 없이 기본 numpy로 회귀선(Trendline) 계산 및 그리기
                             fig_scatter = px.scatter(
                                 df_scatter, x="주간 수익률(%)", y="순매수 증감률(%)",
                                 text="종목명", hover_data=["이번주", "지난주"],
@@ -351,16 +352,16 @@ with tabs[1]:
                                 x_data = df_scatter["주간 수익률(%)"]
                                 y_data = df_scatter["순매수 증감률(%)"]
                                 
-                                # 1차 방정식(직선) 기울기와 절편 계산
+                                r_value = np.corrcoef(x_data, y_data)[0, 1]
+                                
                                 z = np.polyfit(x_data, y_data, 1)
                                 p = np.poly1d(z)
                                 
-                                # 계산된 직선을 그래프 위에 덧그리기 (눈에 띄는 빨간색 점선)
                                 fig_scatter.add_scatter(
                                     x=x_data, 
                                     y=p(x_data), 
                                     mode='lines', 
-                                    name='상관관계(Trendline)', 
+                                    name=f'상관관계(Trendline)<br>Pearson: {r_value:.2f}', 
                                     line=dict(color='#ff4d4d', dash='dot')
                                 )
 
@@ -448,7 +449,7 @@ with tabs[2]:
         st.info("👈 좌측 사이드바에 Naver DataLab 파일(CSV/Excel)을 업로드하시면 비교 트렌드 차트가 나타납니다.")
 
 # =========================================================================
-# --- ★ Tab 3: [주간 거래량 추이] (제한 해제 패치) ---
+# --- Tab 3: [주간 거래량 추이] ---
 # =========================================================================
 with tabs[3]:
     st.markdown("### 📊 선택 ETF 실제 주간 거래량 추이")
@@ -524,7 +525,7 @@ with tabs[5]:
                 st.info("최근 7일간 감지된 주요 불만 리뷰가 없습니다.")
 
 # =========================================================================
-# --- ★ Tab 6: [경쟁사 동향] (이모지 매핑 패치) ---
+# --- Tab 6: [경쟁사 동향] ---
 # =========================================================================
 with tabs[6]:
     st.markdown("### 🏢 타사 공식 마케팅 채널 동향 (실시간 RSS)")
@@ -568,45 +569,92 @@ with tabs[6]:
                             st.markdown(f"- <a href='{p_link}' target='_blank' style='color:#4da6ff; text-decoration:none;'>{p_title} 🔗</a>", unsafe_allow_html=True)
 
 # =========================================================================
-# --- ★ Tab 7: [ETF 운용 현황] (기타 섹터/테마 하단 정렬 패치) ---
+# --- ★ Tab 7: [ETF 운용 현황] (1:2 비율 파이차트 & 테이블 병렬 배치 패치) ---
 # =========================================================================
 with tabs[7]:
-    st.markdown("### 🏢 국내 상위 운용사 테마별 AUM 현황 (현재 실시간 기준 / 단위: 억원)")
+    st.markdown("### 🏢 국내 ETF 운용사 AUM 시장 점유율 및 테마별 현황 (실시간 기준)")
     st.caption("한국거래소(KRX) 실시간 데이터를 바탕으로 상위 운용사 간의 순자산총액(AUM) 규모를 비교하여 시장 장악력과 공백을 스캔합니다.")
     st.info("※ AUM 데이터는 파이썬 라이브러리 한계상 과거 특정 주차가 아닌 '조회 시점(오늘)'의 최신 시가총액을 보여줍니다. 과거 자금 흐름은 아래의 엑셀 기반 꺾은선 차트를 참고해 주세요.")
+    
+    # 1:2 비율로 좌우 분할
+    col_pie, col_table = st.columns([1, 2])
     
     pivot_df = pd.DataFrame()
     with st.spinner("KRX 전체 상장 ETF 데이터를 분석 중입니다... (약 5~10초 소요)"):
         try:
-            target_brands = ['KODEX', 'TIGER', 'KBSTAR', 'ACE', 'ARIRANG', 'HANARO']
+            # 1. 전체 데이터 로드 및 브랜드 분리 (KBSTAR -> RISE 변환 포함)
             df_all_etf = fdr.StockListing('ETF/KR')
-            df_all_etf['브랜드'] = df_all_etf['Name'].apply(lambda x: str(x).split(' ')[0])
+            df_all_etf['브랜드'] = df_all_etf['Name'].apply(lambda x: str(x).split(' ')[0]).replace('KBSTAR', 'RISE')
+            df_all_etf['AUM(억원)'] = df_all_etf['MarCap'].fillna(0)
             
-            df_top_brands = df_all_etf[df_all_etf['브랜드'].isin(target_brands)].copy()
-            df_top_brands['분류_테마'] = df_top_brands['Name'].apply(assign_auto_theme)
-            
-            df_top_brands['AUM(억원)'] = df_top_brands['MarCap'].fillna(0)
-            pivot_df = pd.pivot_table(
-                df_top_brands,
-                values='AUM(억원)',
-                index='분류_테마',
-                columns='브랜드',
-                aggfunc='sum',
-                fill_value=0
-            )
-            
-            ordered_cols = [col for col in target_brands if col in pivot_df.columns]
-            pivot_df = pivot_df[ordered_cols].astype(int)
-            
-            # 기타 섹터/테마를 맨 아래로 보내는 정렬 로직
-            if '📦 기타 섹터/테마' in pivot_df.index:
-                idx_list = list(pivot_df.index)
-                idx_list.remove('📦 기타 섹터/테마')
-                idx_list.append('📦 기타 섹터/테마')
-                pivot_df = pivot_df.reindex(idx_list)
-            
-            st.dataframe(pivot_df.style.format("{:,}"), use_container_width=True)
-            
+            # -----------------------------------------------
+            # [좌측 영역]: TOP N 운용사 전체 시장 점유율 파이 차트
+            # -----------------------------------------------
+            with col_pie:
+                st.markdown("#### 🥧 전체 시장 점유율 (AUM 기준)")
+                
+                # 상위 N개 조절 슬라이더
+                top_n_brands = st.slider("표시할 상위 운용사 수 설정", min_value=3, max_value=15, value=6, step=1)
+                
+                # 브랜드별 총 AUM 계산 및 내림차순 정렬
+                df_brand_aum = df_all_etf.groupby('브랜드')['AUM(억원)'].sum().reset_index().sort_values(by='AUM(억원)', ascending=False)
+                
+                # TOP N개 자르기 및 '기타 운용사' 묶기
+                if len(df_brand_aum) > top_n_brands:
+                    df_top = df_brand_aum.head(top_n_brands)
+                    others_val = df_brand_aum.iloc[top_n_brands:]['AUM(억원)'].sum()
+                    df_others = pd.DataFrame([{'브랜드': "🧩 기타 운용사", 'AUM(억원)': others_val}])
+                    df_pie_final = pd.concat([df_top, df_others], ignore_index=True)
+                else:
+                    df_pie_final = df_brand_aum
+                    
+                # 파이(도넛) 차트 렌더링
+                fig_market_share = px.pie(
+                    df_pie_final,
+                    names='브랜드',
+                    values='AUM(억원)',
+                    hole=0.4, # 도넛 형태
+                    color_discrete_sequence=px.colors.sequential.Blues_r
+                )
+                fig_market_share.update_traces(textposition='inside', textinfo='percent+label')
+                fig_market_share.update_layout(height=420, margin=dict(t=20, l=20, r=20, b=20), template="plotly_dark", showlegend=False)
+                st.plotly_chart(fig_market_share, use_container_width=True)
+
+            # -----------------------------------------------
+            # [우측 영역]: 기존 4대장 테마별 AUM 테이블
+            # -----------------------------------------------
+            with col_table:
+                st.markdown("#### 📊 4대장 운용사 테마별 AUM 현황")
+                target_brands = ['KODEX', 'TIGER', 'ACE', 'RISE']
+                
+                # 타겟 4대장 데이터만 필터링
+                df_top_brands = df_all_etf[df_all_etf['브랜드'].isin(target_brands)].copy()
+                df_top_brands['분류_테마'] = df_top_brands['Name'].apply(assign_auto_theme)
+                
+                # 피벗 테이블 생성
+                pivot_df = pd.pivot_table(
+                    df_top_brands,
+                    values='AUM(억원)',
+                    index='분류_테마',
+                    columns='브랜드',
+                    aggfunc='sum',
+                    fill_value=0
+                )
+                
+                # 지정한 4대장 순서대로 컬럼 정렬
+                ordered_cols = [col for col in target_brands if col in pivot_df.columns]
+                pivot_df = pivot_df[ordered_cols].astype(int)
+                
+                # 기타 섹터/테마를 맨 아래로 내리기
+                if '📦 기타 섹터/테마' in pivot_df.index:
+                    idx_list = list(pivot_df.index)
+                    idx_list.remove('📦 기타 섹터/테마')
+                    idx_list.append('📦 기타 섹터/테마')
+                    pivot_df = pivot_df.reindex(idx_list)
+                
+                # 데이터프레임 렌더링 (파이 차트와 높이 밸런스 맞춤)
+                st.dataframe(pivot_df.style.format("{:,}"), use_container_width=True, height=420)
+                
         except Exception as e:
             st.error(f"데이터를 불러오는 중 오류가 발생했습니다: {e}")
 
@@ -633,7 +681,7 @@ with tabs[7]:
                     temp_df = load_and_clean_excel(uploaded_excel, w)
                     if '종목명' in temp_df.columns:
                         temp_df = temp_df[temp_df['종목명'] != '전체'].copy()
-                        temp_df['브랜드'] = temp_df['종목명'].apply(lambda x: str(x).split(' ')[0])
+                        temp_df['브랜드'] = temp_df['종목명'].apply(lambda x: str(x).split(' ')[0]).replace('KBSTAR', 'RISE')
                         temp_df = temp_df[temp_df['브랜드'].isin(target_brands)]
                         temp_df['분류_테마'] = temp_df['종목명'].apply(assign_auto_theme)
                         
@@ -767,7 +815,7 @@ with tabs[9]:
 [4. 경쟁사 마케팅 집중 동향]
 - TIGER (미래에셋): 초단기옵션 커버드콜 신상품, 월배당, 바이오테크 집중 홍보 중
 - ACE (한국투자): 반도체 3종 비교, ISA 계좌 활용 마케팅, 월배당 라인업 확대 홍보 중
-- KBSTAR & SOL 등 타사: 연금 마케팅 및 테마 집중 스터디 진행 중
+- RISE(KB) & SOL(신한) 등 타사: 테마 집중 스터디 및 고객 프로모션 진행 중
 
 위 데이터를 종합하여 아래 3가지 Action Item을 포함한 전술 리포트를 작성해.
 1. Weekly Market Interpretation: 자금 유입 흐름과 검색량의 상관관계 및 경쟁사 동향 통합 분석
