@@ -7,7 +7,7 @@ import requests
 from bs4 import BeautifulSoup
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
-import json # 외부 라이브러리 설치 불필요 (파이썬 기본 내장)
+import json 
 
 # 1. 페이지 레이아웃 및 기본 테마 설정
 st.set_page_config(page_title="ETF Monitoring AI Agent", layout="wide")
@@ -65,7 +65,7 @@ def get_realtime_news(keyword="ETF", timeframe="7d", max_items=5):
     except Exception as e:
         return pd.DataFrame([{"게시일 / 출처": "오류", "원본제목": "실시간 뉴스를 불러올 수 없습니다.", "링크": ""}])
 
-# ★ 실시간 애플 앱스토어 리뷰 파싱 함수 (limit=200 및 JSON 파싱 안전성 극대화)
+# ★ 실시간 애플 앱스토어 리뷰 파싱 함수 (동적 앵커링으로 날짜 괴리 완벽 해결)
 @st.cache_data(ttl=1800)
 def get_apple_app_reviews():
     apps = {
@@ -75,7 +75,6 @@ def get_apple_app_reviews():
         "KB증권 M-able": "1198642398"
     }
     
-    three_months_ago = datetime.today() - timedelta(days=90)
     all_bad_reviews = []
     
     headers = {
@@ -84,7 +83,6 @@ def get_apple_app_reviews():
 
     try:
         for app_name, app_id in apps.items():
-            # limit=200을 명시하여 최근 50개가 아닌 200개까지 넉넉하게 긁어옵니다.
             url = f"https://itunes.apple.com/kr/rss/customerreviews/page=1/id={app_id}/sortby=mostrecent/limit=200/json"
             
             res = requests.get(url, headers=headers, timeout=10)
@@ -95,26 +93,38 @@ def get_apple_app_reviews():
             feed = data.get("feed", {})
             entries = feed.get("entry", [])
             
-            # 리뷰가 딱 1개면 딕셔너리로 반환되는 경우를 대비한 안전 처리
             if isinstance(entries, dict):
                 entries = [entries]
                 
             if not entries:
                 continue
-                
+
+            # API에서 유효한 리뷰 데이터만 우선 분리
+            valid_entries = []
             for entry in entries:
                 rating_data = entry.get("im:rating")
-                # 앱 메타데이터(첫 번째 엔트리) 건너뛰기
-                if not rating_data:
-                    continue
-                    
+                if rating_data:
+                    valid_entries.append(entry)
+            
+            if not valid_entries:
+                continue
+
+            # ★ 시스템 오늘 날짜가 아닌, '가장 최신 리뷰'의 날짜를 기준점(Anchor)으로 설정
+            try:
+                first_date_str = valid_entries[0].get("updated", {}).get("label", "")[:10]
+                anchor_date = datetime.strptime(first_date_str, "%Y-%m-%d")
+            except:
+                anchor_date = datetime.today()
+                
+            three_months_ago = anchor_date - timedelta(days=90)
+                
+            for entry in valid_entries:
                 try:
-                    score = int(rating_data.get("label", "5"))
+                    score = int(entry.get("im:rating", {}).get("label", "5"))
                     date_str = entry.get("updated", {}).get("label", "")[:10] 
                     review_date = datetime.strptime(date_str, "%Y-%m-%d")
                     
                     content_data = entry.get("content", {})
-                    # JSON 구조 변경에 대비한 방어적 코드
                     if isinstance(content_data, dict):
                         content = content_data.get("label", "내용 없음")
                     else:
@@ -122,7 +132,7 @@ def get_apple_app_reviews():
                         
                     title = entry.get("title", {}).get("label", "제목 없음")
                     
-                    # 1~2점 & 3개월 이내 조건 충족 시 수집
+                    # 1~2점 & 해당 앱의 '가장 최신 리뷰 기준' 3개월 이내 악플만 캡처
                     if score <= 2 and review_date >= three_months_ago:
                         all_bad_reviews.append({
                             "app": app_name,
@@ -132,14 +142,13 @@ def get_apple_app_reviews():
                             "content": content
                         })
                 except Exception:
-                    pass # 개별 리뷰 파싱 에러는 무시하고 계속 진행
+                    pass 
                     
-        # 수집된 데이터를 최신순으로 정렬
         all_bad_reviews.sort(key=lambda x: x['date'], reverse=True)
         return all_bad_reviews[:12] # 최신 악플 최대 12개 노출
         
     except Exception as e:
-        return [{"error": f"API 연동 중 일시적 오류가 발생했습니다: {str(e)}"}]
+        return [{"error": f"API 연동 중 오류가 발생했습니다: {str(e)}"}]
 
 # 실시간 데이터 파싱 함수 (이벤트 캘린더 전용)
 @st.cache_data(ttl=3600)
@@ -734,7 +743,7 @@ with tabs[4]:
                 st.info("해당 기간 동안 검색된 이벤트나 상장 프로모션 보도자료가 없습니다.")
 
 # =========================================================================
-# --- ★ Tab 5: [고객 UX 분석] (표준 라이브러리 기반 찐 데이터 파싱 오류 수정 패치) ---
+# --- ★ Tab 5: [고객 UX 분석] (앱스토어 시간 괴리 동적 계산 해결 완료 패치) ---
 # =========================================================================
 with tabs[5]:
     st.markdown("### 🗣️ 고객 Voice (VOC) & 시스템 리스크 모니터링 (최근 3개월)")
@@ -761,9 +770,9 @@ with tabs[5]:
         
     with col_news:
         st.subheader("📰 언론 보도 증권앱/MTS 중대 오류 이슈")
-        with st.spinner("최근 3개월간 언론에 터진 대형 시스템 오류 기사를 수집 중입니다..."):
-            # 구글 뉴스 엔진이 완벽하게 이해할 수 있는 직관적인 키워드로 단순화
-            df_app_voc = get_realtime_news('"MTS 오류" OR "증권앱 먹통" OR "MTS 지연"', timeframe="3m", max_items=5)
+        with st.spinner("최근 1년간 언론에 터진 대형 시스템 오류 기사를 수집 중입니다..."):
+            # 뉴스 엔진이 완벽하게 이해하는 키워드로 단순화 + 기간 1년으로 넉넉하게 확장
+            df_app_voc = get_realtime_news('"MTS 오류" OR "증권앱 먹통" OR "접속지연"', timeframe="1y", max_items=5)
             
             if "링크" in df_app_voc.columns and df_app_voc["링크"].iloc[0] != "":
                 for idx, row in df_app_voc.iterrows():
@@ -771,7 +780,7 @@ with tabs[5]:
                         st.markdown(f"🚨 <a href='{row['링크']}' target='_blank' style='color:#ff4d4d; text-decoration:none;'>{row['원본제목']} 🔗</a>", unsafe_allow_html=True)
                         st.caption(f"📅 {row['게시일 / 출처']}")
             else:
-                st.info("최근 3개월간 보도된 증권앱 중대 오류 기사가 없습니다.")
+                st.info("최근 주요(최대 1년) 보도된 증권앱 중대 오류 기사가 없습니다.")
 
 # =========================================================================
 # --- Tab 6: [경쟁사 동향] ---
