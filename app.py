@@ -45,7 +45,7 @@ glassmorphism_css = """
 [data-baseweb="tab-list"] {
     gap: 8px;
     padding-bottom: 12px;
-    flex-wrap: wrap; /* 화면이 작아져도 버튼이 짤리지 않게 자동 줄바꿈 */
+    flex-wrap: wrap; 
 }
 [data-baseweb="tab"] {
     background: rgba(255, 255, 255, 0.04) !important;
@@ -219,35 +219,41 @@ def load_and_clean_excel(file, sheet_name):
 
 
 # =========================================================================
-# ★ 2. 2단 메인 레이아웃 적용 (메인 화면 80% / 여백 2% / 우측 컨트롤 타워 18%)
+# ★ 2. 메인 화면 3단 분할 비율 조정 (메인 85% / 우측 컨트롤 타워 15%로 날씬하게)
 # =========================================================================
-# 좌측 사이드바를 안 쓰므로 공간을 조금 더 여유롭게 잡습니다.
-col_main, col_spacing, col_right = st.columns([4, 0.1, 1.2])
+# 기존 [4, 0.1, 1.2]에서 컨트롤 타워의 너비를 대폭 줄여 65% 수준인 0.8로 세팅
+col_main, col_spacing, col_right = st.columns([4.5, 0.1, 0.8])
 
 # ---------------------------------------------------------
-# [우측 패널] 타이틀 & 데이터 컨트롤 센터 (항상 고정)
+# [우측 패널] 타이틀 & 얇아진 데이터 컨트롤 센터
 # ---------------------------------------------------------
 with col_right:
-    # 1. 우측 상단 메인 텍스트 (사이드바에서 이동)
+    # 1. 우측 상단 메인 텍스트 (타이틀 폰트 크기 대폭 확대: 24px -> 36px)
     st.markdown(
         """
-        <div style='text-align: right; margin-bottom: 20px; margin-top: 10px;'>
-            <h2 style='font-weight: 800; font-size: 24px; letter-spacing: -0.5px; background: linear-gradient(to left, #ffffff, #93c5fd); -webkit-background-clip: text; -webkit-text-fill-color: transparent;'>
+        <div style='text-align: right; margin-bottom: 25px; margin-top: 5px;'>
+            <h2 style='font-weight: 800; font-size: 36px; line-height: 1.1; letter-spacing: -1px; background: linear-gradient(to left, #ffffff, #93c5fd); -webkit-background-clip: text; -webkit-text-fill-color: transparent;'>
                 ETF Monitoring<br>AI Agent
             </h2>
-            <p style='color:#94a3b8; font-size:12px;'>Data Intelligence Dashboard</p>
+            <p style='color:#94a3b8; font-size:12px; margin-top:5px;'>Data Intelligence Dashboard</p>
         </div>
         """, unsafe_allow_html=True
     )
 
-    # 2. 데이터 컨트롤 타워 (주차 선택 위로 올림)
+    # 2. 데이터 컨트롤 타워 (주차 선택 최상단 배치)
     with st.container(border=True):
         st.markdown("<h4 style='text-align:center; font-size: 16px;'>🎛️ 데이터 컨트롤</h4>", unsafe_allow_html=True)
         st.divider()
         
+        # 엑셀 업로더 (주차 추출용으로 먼저 렌더링되지만 UI 배치는 아래로)
+        available_weeks = ["데이터 없음"]
+        uploaded_excel_temp = st.session_state.get('excel_main') # 상태 보존용
+        
+        # UI 배치를 위한 Placeholder
+        week_placeholder = st.empty()
+        st.divider()
         uploaded_excel = st.file_uploader("📈 ETF 순매수 엑셀", type=["xlsx", "xls"], key="excel_main")
         
-        available_weeks = ["데이터 없음"]
         if uploaded_excel is not None:
             try:
                 xls = pd.ExcelFile(uploaded_excel)
@@ -256,9 +262,9 @@ with col_right:
                     available_weeks = sheet_names[::-1] 
             except: pass
 
-        # 주차 선택이 가장 위로 올라옴 (엑셀 업로드 직후)
+        # Placeholder에 주차 선택 박스를 엑셀 업로드 위로 주입
         default_idx = 1 if len(available_weeks) > 1 else 0
-        selected_week = st.selectbox("📆 조회 기준 주차", options=available_weeks, index=default_idx)
+        selected_week = week_placeholder.selectbox("📆 조회 기준 주차", options=available_weeks, index=default_idx)
         
         st.divider()
         uploaded_dl = st.file_uploader("🔍 DataLab 검색량", type=["csv", "xlsx", "xls"], key="dl_main")
@@ -267,15 +273,13 @@ with col_right:
     st.markdown("<br><br><br>", unsafe_allow_html=True)
     st.markdown("<p style='text-align:right; color: #64748b; font-size: 10px; letter-spacing: 2px; font-weight: 600; margin-bottom: 10px;'>POWERED BY</p>", unsafe_allow_html=True)
     
-    # 오른쪽 정렬 느낌을 주기 위해 컬럼 분할 후 오른쪽에 배치
-    _, col_logo_r = st.columns([1, 1.5])
-    with col_logo_r:
-        try:
-            st.image("20220927092603_1800954_640_640.png", use_container_width=True)
-            st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
-            st.image("커리어하이 로고(하양).png", use_container_width=True)
-        except:
-            st.markdown("<p style='text-align:right; color:#94a3b8; font-size:12px;'>삼성자산운용 x 커리어하이</p>", unsafe_allow_html=True)
+    try:
+        # 공간이 좁아졌으므로 우측 정렬로 꽉 차게 배치
+        st.image("20220927092603_1800954_640_640.png", use_container_width=True)
+        st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
+        st.image("커리어하이 로고(하양).png", use_container_width=True)
+    except:
+        st.markdown("<p style='text-align:right; color:#94a3b8; font-size:12px;'>삼성자산운용 x 커리어하이</p>", unsafe_allow_html=True)
 
 # ---------------------------------------------------------
 # [중앙 화면] 가로형 탭 복구 (데이터 100% 실시간 자동 연동)
@@ -456,7 +460,7 @@ with col_main:
                                 
                                 df_scatter_filtered = df_merged[df_merged['종목명'].isin(selected_scatter_etfs)].copy()
                                 df_scatter_filtered['주간 수익률(%)'] = df_scatter_filtered['종목명'].map(real_returns)
-                                # 글로벌 변수 갱신으로 10번 프롬프트 탭 연동!
+                                # 글로벌 변수 갱신으로 10번 프롬프트 탭 자동 연동
                                 df_scatter = df_scatter_filtered.dropna()
                                 
                                 fig_scatter = px.scatter(df_scatter, x="주간 수익률(%)", y="순매수 증감률(%)", text="종목명", hover_data=["이번주", "지난주"], title=f"**실제 수익률 vs. {subject_tab2_scatter} 순매수 증감률**")
@@ -773,7 +777,13 @@ with col_main:
     # === Tab 9: 글로벌 공백 & 정책 동향 ===
     with tabs[9]:
         st.markdown("### 🇺🇸 글로벌 혁신 구조 공백 분석 (US Mega Trends vs KODEX)")
-        raw_keywords = ["타겟 인컴 ETF 버퍼형", "0DTE 초단기 옵션 커버드콜 ETF", "가상자산 비트코인 현물 ETF", "BDC 대체투자", "하방 방어형 100% 버퍼 ETF"]
+        raw_keywords = [
+            "타겟 인컴 ETF 버퍼형", 
+            "0DTE 초단기 옵션 커버드콜 ETF", 
+            "가상자산 비트코인 현물 ETF", 
+            "BDC 기업성장집합투자기구 대체투자", 
+            "하방 방어형 100% 버퍼 ETF"
+        ]
         trend_strengths = []
         with st.spinner("미국 혁신 테마 트렌드를 스캔 중입니다..."):
             for kw in raw_keywords:
@@ -804,7 +814,6 @@ with col_main:
         st.caption("단순한 데이터 요약을 넘어, 대시보드의 모든 인텔리전스(수급, 규제, 고객 VOC, 경쟁사)를 결합하여 실무팀에 하달할 구체적인 '행동 지침(Action Item)'을 도출합니다.")
         st.divider()
 
-        # 가로형 탭이므로 다른 탭을 클릭하지 않아도 df_scatter 데이터가 무조건 백그라운드에서 한 번에 넘어옵니다!
         data_context = df_scatter.sort_values(by='주간 수익률(%)', ascending=False).head(20).to_string(index=False) if not df_scatter.empty else "데이터가 부족합니다. (우측 패널에 엑셀 데이터를 업로드해주세요.)"
         dl_context = st.session_state.get('dl_summary', "데이터랩 미연동")
         market_sentiment = st.session_state.get('market_sentiment', "혼조세 지속")
