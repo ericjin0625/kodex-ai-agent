@@ -35,8 +35,8 @@ def assign_auto_theme(etf_name):
     else:
         return '📦 기타 섹터/테마'
 
-# 2. 실시간 데이터 파싱 함수 (뉴스 연동)
-@st.cache_data(ttl=1800)
+# 2. 실시간 데이터 파싱 함수 (뉴스 연동 - 한줄 요약 로직 제거)
+@st.cache_data(ttl=3600)
 def get_realtime_news(keyword="ETF", max_items=5):
     url = f"https://news.google.com/rss/search?q={keyword}+when:7d&hl=ko&gl=KR&ceid=KR:ko"
     try:
@@ -64,7 +64,7 @@ def get_realtime_news(keyword="ETF", max_items=5):
     except Exception as e:
         return pd.DataFrame([{"게시일 / 출처": "오류", "원본제목": "실시간 뉴스를 불러올 수 없습니다.", "링크": ""}])
 
-# ★ 신규 추가: 타 운용사 네이버 블로그 실시간 RSS 파싱 함수
+# 타 운용사 네이버 블로그 실시간 RSS 파싱 함수
 @st.cache_data(ttl=1800)
 def get_competitor_blog(blog_id):
     url = f"https://rss.blog.naver.com/{blog_id}.xml"
@@ -72,7 +72,7 @@ def get_competitor_blog(blog_id):
         res = requests.get(url, timeout=5)
         root = ET.fromstring(res.content)
         posts = []
-        for item in root.findall('./channel/item')[:3]: # 최신 글 3개
+        for item in root.findall('./channel/item')[:3]: 
             title = item.find('title').text
             link = item.find('link').text
             posts.append((title, link))
@@ -91,6 +91,7 @@ def get_real_returns(symbols_dict, etf_names):
     end_date = datetime.today()
     start_date = end_date - timedelta(days=14)
     returns_dict = {}
+    
     for name in etf_names:
         symbol = symbols_dict.get(name)
         if symbol:
@@ -238,17 +239,15 @@ with tabs[0]:
         st.info("좌측 사이드바에 엑셀 데이터를 업로드해주세요.")
 
 # =========================================================================
-# --- Tab 1: [ETF 순매수 등락, 수익률] ---
+# --- ★ Tab 1: [ETF 순매수 등락, 수익률] (주차 연동 및 Numpy 회귀선 패치) ---
 # =========================================================================
 with tabs[1]:
     st.markdown("### 📈 기간별 ETF 순매수 현황")
-    col_start, col_end, col_text, col_slider = st.columns([1.5, 1.5, 2, 3])
+    col_start, col_text, col_slider = st.columns([1.5, 3.5, 3])
     with col_start:
         start_week = st.selectbox("시작 주차:", options=available_weeks[::-1], index=0, key="start_week")
-    with col_end:
-        end_week = st.selectbox("종료 주차:", options=available_weeks, index=0, key="end_week")
     with col_text:
-        st.markdown(f"<p style='margin-top: 30px; font-weight: bold;'>부터 &nbsp;&nbsp; {end_week} 까지의</p>", unsafe_allow_html=True)
+        st.markdown(f"<p style='margin-top: 30px; font-weight: bold;'>부터 &nbsp;&nbsp; {selected_week} (현재 선택 주차) 까지의</p>", unsafe_allow_html=True)
     with col_slider:
         top_n_tab2 = st.slider("TOP N개 ETF 순매수 순위:", min_value=10, max_value=100, value=50, step=10, key="top_n_tab2", label_visibility="collapsed")
         st.markdown(f"<p style='text-align:right; color:red; font-weight:bold; margin-top:-10px;'>{top_n_tab2}</p>", unsafe_allow_html=True)
@@ -259,7 +258,7 @@ with tabs[1]:
     if uploaded_excel is not None:
         try:
             start_idx = available_weeks.index(start_week) if start_week in available_weeks else -1
-            end_idx = available_weeks.index(end_week) if end_week in available_weeks else -1
+            end_idx = available_weeks.index(selected_week) if selected_week in available_weeks else -1
             
             if start_idx != -1 and end_idx != -1 and start_idx >= end_idx:
                 target_sheets = available_weeks[end_idx:start_idx+1]
@@ -341,11 +340,30 @@ with tabs[1]:
                             df_scatter_filtered['주간 수익률(%)'] = df_scatter_filtered['종목명'].map(real_returns)
                             df_scatter = df_scatter_filtered.dropna()
                             
+                            # 추가 설치 없이 기본 numpy로 회귀선(Trendline) 계산 및 그리기
                             fig_scatter = px.scatter(
                                 df_scatter, x="주간 수익률(%)", y="순매수 증감률(%)",
                                 text="종목명", hover_data=["이번주", "지난주"],
                                 title=f"**실제 수익률 vs. {subject_tab2_scatter} 순매수 증감률**"
                             )
+                            
+                            if len(df_scatter) > 1:
+                                x_data = df_scatter["주간 수익률(%)"]
+                                y_data = df_scatter["순매수 증감률(%)"]
+                                
+                                # 1차 방정식(직선) 기울기와 절편 계산
+                                z = np.polyfit(x_data, y_data, 1)
+                                p = np.poly1d(z)
+                                
+                                # 계산된 직선을 그래프 위에 덧그리기 (눈에 띄는 빨간색 점선)
+                                fig_scatter.add_scatter(
+                                    x=x_data, 
+                                    y=p(x_data), 
+                                    mode='lines', 
+                                    name='상관관계(Trendline)', 
+                                    line=dict(color='#ff4d4d', dash='dot')
+                                )
+
                             fig_scatter.update_traces(
                                 textposition='top center',
                                 marker=dict(size=10, color='#4da6ff', opacity=0.7),
@@ -430,19 +448,18 @@ with tabs[2]:
         st.info("👈 좌측 사이드바에 Naver DataLab 파일(CSV/Excel)을 업로드하시면 비교 트렌드 차트가 나타납니다.")
 
 # =========================================================================
-# --- Tab 3: [주간 거래량 추이] ---
+# --- ★ Tab 3: [주간 거래량 추이] (제한 해제 패치) ---
 # =========================================================================
 with tabs[3]:
-    st.markdown("### 📊 선택 ETF 실제 주간 거래량 추이 (최대 12개)")
+    st.markdown("### 📊 선택 ETF 실제 주간 거래량 추이")
     
     if uploaded_excel is not None and not df_source.empty and '종목명' in df_source.columns:
         extracted_etfs = df_source[df_source['종목명'] != '전체']['종목명'].dropna().unique().tolist()
         
         selected_etfs = st.multiselect(
-            "검색 및 선택 (아래 빈칸을 클릭하거나 타이핑하세요):", 
+            "검색 및 선택 (원하시는 만큼 무제한 선택 가능합니다):", 
             options=extracted_etfs, 
-            default=extracted_etfs[:4] if len(extracted_etfs) >= 4 else extracted_etfs, 
-            max_selections=12
+            default=extracted_etfs[:4] if len(extracted_etfs) >= 4 else extracted_etfs
         )
         
         st.divider()
@@ -474,7 +491,7 @@ with tabs[3]:
         st.info("좌측 사이드바에 엑셀 데이터를 업로드해주세요.")
 
 # =========================================================================
-# --- ★ Tab 5: [고객 UX 분석] (100% 실시간 뉴스/블로그 크롤링 대체 완료) ---
+# --- Tab 5: [고객 UX 분석] ---
 # =========================================================================
 with tabs[5]:
     st.markdown("### 🗣️ 고객 Voice (VOC) & Pain Point 분석 (실시간 연동)")
@@ -507,25 +524,24 @@ with tabs[5]:
                 st.info("최근 7일간 감지된 주요 불만 리뷰가 없습니다.")
 
 # =========================================================================
-# --- ★ Tab 6: [경쟁사 동향] (100% 실시간 운용사 공식 네이버 블로그 RSS 연동 완료) ---
+# --- ★ Tab 6: [경쟁사 동향] (이모지 매핑 패치) ---
 # =========================================================================
 with tabs[6]:
     st.markdown("### 🏢 타사 공식 마케팅 채널 동향 (실시간 RSS)")
     st.caption("경쟁 운용사들의 공식 네이버 블로그 최신글을 실시간으로 읽어와 마케팅 소구점(Selling Point)을 파악합니다.")
     st.divider()
 
-    # 운용사 블로그 ID 매핑 (실제 네이버 블로그 아이디)
     blog_map = {
-        "🐅 TIGER ETF (미래에셋)": ("m_invest", "https://blog.naver.com/m_invest"),
-        "🏆 ACE ETF (한국투자)": ("aceetf", "https://blog.naver.com/aceetf"),
-        "⭐ RISE ETF (KB자산운용)": ("riseetf", "https://blog.naver.com/riseetf"),
+        "🐯 TIGER ETF (미래에셋)": ("m_invest", "https://blog.naver.com/m_invest"),
+        "♠️ ACE ETF (한국투자)": ("aceetf", "https://blog.naver.com/aceetf"),
+        "📈 RISE ETF (KB자산운용)": ("riseetf", "https://blog.naver.com/riseetf"),
         "☀️ SOL ETF (신한자산운용)": ("soletf", "https://blog.naver.com/soletf"),
-        "🌐 PLUS ETF (한화자산운용)": ("hanwhaasset", "https://blog.naver.com/hanwhaasset"),
-        "🌱 HANARO ETF (NH아문디)": ("nh_amundi", "https://blog.naver.com/nh_amundi"),
-        "🥇 1Q ETF (하나자산운용)": ("1qetf", "https://blog.naver.com/1qetf"),
-        "⏱️ TIMEFOLIO ETF (타임폴리오)": ("timefolioetf", "https://blog.naver.com/timefolioetf"),
+        "➕ PLUS ETF (한화자산운용)": ("hanwhaasset", "https://blog.naver.com/hanwhaasset"),
+        "🌾 HANARO ETF (NH아문디)": ("nh_amundi", "https://blog.naver.com/nh_amundi"),
+        "1️⃣ 1Q ETF (하나자산운용)": ("1qetf", "https://blog.naver.com/1qetf"),
+        "⏳ TIMEFOLIO ETF (타임폴리오)": ("timefolioetf", "https://blog.naver.com/timefolioetf"),
         "🔵 WON ETF (우리자산운용)": ("wooriam_kr", "https://blog.naver.com/wooriam_kr"),
-        "🎯 KIWOOM ETF (키움투자자산운용)": ("kiwoomammkt", "https://blog.naver.com/kiwoomammkt")
+        "🅚 KIWOOM ETF (키움투자자산운용)": ("kiwoomammkt", "https://blog.naver.com/kiwoomammkt")
     }
 
     blog_items = list(blog_map.items())
@@ -534,7 +550,6 @@ with tabs[6]:
         for i in range(0, len(blog_items), 2):
             c1, c2 = st.columns(2)
             
-            # 왼쪽 열
             name1, (b_id1, url1) = blog_items[i]
             with c1:
                 st.subheader(f"[{name1}]({url1})")
@@ -543,7 +558,6 @@ with tabs[6]:
                     for p_title, p_link in posts:
                         st.markdown(f"- <a href='{p_link}' target='_blank' style='color:#4da6ff; text-decoration:none;'>{p_title} 🔗</a>", unsafe_allow_html=True)
             
-            # 오른쪽 열 (홀수 개일 경우 대비)
             if i + 1 < len(blog_items):
                 name2, (b_id2, url2) = blog_items[i+1]
                 with c2:
@@ -554,7 +568,7 @@ with tabs[6]:
                             st.markdown(f"- <a href='{p_link}' target='_blank' style='color:#4da6ff; text-decoration:none;'>{p_title} 🔗</a>", unsafe_allow_html=True)
 
 # =========================================================================
-# --- Tab 7: [ETF 운용 현황] ---
+# --- ★ Tab 7: [ETF 운용 현황] (기타 섹터/테마 하단 정렬 패치) ---
 # =========================================================================
 with tabs[7]:
     st.markdown("### 🏢 국내 상위 운용사 테마별 AUM 현황 (현재 실시간 기준 / 단위: 억원)")
@@ -583,6 +597,13 @@ with tabs[7]:
             
             ordered_cols = [col for col in target_brands if col in pivot_df.columns]
             pivot_df = pivot_df[ordered_cols].astype(int)
+            
+            # 기타 섹터/테마를 맨 아래로 보내는 정렬 로직
+            if '📦 기타 섹터/테마' in pivot_df.index:
+                idx_list = list(pivot_df.index)
+                idx_list.remove('📦 기타 섹터/테마')
+                idx_list.append('📦 기타 섹터/테마')
+                pivot_df = pivot_df.reindex(idx_list)
             
             st.dataframe(pivot_df.style.format("{:,}"), use_container_width=True)
             
@@ -647,7 +668,7 @@ with tabs[7]:
         st.info("👈 좌측 사이드바에 엑셀 데이터를 업로드하시면 트렌드 그래프가 나타납니다.")
 
 # =========================================================================
-# --- ★ Tab 8: [글로벌 공백 & 정책 동향] (동적 계산 및 100% 실시간 뉴스 연동 완료) ---
+# --- Tab 8: [글로벌 공백 & 정책 동향] ---
 # =========================================================================
 with tabs[8]:
     st.markdown("### 🇺🇸 글로벌 혁신 구조 공백 분석 (US Mega Trends vs KODEX)")
@@ -661,11 +682,10 @@ with tabs[8]:
         "하방 방어형 100% 버퍼 ETF"
     ]
     
-    # 실시간 뉴스 카운트를 통해 유입 강도(관심도)를 계산하는 로직
     trend_strengths = []
     with st.spinner("각 테마별 실시간 뉴스 관심도를 측정 중입니다..."):
         for kw in raw_keywords:
-            temp_df = get_realtime_news(kw, max_items=10) # 10개까지 조회
+            temp_df = get_realtime_news(kw, max_items=10) 
             count = len(temp_df) if not temp_df.empty and temp_df.iloc[0]["게시일 / 출처"] != "-" else 0
             if count >= 8: strength = "🔥🔥🔥 최고조"
             elif count >= 3: strength = "🔥🔥 강세"
@@ -700,7 +720,7 @@ with tabs[8]:
     
     st.markdown(f"#### 📡 `[실시간 연동]` {selected_trend_label} 관련 정책/규제 뉴스")
     with st.spinner(f"'{selected_trend_label}' 관련 최신 동향을 수집 중입니다..."):
-        df_gap_news = get_realtime_news(selected_trend_label + " 금융위 규제") # 규제 키워드 결합
+        df_gap_news = get_realtime_news(selected_trend_label + " 금융위 규제") 
         
         if "링크" in df_gap_news.columns and df_gap_news["링크"].iloc[0] != "":
             cols_grid = st.columns(2)
