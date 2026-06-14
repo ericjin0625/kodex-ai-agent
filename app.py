@@ -35,7 +35,7 @@ def assign_auto_theme(etf_name):
     else:
         return '📦 기타 섹터/테마'
 
-# 2. 실시간 데이터 파싱 함수 (뉴스 연동)
+# 2. 실시간 데이터 파싱 함수 (일반 뉴스)
 @st.cache_data(ttl=3600)
 def get_realtime_news(keyword="ETF", max_items=5):
     url = f"https://news.google.com/rss/search?q={keyword}+when:7d&hl=ko&gl=KR&ceid=KR:ko"
@@ -63,6 +63,37 @@ def get_realtime_news(keyword="ETF", max_items=5):
         
     except Exception as e:
         return pd.DataFrame([{"게시일 / 출처": "오류", "원본제목": "실시간 뉴스를 불러올 수 없습니다.", "링크": ""}])
+
+# ★ 실시간 데이터 파싱 함수 (이벤트 캘린더 전용)
+@st.cache_data(ttl=3600)
+def get_event_news(keyword, start_date, end_date, max_items=4):
+    start_str = start_date.strftime("%Y-%m-%d")
+    # 구글 뉴스의 before 속성은 해당 날짜를 포함하지 않으므로 하루를 더해줍니다.
+    end_str = (end_date + timedelta(days=1)).strftime("%Y-%m-%d")
+    url = f"https://news.google.com/rss/search?q={keyword}+after:{start_str}+before:{end_str}&hl=ko&gl=KR&ceid=KR:ko"
+    
+    try:
+        res = requests.get(url, timeout=5)
+        root = ET.fromstring(res.text)
+        
+        news_list = []
+        for item in root.findall('./channel/item'):
+            title = item.find('title').text if item.find('title') is not None else "제목 없음"
+            link = item.find('link').text if item.find('link') is not None else ""
+            pubDate = item.find('pubDate').text[5:16] if item.find('pubDate') is not None else ""
+            source = item.find('source').text if item.find('source') is not None else "Google News"
+            
+            news_list.append({
+                "게시일 / 출처": f"{pubDate} / {source}", 
+                "원본제목": title, 
+                "링크": link
+            })
+            if len(news_list) >= max_items:
+                break
+                
+        return pd.DataFrame(news_list)
+    except Exception as e:
+        return pd.DataFrame()
 
 # 타 운용사 네이버 블로그 실시간 RSS 파싱 함수
 @st.cache_data(ttl=1800)
@@ -155,9 +186,6 @@ tab_names = [
     "[ETF 운용 현황]", "[글로벌 공백 & 정책 동향]", "[AI 분석용 프롬프트]"
 ]
 tabs = st.tabs(tab_names)
-
-with tabs[4]:
-    st.warning("🚧 [진행 이벤트] 탭은 기획안을 바탕으로 순차적으로 구현될 예정입니다.")
 
 @st.cache_data
 def load_and_clean_excel(file, sheet_name):
@@ -492,6 +520,64 @@ with tabs[3]:
         st.info("좌측 사이드바에 엑셀 데이터를 업로드해주세요.")
 
 # =========================================================================
+# --- ★ Tab 4: [진행 이벤트] (캘린더 연동 보도자료 스크랩 패치) ---
+# =========================================================================
+with tabs[4]:
+    st.markdown("### 🎉 운용사별 ETF 진행 이벤트 (뉴스 보도자료 스크랩)")
+    st.caption("선택하신 날짜 구간 동안 언론에 배포된 각 운용사의 이벤트 및 신규 상장 프로모션 기사를 실시간으로 수집합니다.")
+    
+    col_d1, col_d2, _ = st.columns([2, 2, 6])
+    with col_d1:
+        evt_start = st.date_input("🗓️ 시작일 선택", datetime.today() - timedelta(days=30))
+    with col_d2:
+        evt_end = st.date_input("🗓️ 종료일 선택", datetime.today())
+        
+    st.divider()
+    
+    if evt_start > evt_end:
+        st.error("🚨 시작일이 종료일보다 늦을 수 없습니다. 날짜를 다시 설정해주세요.")
+    else:
+        # 스크린샷 1의 12대 메이저 브랜드
+        top_brands = ["KODEX", "TIGER", "RISE", "ACE", "SOL", "KIWOOM", "PLUS", "HANARO", "1Q", "TIMEFOLIO", "KoAct", "WON"]
+        
+        with st.spinner(f"{evt_start.strftime('%Y-%m-%d')} 부터 {evt_end.strftime('%Y-%m-%d')} 까지의 이벤트 기사를 스크랩 중입니다... (약 5~10초 소요)"):
+            has_any_event = False
+            
+            # 1. 12대 운용사 개별 검색
+            for brand in top_brands:
+                query = f'"{brand}" ETF (이벤트 OR 상장 OR 프로모션)'
+                df_evt = get_event_news(query, evt_start, evt_end, max_items=4)
+                
+                if not df_evt.empty:
+                    has_any_event = True
+                    st.markdown(f"#### 🔵 {brand}")
+                    cols = st.columns(len(df_evt) if len(df_evt) < 4 else 4)
+                    for idx, row in df_evt.iterrows():
+                        with cols[idx % 4]:
+                            with st.container(border=True):
+                                st.markdown(f"**<a href='{row['링크']}' target='_blank' style='color:#4da6ff; text-decoration:none;'>{row['원본제목']}</a>**", unsafe_allow_html=True)
+                                st.caption(f"📅 {row['게시일 / 출처']}")
+                    st.write("") # 간격 띄우기
+            
+            # 2. 기타 운용사 통합 검색 (스크린샷 2의 운용사들을 잡아내기 위해 메인 12개사 제외 검색)
+            exclude_query = " ".join([f'-"{b}"' for b in top_brands])
+            other_query = f'ETF (이벤트 OR 상장 OR 프로모션) {exclude_query}'
+            df_other_evt = get_event_news(other_query, evt_start, evt_end, max_items=8) # 기타는 좀 더 넉넉하게 8개
+            
+            if not df_other_evt.empty:
+                has_any_event = True
+                st.markdown(f"#### 🧩 기타 운용사")
+                cols = st.columns(4)
+                for idx, row in df_other_evt.iterrows():
+                    with cols[idx % 4]:
+                        with st.container(border=True):
+                            st.markdown(f"**<a href='{row['링크']}' target='_blank' style='color:#ffb04d; text-decoration:none;'>{row['원본제목']}</a>**", unsafe_allow_html=True)
+                            st.caption(f"📅 {row['게시일 / 출처']}")
+                            
+            if not has_any_event:
+                st.info("해당 기간 동안 검색된 이벤트나 상장 프로모션 보도자료가 없습니다.")
+
+# =========================================================================
 # --- Tab 5: [고객 UX 분석] ---
 # =========================================================================
 with tabs[5]:
@@ -529,7 +615,7 @@ with tabs[5]:
 # =========================================================================
 with tabs[6]:
     st.markdown("### 🏢 타사 공식 마케팅 채널 동향 (실시간 RSS)")
-    st.caption("경쟁 운용사들의 공식 네이버 블로그 최신글을 실시간으로 읽어와 마케팅 소구점(Selling Point)을 파악합니다.")
+    st.caption("경쟁 운용사들의 공식 네이버 블로그 최신글을 실시간으로 읽어와 마케팅 소구점(Selling Point) 파악합니다.")
     st.divider()
 
     blog_map = {
@@ -569,37 +655,29 @@ with tabs[6]:
                             st.markdown(f"- <a href='{p_link}' target='_blank' style='color:#4da6ff; text-decoration:none;'>{p_title} 🔗</a>", unsafe_allow_html=True)
 
 # =========================================================================
-# --- ★ Tab 7: [ETF 운용 현황] (1:2 비율 파이차트 & 테이블 병렬 배치 패치) ---
+# --- Tab 7: [ETF 운용 현황] ---
 # =========================================================================
 with tabs[7]:
     st.markdown("### 🏢 국내 ETF 운용사 AUM 시장 점유율 및 테마별 현황 (실시간 기준)")
     st.caption("한국거래소(KRX) 실시간 데이터를 바탕으로 상위 운용사 간의 순자산총액(AUM) 규모를 비교하여 시장 장악력과 공백을 스캔합니다.")
     st.info("※ AUM 데이터는 파이썬 라이브러리 한계상 과거 특정 주차가 아닌 '조회 시점(오늘)'의 최신 시가총액을 보여줍니다. 과거 자금 흐름은 아래의 엑셀 기반 꺾은선 차트를 참고해 주세요.")
     
-    # 1:2 비율로 좌우 분할
     col_pie, col_table = st.columns([1, 2])
     
     pivot_df = pd.DataFrame()
     with st.spinner("KRX 전체 상장 ETF 데이터를 분석 중입니다... (약 5~10초 소요)"):
         try:
-            # 1. 전체 데이터 로드 및 브랜드 분리 (KBSTAR -> RISE 변환 포함)
             df_all_etf = fdr.StockListing('ETF/KR')
             df_all_etf['브랜드'] = df_all_etf['Name'].apply(lambda x: str(x).split(' ')[0]).replace('KBSTAR', 'RISE')
             df_all_etf['AUM(억원)'] = df_all_etf['MarCap'].fillna(0)
             
-            # -----------------------------------------------
-            # [좌측 영역]: TOP N 운용사 전체 시장 점유율 파이 차트
-            # -----------------------------------------------
             with col_pie:
                 st.markdown("#### 🥧 전체 시장 점유율 (AUM 기준)")
                 
-                # 상위 N개 조절 슬라이더
                 top_n_brands = st.slider("표시할 상위 운용사 수 설정", min_value=3, max_value=15, value=6, step=1)
                 
-                # 브랜드별 총 AUM 계산 및 내림차순 정렬
                 df_brand_aum = df_all_etf.groupby('브랜드')['AUM(억원)'].sum().reset_index().sort_values(by='AUM(억원)', ascending=False)
                 
-                # TOP N개 자르기 및 '기타 운용사' 묶기
                 if len(df_brand_aum) > top_n_brands:
                     df_top = df_brand_aum.head(top_n_brands)
                     others_val = df_brand_aum.iloc[top_n_brands:]['AUM(억원)'].sum()
@@ -608,30 +686,24 @@ with tabs[7]:
                 else:
                     df_pie_final = df_brand_aum
                     
-                # 파이(도넛) 차트 렌더링
                 fig_market_share = px.pie(
                     df_pie_final,
                     names='브랜드',
                     values='AUM(억원)',
-                    hole=0.4, # 도넛 형태
+                    hole=0.4, 
                     color_discrete_sequence=px.colors.sequential.Blues_r
                 )
                 fig_market_share.update_traces(textposition='inside', textinfo='percent+label')
                 fig_market_share.update_layout(height=420, margin=dict(t=20, l=20, r=20, b=20), template="plotly_dark", showlegend=False)
                 st.plotly_chart(fig_market_share, use_container_width=True)
 
-            # -----------------------------------------------
-            # [우측 영역]: 기존 4대장 테마별 AUM 테이블
-            # -----------------------------------------------
             with col_table:
                 st.markdown("#### 📊 4대장 운용사 테마별 AUM 현황")
                 target_brands = ['KODEX', 'TIGER', 'ACE', 'RISE']
                 
-                # 타겟 4대장 데이터만 필터링
                 df_top_brands = df_all_etf[df_all_etf['브랜드'].isin(target_brands)].copy()
                 df_top_brands['분류_테마'] = df_top_brands['Name'].apply(assign_auto_theme)
                 
-                # 피벗 테이블 생성
                 pivot_df = pd.pivot_table(
                     df_top_brands,
                     values='AUM(억원)',
@@ -641,18 +713,15 @@ with tabs[7]:
                     fill_value=0
                 )
                 
-                # 지정한 4대장 순서대로 컬럼 정렬
                 ordered_cols = [col for col in target_brands if col in pivot_df.columns]
                 pivot_df = pivot_df[ordered_cols].astype(int)
                 
-                # 기타 섹터/테마를 맨 아래로 내리기
                 if '📦 기타 섹터/테마' in pivot_df.index:
                     idx_list = list(pivot_df.index)
                     idx_list.remove('📦 기타 섹터/테마')
                     idx_list.append('📦 기타 섹터/테마')
                     pivot_df = pivot_df.reindex(idx_list)
                 
-                # 데이터프레임 렌더링 (파이 차트와 높이 밸런스 맞춤)
                 st.dataframe(pivot_df.style.format("{:,}"), use_container_width=True, height=420)
                 
         except Exception as e:
@@ -797,9 +866,6 @@ with tabs[9]:
     market_sentiment = st.session_state.get('market_sentiment', "데이터 부족")
     current_trend = st.session_state.get('selected_trend_label', "가상자산/BDC 등 핵심 트렌드")
 
-    # ---------------------------------------------------------
-    # [Track 1] 주간 마케팅 & 세일즈 전술 리포트 프롬프트
-    # ---------------------------------------------------------
     prompt_1 = f"""너는 KODEX 마케팅 및 세일즈 최고 책임자(CMO)야.
 다음 실시간 자금 흐름, 검색 트렌드, 시장 심리 및 경쟁사 동향 데이터를 바탕으로 이번 주 '주간 마케팅 & 세일즈 전술 리포트'를 작성해줘.
 
@@ -828,9 +894,6 @@ with tabs[9]:
 
     st.divider()
 
-    # ---------------------------------------------------------
-    # [Track 2] 신상품 기획 및 시장 선점 리포트 프롬프트
-    # ---------------------------------------------------------
     prompt_2 = f"""너는 KODEX 상품기획 및 전략 최고 책임자(CMO)야.
 다음 글로벌 ETF 트렌드 공백, 규제 정책 시그널, 그리고 고객 불편사항(VOC) 데이터를 바탕으로 '신상품 기획 및 시장 선점 리포트'를 작성해줘.
 
