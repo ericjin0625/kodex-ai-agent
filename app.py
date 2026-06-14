@@ -10,19 +10,18 @@ from datetime import datetime, timedelta
 import json 
 import time
 
-# 1. 페이지 레이아웃 및 기본 테마 설정 (반드시 최상단에 위치)
+# 1. 페이지 레이아웃 및 기본 테마 설정
 st.set_page_config(page_title="ETF Monitoring AI Agent", layout="wide", initial_sidebar_state="expanded")
 
-# 전역 상태 변수 초기화 (에러 방지용)
-if 'df_scatter_context' not in st.session_state:
-    st.session_state['df_scatter_context'] = "데이터가 로드되지 않았습니다."
+# 전역 데이터 변수 (탭 간 원활한 데이터 공유)
+df_scatter = pd.DataFrame()
 
 # ==========================================
-# ★ Glassmorphism 3단 레이아웃 커스텀 CSS
+# ★ Glassmorphism 커스텀 CSS (가로형 탭 최적화)
 # ==========================================
 glassmorphism_css = """
 <style>
-/* 1. 전체 배경: 프리미엄 오로라 그라데이션 */
+/* 1. 전체 배경: 딥 네이비 & 퍼플 프리미엄 오로라 그라데이션 */
 .stApp {
     background: linear-gradient(135deg, #0b101e 0%, #171b3c 50%, #0f172a 100%);
     background-attachment: fixed;
@@ -47,33 +46,26 @@ glassmorphism_css = """
 .stDataFrame {
     background: transparent !important;
 }
-/* 4. 라디오 버튼을 수직 탭(Vertical Tab) 모양으로 완벽 커스텀 */
-.stRadio > div[role="radiogroup"] > label > div:first-child {
-    display: none; /* 기본 라디오 동그라미 숨김 */
+/* 4. 중앙 가로형 탭(Tabs) 디자인: 둥글고 트렌디한 캡슐 알약(Pill) 스타일 */
+[data-baseweb="tab-list"] {
+    gap: 8px;
+    padding-bottom: 12px;
 }
-.stRadio > div[role="radiogroup"] > label {
-    background: rgba(255, 255, 255, 0.03);
-    border-radius: 12px;
-    padding: 12px 20px;
-    margin-bottom: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
+[data-baseweb="tab"] {
+    background: rgba(255, 255, 255, 0.04) !important;
+    border-radius: 20px !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    padding: 8px 16px !important;
     color: #94a3b8 !important;
-    font-weight: 500;
-    transition: all 0.2s ease-in-out;
-    cursor: pointer;
-    width: 100%;
 }
-.stRadio > div[role="radiogroup"] > label:hover {
-    background: rgba(255, 255, 255, 0.08);
-}
-.stRadio > div[role="radiogroup"] > label[data-checked="true"] {
-    background: rgba(77, 166, 255, 0.15) !important;
+[data-baseweb="tab"][aria-selected="true"] {
+    background: rgba(77, 166, 255, 0.12) !important;
     border: 1px solid rgba(77, 166, 255, 0.5) !important;
     color: #ffffff !important;
-    box-shadow: 0 0 12px rgba(77, 166, 255, 0.2) !important;
-    font-weight: bold;
+    box-shadow: 0 0 12px rgba(77, 166, 255, 0.25) !important;
+    font-weight: 600 !important;
 }
-/* 5. 기본 UI 숨김 */
+/* 5. 기본 UI 강제 숨김 */
 #MainMenu {visibility: hidden;}
 header {visibility: hidden;}
 footer {visibility: hidden;}
@@ -83,7 +75,7 @@ footer {visibility: hidden;}
 st.markdown(glassmorphism_css, unsafe_allow_html=True)
 
 # ==========================================
-# ★ AI 테마 자동 분류 로직
+# ★ 파싱 및 연산 함수 모음
 # ==========================================
 def assign_auto_theme(etf_name):
     try:
@@ -229,45 +221,46 @@ def load_and_clean_excel(file, sheet_name):
     except: return pd.DataFrame()
 
 # =========================================================================
-# ★ 좌측 사이드바 구조 세팅 (타이틀 및 수직 메뉴)
+# ★ 1. 좌측 브랜딩 사이드바 (타이틀 및 로고 전용)
 # =========================================================================
-tab_names = [
-    "🏠 Home", "📊 Weekly Info", "📈 순매수 등락, 수익률", "📰 뉴스 & 검색 트렌드", 
-    "💸 주간 거래량 추이", "🎉 진행 이벤트 성과", "🗣️ 고객 UX 분석", "🏢 경쟁사 마케팅 동향", 
-    "🥧 운용 현황 및 점유율", "🇺🇸 글로벌 & 정책 동향", "🧠 AI 분석 프롬프트"
-]
-
 with st.sidebar:
     st.markdown(
         """
-        <div style='text-align: center; margin-bottom: 30px;'>
-            <h2 style='font-weight: 800; font-size: 24px; letter-spacing: -0.5px; background: linear-gradient(to right, #ffffff, #93c5fd); -webkit-background-clip: text; -webkit-text-fill-color: transparent;'>
+        <div style='text-align: center; margin-bottom: 20px; margin-top: 10px;'>
+            <h2 style='font-weight: 800; font-size: 26px; letter-spacing: -0.5px; background: linear-gradient(to right, #ffffff, #93c5fd); -webkit-background-clip: text; -webkit-text-fill-color: transparent;'>
                 ETF Monitoring<br>AI Agent
             </h2>
+            <p style='color:#94a3b8; font-size:12px;'>Data Intelligence Dashboard</p>
         </div>
+        <hr style='border-color: rgba(255,255,255,0.1); margin-bottom:30px;'>
         """, unsafe_allow_html=True
     )
-    # 라디오 버튼을 수직 탭으로 활용
-    selected_tab = st.radio("Navigation Menu", tab_names, label_visibility="collapsed")
+    
+    # 좌측 사이드바 하단에 로고 고정
+    st.markdown("<p style='text-align:center; color: #64748b; font-size: 10px; letter-spacing: 2px; font-weight: 600; margin-bottom: 10px;'>POWERED BY</p>", unsafe_allow_html=True)
+    try:
+        st.image("20220927092603_1800954_640_640.png", use_container_width=True)
+        st.write("")
+        st.image("커리어하이 로고(하양).png", use_container_width=True)
+    except:
+        st.caption("삼성자산운용 x 커리어하이")
 
 # =========================================================================
-# ★ 메인 영역 / 우측 컨트롤 타워 (3단 레이아웃 분할)
+# ★ 2. 3단 분할 레이아웃 적용 (메인화면 78% / 여백 2% / 컨트롤타워 20%)
 # =========================================================================
-# 비율: 왼쪽 메인 화면(78%) / 간격(2%) / 우측 컨트롤 타워(20%)
 col_main, col_spacing, col_right = st.columns([3.8, 0.1, 1])
 
 # ---------------------------------------------------------
-# [우측 패널] 데이터 컨트롤 타워 (항상 노출)
+# [우측 패널] 데이터 컨트롤 센터 (항상 고정)
 # ---------------------------------------------------------
 with col_right:
     with st.container(border=True):
-        st.markdown("<h4 style='text-align:center;'>🎛️ 데이터 컨트롤</h4>", unsafe_allow_html=True)
+        st.markdown("<h4 style='text-align:center; font-size: 18px;'>🎛️ 데이터 컨트롤</h4>", unsafe_allow_html=True)
         st.divider()
         uploaded_excel = st.file_uploader("📈 ETF 순매수 엑셀", type=["xlsx", "xls"], key="excel_main")
         st.divider()
         uploaded_dl = st.file_uploader("🔍 DataLab 검색량", type=["csv", "xlsx", "xls"], key="dl_main")
         
-        # 엑셀 데이터 연동하여 주차 옵션 추출
         available_weeks = ["데이터 없음"]
         if uploaded_excel is not None:
             try:
@@ -282,13 +275,20 @@ with col_right:
         selected_week = st.selectbox("📆 조회 기준 주차", options=available_weeks, index=default_idx)
 
 # ---------------------------------------------------------
-# [중앙 메인 화면] 메뉴(수직 탭) 클릭에 따라 변하는 영역
+# [중앙 화면] 가로형 탭 복구 (데이터 100% 동기화)
 # ---------------------------------------------------------
 with col_main:
     st.session_state.setdefault('dl_summary', "DataLab 데이터가 업로드되지 않았습니다.")
     
+    tab_names = [
+        "🏠 Home", "📊 Weekly Info", "📈 순매수 & 수익률", "📰 뉴스 & 트렌드", 
+        "💸 거래량 추이", "🎉 이벤트 성과", "🗣️ 고객 UX", "🏢 경쟁사 동향", 
+        "🥧 AUM 현황", "🇺🇸 글로벌 동향", "🧠 AI 프롬프트"
+    ]
+    tabs = st.tabs(tab_names)
+
     # === Tab 0: Home ===
-    if selected_tab == "🏠 Home":
+    with tabs[0]:
         st.markdown("<br><br>", unsafe_allow_html=True)
         st.markdown(
             """
@@ -302,37 +302,24 @@ with col_main:
             </div>
             """, unsafe_allow_html=True
         )
-        st.markdown("<br><br>", unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
         
         c_p1, c_p2, c_p3 = st.columns(3)
         with c_p1:
             with st.container(border=True):
                 st.markdown("### 📊 성과 어트리뷰션")
-                st.write("투자자별 주간 순매수 흐름을 다차원 산점도로 분석하고, 이벤트를 통한 수급 기여도(ROI)를 직관적으로 추적합니다.")
+                st.write("투자자별 주간 순매수 흐름을 분석하고, 마케팅 이벤트의 수급 기여도(ROI)를 직관적으로 추적합니다.")
         with c_p2:
             with st.container(border=True):
                 st.markdown("### 📡 마켓 인텔리전스")
-                st.write("언론 뉴스 RSS 및 포털 검색량을 결합하여 시장의 실시간 센티먼트를 감지하고 잠재적 시스템 리스크를 방어합니다.")
+                st.write("언론 뉴스 RSS 및 포털 검색량을 결합하여 시장의 실시간 센티먼트를 감지하고 시스템 리스크를 방어합니다.")
         with c_p3:
             with st.container(border=True):
                 st.markdown("### 🧠 AI 프롬프트 빌더")
-                st.write("수집된 모든 수급 지표와 규제 동향, 고객의 Pain Point를 결합하여 실무팀 즉시 하달용 액션 플랜을 도출합니다.")
-                
-        st.markdown("<br><br><br><br>", unsafe_allow_html=True)
-        
-        st.markdown("<p style='text-align:center; color: #64748b; font-size: 11px; letter-spacing: 3px; font-weight: 600; margin-bottom: 10px;'>CO-DEVELOPED BY</p>", unsafe_allow_html=True)
-        col_img_left, col_img_center, col_img_right = st.columns([3.5, 3, 3.5])
-        with col_img_center:
-            col_logo1, col_logo2 = st.columns(2)
-            with col_logo1:
-                try: st.image("20220927092603_1800954_640_640.png", use_container_width=True)
-                except: st.caption("삼성자산운용 로고")
-            with col_logo2:
-                try: st.image("커리어하이 로고(하양).png", use_container_width=True)
-                except: st.caption("커리어하이 로고")
+                st.write("수집된 모든 지표와 규제 동향, 고객 Pain Point를 결합하여 실무팀 하달용 액션 플랜을 도출합니다.")
 
     # === Tab 1: Weekly Info ===
-    elif selected_tab == "📊 Weekly Info":
+    with tabs[1]:
         if uploaded_excel is not None and selected_week != "데이터 없음":
             df_source = load_and_clean_excel(uploaded_excel, selected_week)
             if not df_source.empty and '종목명' in df_source.columns:
@@ -382,8 +369,8 @@ with col_main:
         else:
             st.info("👉 우측 패널에 ETF 순매수 엑셀 데이터를 업로드해주세요.")
 
-    # === Tab 2: 등락률, 수익률 ===
-    elif selected_tab == "📈 순매수 등락, 수익률":
+    # === Tab 2: 순매수 등락, 수익률 ===
+    with tabs[2]:
         if uploaded_excel is not None and selected_week != "데이터 없음" and len(available_weeks) > 1:
             st.markdown("### 📈 기간별 ETF 순매수 현황")
             col_start, col_text, col_slider = st.columns([1.5, 3.5, 3])
@@ -437,7 +424,7 @@ with col_main:
 
                 st.divider()
                 
-                st.markdown("### 🎯 주간 수익률 vs. 투자자별 순매수 증감률 산점도 (실시간 데이터 연동)")
+                st.markdown("### 🎯 주간 수익률 vs. 투자자별 순매수 증감률 산점도 (실시간 연동)")
                 col_subject_tab2_scatter, _ = st.columns([2, 8])
                 with col_subject_tab2_scatter:
                     subject_tab2_scatter = st.selectbox("분석 주체 선택:", ["개인", "기관", "외국인"], key="subject_tab2_scatter")
@@ -460,16 +447,13 @@ with col_main:
                         
                         selected_scatter_etfs = st.multiselect("📍 산점도에 표시할 ETF를 검색/선택하세요:", options=all_etfs_scatter, default=default_selection, key="scatter_multiselect_tab2")
                         if selected_scatter_etfs:
-                            with st.spinner("선택된 종목의 실시간 수익률을 불러오는 중입니다..."):
+                            with st.spinner("실시간 수익률을 불러오는 중입니다..."):
                                 symbols_mapping = get_etf_mapping()
                                 real_returns = get_real_returns(symbols_mapping, selected_scatter_etfs)
                                 
                                 df_scatter_filtered = df_merged[df_merged['종목명'].isin(selected_scatter_etfs)].copy()
                                 df_scatter_filtered['주간 수익률(%)'] = df_scatter_filtered['종목명'].map(real_returns)
                                 df_scatter = df_scatter_filtered.dropna()
-                                
-                                # 나중에 프롬프트 생성기에서 쓰기 위해 session_state에 저장 (글로벌 렌더링 유지)
-                                st.session_state['df_scatter_context'] = df_scatter.sort_values(by='주간 수익률(%)', ascending=False).head(20).to_string(index=False)
                                 
                                 fig_scatter = px.scatter(df_scatter, x="주간 수익률(%)", y="순매수 증감률(%)", text="종목명", hover_data=["이번주", "지난주"], title=f"**실제 수익률 vs. {subject_tab2_scatter} 순매수 증감률**")
                                 if len(df_scatter) > 1:
@@ -490,8 +474,8 @@ with col_main:
         else:
             st.info("👉 우측 패널에 엑셀 데이터를 업로드해주세요. (비교를 위해 2주 이상의 데이터가 필요합니다)")
 
-    # === Tab 3: 뉴스 & 트렌드 ===
-    elif selected_tab == "📰 뉴스 & 검색 트렌드":
+    # === Tab 3: 뉴스 & 검색 트렌드 ===
+    with tabs[3]:
         st.markdown("### 📰 실시간 마켓 센티먼트 및 뉴스 요약")
         with st.spinner("최신 마켓 트렌드를 AI가 분석하고 있습니다..."):
             df_real_news = get_realtime_news("ETF", timeframe="7d")
@@ -536,7 +520,7 @@ with col_main:
             st.info("👉 우측 패널에 Naver DataLab 파일을 업로드하시면 트렌드 차트가 활성화됩니다.")
 
     # === Tab 4: 주간 거래량 추이 ===
-    elif selected_tab == "💸 주간 거래량 추이":
+    with tabs[4]:
         st.markdown("### 📊 선택 ETF 실제 주간 거래량 추이")
         if uploaded_excel is not None and selected_week != "데이터 없음":
             df_source = load_and_clean_excel(uploaded_excel, selected_week)
@@ -567,8 +551,8 @@ with col_main:
         else:
             st.info("👉 우측 패널에 엑셀 데이터를 업로드해주세요.")
 
-    # === Tab 5: 진행 이벤트 ===
-    elif selected_tab == "🎉 진행 이벤트 성과":
+    # === Tab 5: 진행 이벤트 성과 ===
+    with tabs[5]:
         st.markdown("### 📊 이벤트 성과 분석기 (수급 임팩트 트래킹)")
         st.caption("아래 뉴스 스크랩에서 확인한 이벤트 진행 기간을 바탕으로, 자사와 타사 ETF의 실제 순매수 유입 효과(ROI)를 직관적으로 비교 분석합니다.")
         if uploaded_excel is not None and len(available_weeks) > 1 and available_weeks[0] != "데이터 없음":
@@ -653,7 +637,7 @@ with col_main:
                     st.info("해당 기간 동안 감지된 이벤트 보도자료가 없습니다.")
 
     # === Tab 6: 고객 UX 분석 ===
-    elif selected_tab == "🗣️ 고객 UX 분석":
+    with tabs[6]:
         st.markdown("### 🗣️ 고객 Voice (VOC) & 시스템 리스크 모니터링")
         st.caption("외부 라이브러리 없이 애플 앱스토어의 최근 찐 불만 리뷰(1~3점)와 기사화된 중대 오작동 리스크를 1:1 비교합니다.")
         st.divider()
@@ -685,7 +669,7 @@ with col_main:
                     st.info("검색 범위(최대 1년) 내 포착된 리스크성 기사가 없습니다.")
 
     # === Tab 7: 경쟁사 마케팅 동향 ===
-    elif selected_tab == "🏢 경쟁사 마케팅 동향":
+    with tabs[7]:
         st.markdown("### 🏢 타사 공식 마케팅 채널 동향 (실시간 RSS)")
         st.caption("경쟁 운용사들의 공식 네이버 블로그 최신 피드를 정기 구독하여 상품 세일즈 메시지를 역추적합니다.")
         st.divider()
@@ -698,7 +682,7 @@ with col_main:
             "🌾 HANARO ETF (NH아문디)": ("nh_amundi", "https://blog.naver.com/nh_amundi"),
             "1️⃣ 1Q ETF (하나자산운용)": ("1qetf", "https://blog.naver.com/1qetf"),
             "⏳ TIMEFOLIO ETF (타임폴리오)": ("timefolioetf", "https://blog.naver.com/timefolioetf"),
-            "🔵 WON ETF (우리자산운용)": ("wooriam_kr", "https://blog.naver.com/wooriam_kr"),
+            "🔵 WON ETF (우리자산운용)": ("wooriam_kr", "https://wooriam.com/"),
             "🅚 KIWOOM ETF (키움투자자산운용)": ("kiwoomammkt", "https://blog.naver.com/kiwoomammkt")
         }
         blog_items = list(blog_map.items())
@@ -720,7 +704,7 @@ with col_main:
                                 st.markdown(f"- <a href='{p_link}' target='_blank' style='color:#4da6ff; text-decoration:none;'>{p_title} 🔗</a>", unsafe_allow_html=True)
 
     # === Tab 8: 운용 현황 및 점유율 ===
-    elif selected_tab == "🥧 운용 현황 및 점유율":
+    with tabs[8]:
         st.markdown("### 🏢 국내 ETF 운용사 AUM 시장 점유율 및 테마별 현황 (실시간 기준)")
         col_pie, col_table = st.columns([1, 2])
         pivot_df = pd.DataFrame()
@@ -780,10 +764,10 @@ with col_main:
                 fig_trend.update_layout(height=400, margin=dict(l=20, r=20, t=50, b=20), yaxis_title="전체 순매수 합계", xaxis_title=None, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                 st.plotly_chart(fig_trend, use_container_width=True)
         else:
-            st.info("👈 우측 패널에 엑셀 데이터를 업로드하시면 트렌드 그래프가 활성화됩니다.")
+            st.info("👉 우측 패널에 엑셀 데이터를 업로드하시면 트렌드 그래프가 활성화됩니다.")
 
-    # === Tab 9: 글로벌 & 정책 동향 ===
-    elif selected_tab == "🇺🇸 글로벌 & 정책 동향":
+    # === Tab 9: 글로벌 공백 & 정책 동향 ===
+    with tabs[9]:
         st.markdown("### 🇺🇸 글로벌 혁신 구조 공백 분석 (US Mega Trends vs KODEX)")
         raw_keywords = ["타겟 인컴 ETF 버퍼형", "0DTE 초단기 옵션 커버드콜 ETF", "가상자산 비트코인 현물 ETF", "BDC 대체투자", "하방 방어형 100% 버퍼 ETF"]
         trend_strengths = []
@@ -796,7 +780,6 @@ with col_main:
         
         st.divider()
         selected_trend_label = st.selectbox("🔍 뉴스 검색망 가동할 혁신 구조 선택:", options=raw_keywords, index=2)
-        st.session_state['selected_trend_label'] = selected_trend_label
         st.markdown(f"#### 📡 `[실시간 정책 시그널]` {selected_trend_label} 관련 완화 동향")
         with st.spinner("규제 완화 뉴스 스크랩 중..."):
             df_gap_news = get_realtime_news(selected_trend_label + " 금융위 규제", timeframe="7d")
@@ -810,17 +793,21 @@ with col_main:
             else:
                 st.info("관련된 최신 정책 뉴스 피드가 존재하지 않습니다.")
 
-    # === Tab 10: AI 프롬프트 생성기 ===
-    elif selected_tab == "🧠 AI 분석 프롬프트":
+    # === Tab 10: AI 분석용 프롬프트 생성기 ===
+    with tabs[10]:
         st.markdown("### 🧠 전술 & 전략 AI 프롬프트 자동 생성기")
         st.caption("단순한 데이터 요약을 넘어, 대시보드의 모든 인텔리전스(수급, 규제, 고객 VOC, 경쟁사)를 결합하여 실무팀에 하달할 구체적인 '행동 지침(Action Item)'을 도출합니다.")
         st.divider()
 
-        # 이전 탭들에서 생성된 세션 스테이트(Session State) 기반 변수 호출
-        data_context = st.session_state.get('df_scatter_context', "데이터가 로드되지 않았습니다. (2번째 탭 '순매수 등락'에서 차트를 먼저 조회해주세요.)")
+        # 가로형 탭이므로 다른 탭을 클릭하지 않아도 df_scatter 데이터가 이미 백그라운드에서 넘어와 있습니다!
+        data_context = df_scatter.sort_values(by='주간 수익률(%)', ascending=False).head(20).to_string(index=False) if not df_scatter.empty else "데이터가 부족합니다. (우측 패널에 엑셀 데이터를 업로드해주세요.)"
         dl_context = st.session_state.get('dl_summary', "데이터랩 미연동")
         market_sentiment = st.session_state.get('market_sentiment', "혼조세 지속")
-        current_trend = st.session_state.get('selected_trend_label', "가상자산/옵션형")
+        
+        try:
+            current_trend = selected_trend_label
+        except:
+            current_trend = "가상자산/옵션형"
 
         prompt_1 = f"너는 KODEX 마케팅 총괄 최고책임자(CMO)야. 다음 지표를 기반으로 마케팅 전술 리포트를 세부 작성해줘.\n\n[수급현황]\n{data_context}\n\n[포털 검색량]\n{dl_context}\n\n[시장심리]\n{market_sentiment}"
         prompt_2 = f"너는 KODEX 신상품 전략 수석 기획자야. 미국 {current_trend} 자금 쏠림 현상과 국내 규제 리스크 장벽을 해소하며 선점할 수 있는 차기 ETF 기획 초안을 설계해줘."
