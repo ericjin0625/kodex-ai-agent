@@ -10,8 +10,8 @@ from datetime import datetime, timedelta
 import json 
 import time
 
-# 1. 페이지 레이아웃 및 기본 테마 설정 (반드시 최상단에 위치)
-st.set_page_config(page_title="ETF Monitoring AI Agent", layout="wide", initial_sidebar_state="expanded")
+# 1. 페이지 레이아웃 및 기본 테마 설정 (사이드바 기본 숨김 처리)
+st.set_page_config(page_title="ETF Monitoring AI Agent", layout="wide", initial_sidebar_state="collapsed")
 
 # 전역 데이터 변수 (탭 간 원활한 데이터 100% 동기화를 위함)
 df_scatter = pd.DataFrame()
@@ -27,15 +27,7 @@ glassmorphism_css = """
     background-attachment: fixed;
 }
 
-/* 2. 좌측 사이드바: 반투명 유리 효과 및 경계선 */
-[data-testid="stSidebar"] {
-    background: rgba(15, 23, 42, 0.4) !important;
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border-right: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-/* 3. 우측 컨트롤 타워 및 컨테이너: 은은한 글래스 광택 */
+/* 2. 우측 컨트롤 타워 및 컨테이너: 은은한 글래스 광택 */
 [data-testid="stVerticalBlockBorderWrapper"] {
     background: rgba(255, 255, 255, 0.02) !important;
     backdrop-filter: blur(16px) !important;
@@ -49,7 +41,7 @@ glassmorphism_css = """
     background: transparent !important;
 }
 
-/* 4. 중앙 가로형 탭(Tabs) 디자인: 둥글고 트렌디한 캡슐 알약(Pill) 스타일 */
+/* 3. 중앙 가로형 탭(Tabs) 디자인: 둥글고 트렌디한 캡슐 알약(Pill) 스타일 */
 [data-baseweb="tab-list"] {
     gap: 8px;
     padding-bottom: 12px;
@@ -70,7 +62,7 @@ glassmorphism_css = """
     font-weight: 600 !important;
 }
 
-/* 5. 독립 솔루션 마감을 위한 기본 UI 강제 숨김 */
+/* 4. 독립 솔루션 마감을 위한 기본 UI 강제 숨김 */
 #MainMenu {visibility: hidden;}
 header {visibility: hidden;}
 footer {visibility: hidden;}
@@ -227,45 +219,33 @@ def load_and_clean_excel(file, sheet_name):
 
 
 # =========================================================================
-# ★ 1. 좌측 브랜딩 사이드바 (타이틀 및 로고 전용)
+# ★ 2. 2단 메인 레이아웃 적용 (메인 화면 80% / 여백 2% / 우측 컨트롤 타워 18%)
 # =========================================================================
-with st.sidebar:
+# 좌측 사이드바를 안 쓰므로 공간을 조금 더 여유롭게 잡습니다.
+col_main, col_spacing, col_right = st.columns([4, 0.1, 1.2])
+
+# ---------------------------------------------------------
+# [우측 패널] 타이틀 & 데이터 컨트롤 센터 (항상 고정)
+# ---------------------------------------------------------
+with col_right:
+    # 1. 우측 상단 메인 텍스트 (사이드바에서 이동)
     st.markdown(
         """
-        <div style='text-align: center; margin-bottom: 20px; margin-top: 10px;'>
-            <h2 style='font-weight: 800; font-size: 26px; letter-spacing: -0.5px; background: linear-gradient(to right, #ffffff, #93c5fd); -webkit-background-clip: text; -webkit-text-fill-color: transparent;'>
+        <div style='text-align: right; margin-bottom: 20px; margin-top: 10px;'>
+            <h2 style='font-weight: 800; font-size: 24px; letter-spacing: -0.5px; background: linear-gradient(to left, #ffffff, #93c5fd); -webkit-background-clip: text; -webkit-text-fill-color: transparent;'>
                 ETF Monitoring<br>AI Agent
             </h2>
             <p style='color:#94a3b8; font-size:12px;'>Data Intelligence Dashboard</p>
         </div>
-        <hr style='border-color: rgba(255,255,255,0.1); margin-bottom:30px;'>
         """, unsafe_allow_html=True
     )
-    
-    st.markdown("<p style='text-align:center; color: #64748b; font-size: 10px; letter-spacing: 2px; font-weight: 600; margin-bottom: 10px;'>POWERED BY</p>", unsafe_allow_html=True)
-    try:
-        st.image("20220927092603_1800954_640_640.png", use_container_width=True)
-        st.write("")
-        st.image("커리어하이 로고(하양).png", use_container_width=True)
-    except:
-        st.caption("삼성자산운용 x 커리어하이")
 
-
-# =========================================================================
-# ★ 2. 3단 분할 메인 레이아웃 적용 (메인화면 78% / 여백 2% / 컨트롤타워 20%)
-# =========================================================================
-col_main, col_spacing, col_right = st.columns([3.8, 0.1, 1.2])
-
-# ---------------------------------------------------------
-# [우측 패널] 데이터 컨트롤 센터 (항상 고정)
-# ---------------------------------------------------------
-with col_right:
+    # 2. 데이터 컨트롤 타워 (주차 선택 위로 올림)
     with st.container(border=True):
-        st.markdown("<h4 style='text-align:center; font-size: 18px;'>🎛️ 데이터 컨트롤</h4>", unsafe_allow_html=True)
+        st.markdown("<h4 style='text-align:center; font-size: 16px;'>🎛️ 데이터 컨트롤</h4>", unsafe_allow_html=True)
         st.divider()
+        
         uploaded_excel = st.file_uploader("📈 ETF 순매수 엑셀", type=["xlsx", "xls"], key="excel_main")
-        st.divider()
-        uploaded_dl = st.file_uploader("🔍 DataLab 검색량", type=["csv", "xlsx", "xls"], key="dl_main")
         
         available_weeks = ["데이터 없음"]
         if uploaded_excel is not None:
@@ -276,10 +256,26 @@ with col_right:
                     available_weeks = sheet_names[::-1] 
             except: pass
 
-        st.divider()
+        # 주차 선택이 가장 위로 올라옴 (엑셀 업로드 직후)
         default_idx = 1 if len(available_weeks) > 1 else 0
         selected_week = st.selectbox("📆 조회 기준 주차", options=available_weeks, index=default_idx)
+        
+        st.divider()
+        uploaded_dl = st.file_uploader("🔍 DataLab 검색량", type=["csv", "xlsx", "xls"], key="dl_main")
 
+    # 3. 우측 하단 로고
+    st.markdown("<br><br><br>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align:right; color: #64748b; font-size: 10px; letter-spacing: 2px; font-weight: 600; margin-bottom: 10px;'>POWERED BY</p>", unsafe_allow_html=True)
+    
+    # 오른쪽 정렬 느낌을 주기 위해 컬럼 분할 후 오른쪽에 배치
+    _, col_logo_r = st.columns([1, 1.5])
+    with col_logo_r:
+        try:
+            st.image("20220927092603_1800954_640_640.png", use_container_width=True)
+            st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
+            st.image("커리어하이 로고(하양).png", use_container_width=True)
+        except:
+            st.markdown("<p style='text-align:right; color:#94a3b8; font-size:12px;'>삼성자산운용 x 커리어하이</p>", unsafe_allow_html=True)
 
 # ---------------------------------------------------------
 # [중앙 화면] 가로형 탭 복구 (데이터 100% 실시간 자동 연동)
@@ -460,7 +456,7 @@ with col_main:
                                 
                                 df_scatter_filtered = df_merged[df_merged['종목명'].isin(selected_scatter_etfs)].copy()
                                 df_scatter_filtered['주간 수익률(%)'] = df_scatter_filtered['종목명'].map(real_returns)
-                                # ✅ 글로벌 변수에 갱신하여 10번 프롬프트 탭에서 즉각 활용하도록 함!
+                                # 글로벌 변수 갱신으로 10번 프롬프트 탭 연동!
                                 df_scatter = df_scatter_filtered.dropna()
                                 
                                 fig_scatter = px.scatter(df_scatter, x="주간 수익률(%)", y="순매수 증감률(%)", text="종목명", hover_data=["이번주", "지난주"], title=f"**실제 수익률 vs. {subject_tab2_scatter} 순매수 증감률**")
