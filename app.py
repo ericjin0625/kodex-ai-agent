@@ -457,7 +457,7 @@ with tabs[3]:
         st.info("좌측 사이드바에 엑셀 데이터를 업로드해주세요.")
 
 # =========================================================================
-# --- ★ Tab 5: [고객 UX 분석] (경쟁사 상세 패치 완료) ---
+# --- Tab 5: [고객 UX 분석] ---
 # =========================================================================
 with tabs[5]:
     st.markdown("### 🗣️ 고객 Voice (VOC) & Pain Point 분석")
@@ -494,46 +494,90 @@ with tabs[5]:
             st.markdown("- 파생형 ETF(커버드콜 등) 상품 구조에 대한 직관적인 설명 부족.")
 
 # =========================================================================
-# --- ★ Tab 6: [경쟁사 동향] (운용사 4곳 추가 및 레이아웃 패치 완료) ---
+# --- ★ Tab 6: [경쟁사 동향] (운용사 10곳 블로그 링크 및 레이아웃 확장 패치) ---
 # =========================================================================
 with tabs[6]:
     st.markdown("### 🏢 타사 공식 마케팅 채널 동향 (최근 1주일)")
     st.caption("경쟁 운용사들의 공식 네이버 블로그 업데이트 내용을 모니터링하여 핵심 마케팅 소구점(Selling Point)을 파악합니다.")
     st.divider()
 
-    col_top1, col_top2 = st.columns(2)
-    with col_top1:
-        st.subheader("🐅 TIGER ETF (미래에셋)")
+    # 1행: TIGER, ACE
+    c1, c2 = st.columns(2)
+    with c1:
+        st.subheader("🐅 [TIGER ETF (미래에셋)](https://blog.naver.com/m_invest)")
         with st.container(border=True):
             st.markdown("**[최신 공식 블로그 게시글]**")
             st.markdown("- TIGER 미국나스닥100+15%프리미엄초단기옵션 출시 (신상품 홍보)")
             st.markdown("- 월배당 ETF 전성시대, 나에게 맞는 상품은? (테마 교육)")
             st.markdown("- TIGER 바이오테크 섹터 집중 분석 (산업 분석)")
             
-    with col_top2:
-        st.subheader("🏆 ACE ETF (한국투자)")
+    with c2:
+        st.subheader("🏆 [ACE ETF (한국투자)](https://blog.naver.com/aceetf)")
         with st.container(border=True):
             st.markdown("**[최신 공식 블로그 게시글]**")
             st.markdown("- ACE 반도체 ETF 3종 비교 분석 (상품 비교)")
             st.markdown("- ISA 계좌 활용 꿀팁 with ACE (마케팅 프로모션)")
             st.markdown("- 월배당 라인업 확대 공지 (상품 업데이트)")
 
-    col_bot1, col_bot2 = st.columns(2)
-    with col_bot1:
-        st.subheader("⭐ KBSTAR ETF (KB자산운용)")
+    # 2행: RISE(KB), SOL(신한)
+    c3, c4 = st.columns(2)
+    with c3:
+        st.subheader("⭐ [RISE ETF (KB자산운용)](https://blog.naver.com/riseetf)")
         with st.container(border=True):
             st.markdown("**[최신 공식 블로그 게시글]**")
-            st.markdown("- KBSTAR 비만치료제 ETF 파헤치기 (테마 홍보)")
+            st.markdown("- RISE 비만치료제 ETF 파헤치기 (테마 홍보)")
             st.markdown("- 금리 인하 기대감? 채권형 ETF 투자 가이드 (시황 연계)")
-            st.markdown("- 연금 계좌에서 모아가는 ETF 추천 (연금 마케팅)")
 
-    with col_bot2:
-        st.subheader("☀️ SOL ETF (신한자산운용)")
+    with c4:
+        st.subheader("☀️ [SOL ETF (신한자산운용)](https://blog.naver.com/soletf)")
         with st.container(border=True):
             st.markdown("**[최신 공식 블로그 게시글]**")
             st.markdown("- SOL 미국배당다우존스 월배당 인증 이벤트 (고객 프로모션)")
             st.markdown("- 반도체 소부장 ETF, 왜 투자해야 할까? (섹터 교육)")
-            st.markdown("- S&P500 투자, 환노출 vs 환헤지 비교 (투자 정보 제공)")
+
+    # 3행: PLUS(한화), HANARO(NH아문디)
+    c5, c6 = st.columns(2)
+    with c5:
+        st.subheader("🌐 [PLUS ETF (한화자산운용)](https://blog.naver.com/PostList.naver?blogId=hanwhaasset&categoryNo=46&from=postList)")
+        with st.container(border=True):
+            st.markdown("**[최신 공식 블로그 게시글]**")
+            st.markdown("- PLUS 고배당주 위클리 커버드콜 출시 (신상품 홍보)")
+            st.markdown("- 방산 테마 ETF, 지금이 투자 적기? (섹터 교육)")
+
+    with c6:
+        st.subheader("🌱 [HANARO ETF (NH아문디)](https://blog.naver.com/nh_amundi/224055583531)")
+        with st.container(border=True):
+            st.markdown("**[최신 공식 블로그 게시글]**")
+            st.markdown("- HANARO 글로벌AI반도체 ETF (상품 안내)")
+            st.markdown("- 하반기 증시 전망 및 유망 섹터 (시황 분석)")
+
+    # 4행: 1Q(하나), TIMEFOLIO(타임폴리오)
+    c7, c8 = st.columns(2)
+    with c7:
+        st.subheader("🥇 [1Q ETF (하나자산운용)](https://blog.naver.com/1qetf)")
+        with st.container(border=True):
+            st.markdown("**[최신 공식 블로그 게시글]**")
+            st.markdown("- 1Q 머니마켓액티브 ETF 파킹통장 활용법 (상품 교육)")
+
+    with c8:
+        st.subheader("⏱️ [TIMEFOLIO ETF (타임폴리오)](https://blog.naver.com/timefolioetf)")
+        with st.container(border=True):
+            st.markdown("**[최신 공식 블로그 게시글]**")
+            st.markdown("- 타임폴리오 글로벌AI인공지능 액티브 (운용역 노트)")
+
+    # 5행: WON(우리), KIWOOM(키움)
+    c9, c10 = st.columns(2)
+    with c9:
+        st.subheader("🔵 [WON ETF (우리자산운용)](https://blog.naver.com/PostList.naver?blogId=wooriam_kr&from=postList&categoryNo=26)")
+        with st.container(border=True):
+            st.markdown("**[최신 공식 블로그 게시글]**")
+            st.markdown("- 우리WON 단기채권 ETF 활용법 (상품 홍보)")
+
+    with c10:
+        st.subheader("🎯 [KIWOOM ETF (키움투자자산운용)](https://blog.naver.com/PostList.naver?blogId=kiwoomammkt&from=postList&categoryNo=6)")
+        with st.container(border=True):
+            st.markdown("**[최신 공식 블로그 게시글]**")
+            st.markdown("- 히어로즈 TDF 액티브 ETF 시리즈 (연금 마케팅)")
 
 # =========================================================================
 # --- Tab 7: [ETF 운용 현황] ---
