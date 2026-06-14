@@ -35,16 +35,16 @@ def assign_auto_theme(etf_name):
     else:
         return '📦 기타 섹터/테마'
 
-# 2. 실시간 데이터 파싱 함수 (뉴스 연동 - 한줄 요약 로직 제거)
-@st.cache_data(ttl=3600)
-def get_realtime_news(keyword="ETF"):
+# 2. 실시간 데이터 파싱 함수 (뉴스 연동)
+@st.cache_data(ttl=1800)
+def get_realtime_news(keyword="ETF", max_items=5):
     url = f"https://news.google.com/rss/search?q={keyword}+when:7d&hl=ko&gl=KR&ceid=KR:ko"
     try:
         res = requests.get(url, timeout=5)
         root = ET.fromstring(res.text)
         
         news_list = []
-        for item in root.findall('./channel/item')[:5]:
+        for item in root.findall('./channel/item')[:max_items]:
             title = item.find('title').text if item.find('title') is not None else "제목 없음"
             link = item.find('link').text if item.find('link') is not None else ""
             pubDate = item.find('pubDate').text[5:16] if item.find('pubDate') is not None else ""
@@ -57,14 +57,14 @@ def get_realtime_news(keyword="ETF"):
             })
             
         if not news_list:
-            return pd.DataFrame([{"게시일 / 출처": "-", "원본제목": "뉴스 검색 결과가 없습니다.", "링크": ""}])
+            return pd.DataFrame([{"게시일 / 출처": "-", "원본제목": f"'{keyword}' 관련 최근 뉴스가 없습니다.", "링크": ""}])
             
         return pd.DataFrame(news_list)
         
     except Exception as e:
         return pd.DataFrame([{"게시일 / 출처": "오류", "원본제목": "실시간 뉴스를 불러올 수 없습니다.", "링크": ""}])
 
-# 타 운용사 네이버 블로그 실시간 RSS 파싱 함수
+# ★ 신규 추가: 타 운용사 네이버 블로그 실시간 RSS 파싱 함수
 @st.cache_data(ttl=1800)
 def get_competitor_blog(blog_id):
     url = f"https://rss.blog.naver.com/{blog_id}.xml"
@@ -72,7 +72,7 @@ def get_competitor_blog(blog_id):
         res = requests.get(url, timeout=5)
         root = ET.fromstring(res.content)
         posts = []
-        for item in root.findall('./channel/item')[:3]: 
+        for item in root.findall('./channel/item')[:3]: # 최신 글 3개
             title = item.find('title').text
             link = item.find('link').text
             posts.append((title, link))
@@ -91,7 +91,6 @@ def get_real_returns(symbols_dict, etf_names):
     end_date = datetime.today()
     start_date = end_date - timedelta(days=14)
     returns_dict = {}
-    
     for name in etf_names:
         symbol = symbols_dict.get(name)
         if symbol:
@@ -239,7 +238,7 @@ with tabs[0]:
         st.info("좌측 사이드바에 엑셀 데이터를 업로드해주세요.")
 
 # =========================================================================
-# --- ★ Tab 1: [ETF 순매수 등락, 수익률] (산점도 회귀선 패치) ---
+# --- Tab 1: [ETF 순매수 등락, 수익률] ---
 # =========================================================================
 with tabs[1]:
     st.markdown("### 📈 기간별 ETF 순매수 현황")
@@ -342,24 +341,11 @@ with tabs[1]:
                             df_scatter_filtered['주간 수익률(%)'] = df_scatter_filtered['종목명'].map(real_returns)
                             df_scatter = df_scatter_filtered.dropna()
                             
-                            # ★ 회귀선(Trendline) 추가 로직
-                            try:
-                                fig_scatter = px.scatter(
-                                    df_scatter, x="주간 수익률(%)", y="순매수 증감률(%)",
-                                    text="종목명", hover_data=["이번주", "지난주"],
-                                    title=f"**실제 수익률 vs. {subject_tab2_scatter} 순매수 증감률**",
-                                    trendline="ols", # 회귀선 추가 (statsmodels 라이브러리 필수)
-                                    trendline_color_override="#ff4d4d" # 눈에 잘 띄는 빨간색 지정
-                                )
-                            except Exception as e:
-                                # statsmodels가 미설치된 경우 회귀선 없이 일반 산점도로 Fallback
-                                fig_scatter = px.scatter(
-                                    df_scatter, x="주간 수익률(%)", y="순매수 증감률(%)",
-                                    text="종목명", hover_data=["이번주", "지난주"],
-                                    title=f"**실제 수익률 vs. {subject_tab2_scatter} 순매수 증감률**"
-                                )
-                                st.warning("⚠️ 회귀선을 그리려면 `pip install statsmodels` 설치가 필요합니다.")
-
+                            fig_scatter = px.scatter(
+                                df_scatter, x="주간 수익률(%)", y="순매수 증감률(%)",
+                                text="종목명", hover_data=["이번주", "지난주"],
+                                title=f"**실제 수익률 vs. {subject_tab2_scatter} 순매수 증감률**"
+                            )
                             fig_scatter.update_traces(
                                 textposition='top center',
                                 marker=dict(size=10, color='#4da6ff', opacity=0.7),
@@ -488,7 +474,7 @@ with tabs[3]:
         st.info("좌측 사이드바에 엑셀 데이터를 업로드해주세요.")
 
 # =========================================================================
-# --- Tab 5: [고객 UX 분석] ---
+# --- ★ Tab 5: [고객 UX 분석] (100% 실시간 뉴스/블로그 크롤링 대체 완료) ---
 # =========================================================================
 with tabs[5]:
     st.markdown("### 🗣️ 고객 Voice (VOC) & Pain Point 분석 (실시간 연동)")
@@ -521,13 +507,14 @@ with tabs[5]:
                 st.info("최근 7일간 감지된 주요 불만 리뷰가 없습니다.")
 
 # =========================================================================
-# --- Tab 6: [경쟁사 동향] ---
+# --- ★ Tab 6: [경쟁사 동향] (100% 실시간 운용사 공식 네이버 블로그 RSS 연동 완료) ---
 # =========================================================================
 with tabs[6]:
     st.markdown("### 🏢 타사 공식 마케팅 채널 동향 (실시간 RSS)")
     st.caption("경쟁 운용사들의 공식 네이버 블로그 최신글을 실시간으로 읽어와 마케팅 소구점(Selling Point)을 파악합니다.")
     st.divider()
 
+    # 운용사 블로그 ID 매핑 (실제 네이버 블로그 아이디)
     blog_map = {
         "🐅 TIGER ETF (미래에셋)": ("m_invest", "https://blog.naver.com/m_invest"),
         "🏆 ACE ETF (한국투자)": ("aceetf", "https://blog.naver.com/aceetf"),
@@ -547,6 +534,7 @@ with tabs[6]:
         for i in range(0, len(blog_items), 2):
             c1, c2 = st.columns(2)
             
+            # 왼쪽 열
             name1, (b_id1, url1) = blog_items[i]
             with c1:
                 st.subheader(f"[{name1}]({url1})")
@@ -555,6 +543,7 @@ with tabs[6]:
                     for p_title, p_link in posts:
                         st.markdown(f"- <a href='{p_link}' target='_blank' style='color:#4da6ff; text-decoration:none;'>{p_title} 🔗</a>", unsafe_allow_html=True)
             
+            # 오른쪽 열 (홀수 개일 경우 대비)
             if i + 1 < len(blog_items):
                 name2, (b_id2, url2) = blog_items[i+1]
                 with c2:
@@ -658,7 +647,7 @@ with tabs[7]:
         st.info("👈 좌측 사이드바에 엑셀 데이터를 업로드하시면 트렌드 그래프가 나타납니다.")
 
 # =========================================================================
-# --- Tab 8: [글로벌 공백 & 정책 동향] ---
+# --- ★ Tab 8: [글로벌 공백 & 정책 동향] (동적 계산 및 100% 실시간 뉴스 연동 완료) ---
 # =========================================================================
 with tabs[8]:
     st.markdown("### 🇺🇸 글로벌 혁신 구조 공백 분석 (US Mega Trends vs KODEX)")
@@ -672,10 +661,11 @@ with tabs[8]:
         "하방 방어형 100% 버퍼 ETF"
     ]
     
+    # 실시간 뉴스 카운트를 통해 유입 강도(관심도)를 계산하는 로직
     trend_strengths = []
     with st.spinner("각 테마별 실시간 뉴스 관심도를 측정 중입니다..."):
         for kw in raw_keywords:
-            temp_df = get_realtime_news(kw, max_items=10) 
+            temp_df = get_realtime_news(kw, max_items=10) # 10개까지 조회
             count = len(temp_df) if not temp_df.empty and temp_df.iloc[0]["게시일 / 출처"] != "-" else 0
             if count >= 8: strength = "🔥🔥🔥 최고조"
             elif count >= 3: strength = "🔥🔥 강세"
@@ -710,7 +700,7 @@ with tabs[8]:
     
     st.markdown(f"#### 📡 `[실시간 연동]` {selected_trend_label} 관련 정책/규제 뉴스")
     with st.spinner(f"'{selected_trend_label}' 관련 최신 동향을 수집 중입니다..."):
-        df_gap_news = get_realtime_news(selected_trend_label + " 금융위 규제") 
+        df_gap_news = get_realtime_news(selected_trend_label + " 금융위 규제") # 규제 키워드 결합
         
         if "링크" in df_gap_news.columns and df_gap_news["링크"].iloc[0] != "":
             cols_grid = st.columns(2)
