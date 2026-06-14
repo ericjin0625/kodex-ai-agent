@@ -35,16 +35,16 @@ def assign_auto_theme(etf_name):
     else:
         return '📦 기타 섹터/테마'
 
-# 2. 실시간 데이터 파싱 함수 (뉴스 연동 - 한줄 요약 로직 제거)
-@st.cache_data(ttl=3600)
-def get_realtime_news(keyword="ETF"):
+# 2. 실시간 데이터 파싱 함수 (뉴스 연동)
+@st.cache_data(ttl=1800)
+def get_realtime_news(keyword="ETF", max_items=5):
     url = f"https://news.google.com/rss/search?q={keyword}+when:7d&hl=ko&gl=KR&ceid=KR:ko"
     try:
         res = requests.get(url, timeout=5)
         root = ET.fromstring(res.text)
         
         news_list = []
-        for item in root.findall('./channel/item')[:5]:
+        for item in root.findall('./channel/item')[:max_items]:
             title = item.find('title').text if item.find('title') is not None else "제목 없음"
             link = item.find('link').text if item.find('link') is not None else ""
             pubDate = item.find('pubDate').text[5:16] if item.find('pubDate') is not None else ""
@@ -57,12 +57,30 @@ def get_realtime_news(keyword="ETF"):
             })
             
         if not news_list:
-            return pd.DataFrame([{"게시일 / 출처": "-", "원본제목": "뉴스 검색 결과가 없습니다.", "링크": ""}])
+            return pd.DataFrame([{"게시일 / 출처": "-", "원본제목": f"'{keyword}' 관련 최근 뉴스가 없습니다.", "링크": ""}])
             
         return pd.DataFrame(news_list)
         
     except Exception as e:
         return pd.DataFrame([{"게시일 / 출처": "오류", "원본제목": "실시간 뉴스를 불러올 수 없습니다.", "링크": ""}])
+
+# ★ 신규 추가: 타 운용사 네이버 블로그 실시간 RSS 파싱 함수
+@st.cache_data(ttl=1800)
+def get_competitor_blog(blog_id):
+    url = f"https://rss.blog.naver.com/{blog_id}.xml"
+    try:
+        res = requests.get(url, timeout=5)
+        root = ET.fromstring(res.content)
+        posts = []
+        for item in root.findall('./channel/item')[:3]: # 최신 글 3개
+            title = item.find('title').text
+            link = item.find('link').text
+            posts.append((title, link))
+        if not posts:
+            return [("최신 게시글이 없습니다.", "https://blog.naver.com/" + blog_id)]
+        return posts
+    except Exception as e:
+        return [("실시간 연동 지연 (클릭 시 이동)", "https://blog.naver.com/" + blog_id)]
 
 @st.cache_data(ttl=86400)
 def get_etf_mapping():
@@ -73,7 +91,6 @@ def get_real_returns(symbols_dict, etf_names):
     end_date = datetime.today()
     start_date = end_date - timedelta(days=14)
     returns_dict = {}
-    
     for name in etf_names:
         symbol = symbols_dict.get(name)
         if symbol:
@@ -94,7 +111,7 @@ def get_real_returns(symbols_dict, etf_names):
 
 # ★ 시장 센티먼트 자동 요약 AI 함수
 def generate_market_sentiment(news_df):
-    if news_df.empty or news_df["원본제목"].iloc[0].startswith("제목 없음"):
+    if news_df.empty or news_df["원본제목"].iloc[0].startswith("'"):
         return "시장 심리를 분석할 충분한 뉴스 데이터가 없습니다."
     
     all_titles = " ".join(news_df["원본제목"].astype(str).tolist())
@@ -457,132 +474,84 @@ with tabs[3]:
         st.info("좌측 사이드바에 엑셀 데이터를 업로드해주세요.")
 
 # =========================================================================
-# --- Tab 5: [고객 UX 분석] ---
+# --- ★ Tab 5: [고객 UX 분석] (100% 실시간 뉴스/블로그 크롤링 대체 완료) ---
 # =========================================================================
 with tabs[5]:
-    st.markdown("### 🗣️ 고객 Voice (VOC) & Pain Point 분석")
-    st.caption("증권사 앱스토어 최신 리뷰와 대고객 블로그 게시글을 취합하여 AI가 핵심 불편사항(Pain Points)을 분석합니다.")
+    st.markdown("### 🗣️ 고객 Voice (VOC) & Pain Point 분석 (실시간 연동)")
+    st.caption("증권 앱 불편사항 및 ETF 단점 관련 실시간 기사/블로그 검색결과를 스크랩합니다.")
     st.divider()
 
     col_app, col_blog = st.columns(2)
     with col_app:
-        st.subheader("📱 증권사 앱 최신 리뷰 요약 (최근 1주일)")
-        with st.container(border=True):
-            st.markdown("**1. 삼성증권 (mPOP)** - ⭐ 4.2 / 5.0")
-            st.markdown("- ✅ 업데이트 이후 UI가 깔끔해졌다.")
-            st.markdown("- ❌ 특정 차트 화면 로딩 속도가 이전보다 느려짐.")
-            
-        with st.container(border=True):
-            st.markdown("**2. 한국투자증권 (한국투자앱)** - ⭐ 3.9 / 5.0")
-            st.markdown("- ❌ ETF 검색 시 정렬 기준이 직관적이지 않음.")
-            st.markdown("- ❌ 배당금 입금 알림이 지연되는 경우가 잦음.")
-            
-        with st.container(border=True):
-            st.markdown("**3. KB증권 (M-able)** - ⭐ 3.7 / 5.0")
-            st.markdown("- ❌ ETF 호가창 UI가 복잡해서 직관성이 떨어짐.")
-            st.markdown("- ❌ 관심종목 그룹핑 기능 편집이 불편함.")
+        st.subheader("📱 증권앱 불편사항 (실시간 스크랩)")
+        with st.spinner("앱 리뷰/오류 관련 최신 뉴스를 수집 중입니다..."):
+            df_app_voc = get_realtime_news("증권앱 오류 불편 불만", max_items=4)
+            if "링크" in df_app_voc.columns and df_app_voc["링크"].iloc[0] != "":
+                for idx, row in df_app_voc.iterrows():
+                    with st.container(border=True):
+                        st.markdown(f"🚨 <a href='{row['링크']}' target='_blank' style='color:#ff4d4d; text-decoration:none;'>{row['원본제목']} 🔗</a>", unsafe_allow_html=True)
+                        st.caption(f"{row['게시일 / 출처']}")
+            else:
+                st.info("최근 7일간 감지된 증권앱 중대 오류 기사가 없습니다.")
             
     with col_blog:
-        st.subheader("✍️ 개인 투자자 블로그 Pain Point 분석 (최근 1주일)")
-        with st.container(border=True):
-            st.markdown("🔑 **주요 Pain Point 키워드**")
-            st.markdown("`괴리율`, `비싼 수수료`, `상장폐지 우려`, `설명 부족`, `KODEX vs TIGER`")
-            st.divider()
-            st.markdown("**핵심 Pain Point 요약:**")
-            st.markdown("- 해외 지수 추종 ETF의 실시간 가격 괴리율 심화 문제 지적.")
-            st.markdown("- 유사 상품(배당형) 간 수수료 경쟁력 차이 체감 및 비교 글 급증.")
-            st.markdown("- 파생형 ETF(커버드콜 등) 상품 구조에 대한 직관적인 설명 부족.")
+        st.subheader("✍️ ETF 투자자 Pain Point (실시간 스크랩)")
+        with st.spinner("ETF 괴리율, 단점 관련 블로그/뉴스를 수집 중입니다..."):
+            df_blog_voc = get_realtime_news("KODEX 단점 괴리율 불만", max_items=4)
+            if "링크" in df_blog_voc.columns and df_blog_voc["링크"].iloc[0] != "":
+                for idx, row in df_blog_voc.iterrows():
+                    with st.container(border=True):
+                        st.markdown(f"💡 <a href='{row['링크']}' target='_blank' style='color:#ffb04d; text-decoration:none;'>{row['원본제목']} 🔗</a>", unsafe_allow_html=True)
+                        st.caption(f"{row['게시일 / 출처']}")
+            else:
+                st.info("최근 7일간 감지된 주요 불만 리뷰가 없습니다.")
 
 # =========================================================================
-# --- ★ Tab 6: [경쟁사 동향] (게시글 제목 클릭 시 새 탭으로 연결 패치) ---
+# --- ★ Tab 6: [경쟁사 동향] (100% 실시간 운용사 공식 네이버 블로그 RSS 연동 완료) ---
 # =========================================================================
 with tabs[6]:
-    st.markdown("### 🏢 타사 공식 마케팅 채널 동향 (최근 1주일)")
-    st.caption("경쟁 운용사들의 공식 네이버 블로그 업데이트 내용을 모니터링하여 핵심 마케팅 소구점(Selling Point)을 파악합니다.")
+    st.markdown("### 🏢 타사 공식 마케팅 채널 동향 (실시간 RSS)")
+    st.caption("경쟁 운용사들의 공식 네이버 블로그 최신글을 실시간으로 읽어와 마케팅 소구점(Selling Point)을 파악합니다.")
     st.divider()
 
-    c1, c2 = st.columns(2)
-    with c1:
-        url_tiger = "https://blog.naver.com/m_invest"
-        st.subheader(f"🐅 [TIGER ETF (미래에셋)]({url_tiger})")
-        with st.container(border=True):
-            st.markdown("**[최신 공식 블로그 게시글]**")
-            st.markdown(f"- <a href='{url_tiger}' target='_blank' style='color:#4da6ff; text-decoration:none;'>TIGER 미국나스닥100+15%프리미엄초단기옵션 출시 (신상품 홍보) 🔗</a>", unsafe_allow_html=True)
-            st.markdown(f"- <a href='{url_tiger}' target='_blank' style='color:#4da6ff; text-decoration:none;'>월배당 ETF 전성시대, 나에게 맞는 상품은? (테마 교육) 🔗</a>", unsafe_allow_html=True)
-            st.markdown(f"- <a href='{url_tiger}' target='_blank' style='color:#4da6ff; text-decoration:none;'>TIGER 바이오테크 섹터 집중 분석 (산업 분석) 🔗</a>", unsafe_allow_html=True)
+    # 운용사 블로그 ID 매핑 (실제 네이버 블로그 아이디)
+    blog_map = {
+        "🐅 TIGER ETF (미래에셋)": ("m_invest", "https://blog.naver.com/m_invest"),
+        "🏆 ACE ETF (한국투자)": ("aceetf", "https://blog.naver.com/aceetf"),
+        "⭐ RISE ETF (KB자산운용)": ("riseetf", "https://blog.naver.com/riseetf"),
+        "☀️ SOL ETF (신한자산운용)": ("soletf", "https://blog.naver.com/soletf"),
+        "🌐 PLUS ETF (한화자산운용)": ("hanwhaasset", "https://blog.naver.com/hanwhaasset"),
+        "🌱 HANARO ETF (NH아문디)": ("nh_amundi", "https://blog.naver.com/nh_amundi"),
+        "🥇 1Q ETF (하나자산운용)": ("1qetf", "https://blog.naver.com/1qetf"),
+        "⏱️ TIMEFOLIO ETF (타임폴리오)": ("timefolioetf", "https://blog.naver.com/timefolioetf"),
+        "🔵 WON ETF (우리자산운용)": ("wooriam_kr", "https://blog.naver.com/wooriam_kr"),
+        "🎯 KIWOOM ETF (키움투자자산운용)": ("kiwoomammkt", "https://blog.naver.com/kiwoomammkt")
+    }
+
+    blog_items = list(blog_map.items())
+    
+    with st.spinner("전체 운용사 블로그의 최신 게시글을 실시간으로 가져오고 있습니다... (약 2~3초 소요)"):
+        for i in range(0, len(blog_items), 2):
+            c1, c2 = st.columns(2)
             
-    with c2:
-        url_ace = "https://blog.naver.com/aceetf"
-        st.subheader(f"🏆 [ACE ETF (한국투자)]({url_ace})")
-        with st.container(border=True):
-            st.markdown("**[최신 공식 블로그 게시글]**")
-            st.markdown(f"- <a href='{url_ace}' target='_blank' style='color:#4da6ff; text-decoration:none;'>ACE 반도체 ETF 3종 비교 분석 (상품 비교) 🔗</a>", unsafe_allow_html=True)
-            st.markdown(f"- <a href='{url_ace}' target='_blank' style='color:#4da6ff; text-decoration:none;'>ISA 계좌 활용 꿀팁 with ACE (마케팅 프로모션) 🔗</a>", unsafe_allow_html=True)
-            st.markdown(f"- <a href='{url_ace}' target='_blank' style='color:#4da6ff; text-decoration:none;'>월배당 라인업 확대 공지 (상품 업데이트) 🔗</a>", unsafe_allow_html=True)
-
-    c3, c4 = st.columns(2)
-    with c3:
-        url_rise = "https://blog.naver.com/riseetf"
-        st.subheader(f"⭐ [RISE ETF (KB자산운용)]({url_rise})")
-        with st.container(border=True):
-            st.markdown("**[최신 공식 블로그 게시글]**")
-            st.markdown(f"- <a href='{url_rise}' target='_blank' style='color:#4da6ff; text-decoration:none;'>RISE 비만치료제 ETF 파헤치기 (테마 홍보) 🔗</a>", unsafe_allow_html=True)
-            st.markdown(f"- <a href='{url_rise}' target='_blank' style='color:#4da6ff; text-decoration:none;'>금리 인하 기대감? 채권형 ETF 투자 가이드 (시황 연계) 🔗</a>", unsafe_allow_html=True)
-
-    with c4:
-        url_sol = "https://blog.naver.com/soletf"
-        st.subheader(f"☀️ [SOL ETF (신한자산운용)]({url_sol})")
-        with st.container(border=True):
-            st.markdown("**[최신 공식 블로그 게시글]**")
-            st.markdown(f"- <a href='{url_sol}' target='_blank' style='color:#4da6ff; text-decoration:none;'>SOL 미국배당다우존스 월배당 인증 이벤트 (고객 프로모션) 🔗</a>", unsafe_allow_html=True)
-            st.markdown(f"- <a href='{url_sol}' target='_blank' style='color:#4da6ff; text-decoration:none;'>반도체 소부장 ETF, 왜 투자해야 할까? (섹터 교육) 🔗</a>", unsafe_allow_html=True)
-
-    c5, c6 = st.columns(2)
-    with c5:
-        url_plus = "https://blog.naver.com/PostList.naver?blogId=hanwhaasset&categoryNo=46&from=postList"
-        st.subheader(f"🌐 [PLUS ETF (한화자산운용)]({url_plus})")
-        with st.container(border=True):
-            st.markdown("**[최신 공식 블로그 게시글]**")
-            st.markdown(f"- <a href='{url_plus}' target='_blank' style='color:#4da6ff; text-decoration:none;'>PLUS 고배당주 위클리 커버드콜 출시 (신상품 홍보) 🔗</a>", unsafe_allow_html=True)
-            st.markdown(f"- <a href='{url_plus}' target='_blank' style='color:#4da6ff; text-decoration:none;'>방산 테마 ETF, 지금이 투자 적기? (섹터 교육) 🔗</a>", unsafe_allow_html=True)
-
-    with c6:
-        url_hanaro = "https://blog.naver.com/nh_amundi/224055583531"
-        st.subheader(f"🌱 [HANARO ETF (NH아문디)]({url_hanaro})")
-        with st.container(border=True):
-            st.markdown("**[최신 공식 블로그 게시글]**")
-            st.markdown(f"- <a href='{url_hanaro}' target='_blank' style='color:#4da6ff; text-decoration:none;'>HANARO 글로벌AI반도체 ETF (상품 안내) 🔗</a>", unsafe_allow_html=True)
-            st.markdown(f"- <a href='{url_hanaro}' target='_blank' style='color:#4da6ff; text-decoration:none;'>하반기 증시 전망 및 유망 섹터 (시황 분석) 🔗</a>", unsafe_allow_html=True)
-
-    c7, c8 = st.columns(2)
-    with c7:
-        url_1q = "https://blog.naver.com/1qetf"
-        st.subheader(f"🥇 [1Q ETF (하나자산운용)]({url_1q})")
-        with st.container(border=True):
-            st.markdown("**[최신 공식 블로그 게시글]**")
-            st.markdown(f"- <a href='{url_1q}' target='_blank' style='color:#4da6ff; text-decoration:none;'>1Q 머니마켓액티브 ETF 파킹통장 활용법 (상품 교육) 🔗</a>", unsafe_allow_html=True)
-
-    with c8:
-        url_timefolio = "https://blog.naver.com/timefolioetf"
-        st.subheader(f"⏱️ [TIMEFOLIO ETF (타임폴리오)]({url_timefolio})")
-        with st.container(border=True):
-            st.markdown("**[최신 공식 블로그 게시글]**")
-            st.markdown(f"- <a href='{url_timefolio}' target='_blank' style='color:#4da6ff; text-decoration:none;'>타임폴리오 글로벌AI인공지능 액티브 (운용역 노트) 🔗</a>", unsafe_allow_html=True)
-
-    c9, c10 = st.columns(2)
-    with c9:
-        url_won = "https://blog.naver.com/PostList.naver?blogId=wooriam_kr&from=postList&categoryNo=26"
-        st.subheader(f"🔵 [WON ETF (우리자산운용)]({url_won})")
-        with st.container(border=True):
-            st.markdown("**[최신 공식 블로그 게시글]**")
-            st.markdown(f"- <a href='{url_won}' target='_blank' style='color:#4da6ff; text-decoration:none;'>우리WON 단기채권 ETF 활용법 (상품 홍보) 🔗</a>", unsafe_allow_html=True)
-
-    with c10:
-        url_kiwoom = "https://blog.naver.com/PostList.naver?blogId=kiwoomammkt&from=postList&categoryNo=6"
-        st.subheader(f"🎯 [KIWOOM ETF (키움투자자산운용)]({url_kiwoom})")
-        with st.container(border=True):
-            st.markdown("**[최신 공식 블로그 게시글]**")
-            st.markdown(f"- <a href='{url_kiwoom}' target='_blank' style='color:#4da6ff; text-decoration:none;'>히어로즈 TDF 액티브 ETF 시리즈 (연금 마케팅) 🔗</a>", unsafe_allow_html=True)
+            # 왼쪽 열
+            name1, (b_id1, url1) = blog_items[i]
+            with c1:
+                st.subheader(f"[{name1}]({url1})")
+                with st.container(border=True):
+                    posts = get_competitor_blog(b_id1)
+                    for p_title, p_link in posts:
+                        st.markdown(f"- <a href='{p_link}' target='_blank' style='color:#4da6ff; text-decoration:none;'>{p_title} 🔗</a>", unsafe_allow_html=True)
+            
+            # 오른쪽 열 (홀수 개일 경우 대비)
+            if i + 1 < len(blog_items):
+                name2, (b_id2, url2) = blog_items[i+1]
+                with c2:
+                    st.subheader(f"[{name2}]({url2})")
+                    with st.container(border=True):
+                        posts = get_competitor_blog(b_id2)
+                        for p_title, p_link in posts:
+                            st.markdown(f"- <a href='{p_link}' target='_blank' style='color:#4da6ff; text-decoration:none;'>{p_title} 🔗</a>", unsafe_allow_html=True)
 
 # =========================================================================
 # --- Tab 7: [ETF 운용 현황] ---
@@ -678,24 +647,34 @@ with tabs[7]:
         st.info("👈 좌측 사이드바에 엑셀 데이터를 업로드하시면 트렌드 그래프가 나타납니다.")
 
 # =========================================================================
-# --- Tab 8: [글로벌 공백 & 정책 동향] ---
+# --- ★ Tab 8: [글로벌 공백 & 정책 동향] (동적 계산 및 100% 실시간 뉴스 연동 완료) ---
 # =========================================================================
 with tabs[8]:
     st.markdown("### 🇺🇸 글로벌 혁신 구조 공백 분석 (US Mega Trends vs KODEX)")
-    st.caption("미국 ETF 시장에서 최근 자금 유입이 폭발하고 있는 '금융 혁신 구조'와 KODEX 라인업을 교차 대조하여 선점 기회를 발굴합니다.")
+    st.caption("실시간 기사 발행량 카운트를 통해 미국 ETF 시장의 혁신 구조 트렌드 유입 강도를 동적으로 측정합니다.")
     
     raw_keywords = [
-        "🎯 타겟 인컴 (Defined Outcome / 버퍼형)", 
-        "⚡ 0DTE 초단기 옵션 커버드콜", 
-        "🪙 가상자산 현물 (Bitcoin/Ether)", 
-        "🏢 기업성장집합투자기구 (BDC)",
-        "🛡️ 100% 하방 방어형 (100% Buffer)"
+        "타겟 인컴 ETF 버퍼형", 
+        "0DTE 초단기 옵션 커버드콜 ETF", 
+        "가상자산 비트코인 현물 ETF", 
+        "BDC 기업성장집합투자기구 대체투자",
+        "하방 방어형 100% 버퍼 ETF"
     ]
     
+    # 실시간 뉴스 카운트를 통해 유입 강도(관심도)를 계산하는 로직
+    trend_strengths = []
+    with st.spinner("각 테마별 실시간 뉴스 관심도를 측정 중입니다..."):
+        for kw in raw_keywords:
+            temp_df = get_realtime_news(kw, max_items=10) # 10개까지 조회
+            count = len(temp_df) if not temp_df.empty and temp_df.iloc[0]["게시일 / 출처"] != "-" else 0
+            if count >= 8: strength = "🔥🔥🔥 최고조"
+            elif count >= 3: strength = "🔥🔥 강세"
+            else: strength = "🔥 꾸준함"
+            trend_strengths.append(strength)
+            
     us_trends_df = pd.DataFrame({
         "혁신 상품 구조 (미국 메가 트렌드)": raw_keywords,
-        "미국 시장 AUM 규모": ["$ 35B+", "$ 55B+", "$ 70B+", "$ 40B+", "$ 20B+"],
-        "최근 3개월 유입 강도": ["🔥🔥 강세", "🔥🔥🔥 최고조", "🔥🔥🔥 최고조", "🔥 꾸준함", "🔥🔥 강세"],
+        "최근 뉴스 기반 유입 강도": trend_strengths,
         "KODEX 라인업 현황": ["공백 (0개)", "일부 유사 (1개)", "규제 한계 (0개)", "규제 한계 (0개)", "공백 (0개)"],
         "전략적 제언 (Action Plan)": [
             "즉시 벤치마킹 및 상품 기획 TF 가동", 
@@ -707,21 +686,10 @@ with tabs[8]:
     })
     
     st.dataframe(us_trends_df, use_container_width=True, hide_index=True)
-    st.info("💡 **인사이트 도출 가이드:** '공백' 상태인 혁신 구조는 즉각적인 상품 기획 회의 안건으로 상정하고, '규제 한계' 상태인 테마는 하단의 규제 동향 뉴스 피드를 통해 당국의 해소 타이밍을 엿봐야 합니다.")
     st.divider()
 
     st.markdown("### ⚖️ 규제 및 정책 시그널 집중 모니터링 (Regulatory Signals)")
     st.caption("국내 공백의 주요 원인인 '규제 장벽' 해소 타이밍을 선제적으로 포착하기 위해 금융위 법안 및 당국 기류를 실시간 스크랩합니다.")
-    
-    cleaned_options = [
-        "타겟 인컴 ETF 버퍼형",
-        "0DTE 초단기 옵션 커버드콜 ETF",
-        "가상자산 비트코인 현물 ETF 금융위",
-        "BDC 기업성장집합투자기구 대체투자",
-        "하방 방어형 버퍼 ETF"
-    ]
-    
-    display_to_query = dict(zip(raw_keywords, cleaned_options))
     
     selected_trend_label = st.selectbox(
         "🔍 분석 및 실시간 뉴스 크롤링을 진행할 미국 혁신 테마 선택:",
@@ -730,11 +698,9 @@ with tabs[8]:
     )
     st.session_state['selected_trend_label'] = selected_trend_label
     
-    active_query = display_to_query[selected_trend_label]
-    
     st.markdown(f"#### 📡 `[실시간 연동]` {selected_trend_label} 관련 정책/규제 뉴스")
     with st.spinner(f"'{selected_trend_label}' 관련 최신 동향을 수집 중입니다..."):
-        df_gap_news = get_realtime_news(active_query)
+        df_gap_news = get_realtime_news(selected_trend_label + " 금융위 규제") # 규제 키워드 결합
         
         if "링크" in df_gap_news.columns and df_gap_news["링크"].iloc[0] != "":
             cols_grid = st.columns(2)
