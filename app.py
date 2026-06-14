@@ -494,90 +494,95 @@ with tabs[5]:
             st.markdown("- 파생형 ETF(커버드콜 등) 상품 구조에 대한 직관적인 설명 부족.")
 
 # =========================================================================
-# --- ★ Tab 6: [경쟁사 동향] (운용사 10곳 블로그 링크 및 레이아웃 확장 패치) ---
+# --- ★ Tab 6: [경쟁사 동향] (게시글 제목 클릭 시 새 탭으로 연결 패치) ---
 # =========================================================================
 with tabs[6]:
     st.markdown("### 🏢 타사 공식 마케팅 채널 동향 (최근 1주일)")
     st.caption("경쟁 운용사들의 공식 네이버 블로그 업데이트 내용을 모니터링하여 핵심 마케팅 소구점(Selling Point)을 파악합니다.")
     st.divider()
 
-    # 1행: TIGER, ACE
     c1, c2 = st.columns(2)
     with c1:
-        st.subheader("🐅 [TIGER ETF (미래에셋)](https://blog.naver.com/m_invest)")
+        url_tiger = "https://blog.naver.com/m_invest"
+        st.subheader(f"🐅 [TIGER ETF (미래에셋)]({url_tiger})")
         with st.container(border=True):
             st.markdown("**[최신 공식 블로그 게시글]**")
-            st.markdown("- TIGER 미국나스닥100+15%프리미엄초단기옵션 출시 (신상품 홍보)")
-            st.markdown("- 월배당 ETF 전성시대, 나에게 맞는 상품은? (테마 교육)")
-            st.markdown("- TIGER 바이오테크 섹터 집중 분석 (산업 분석)")
+            st.markdown(f"- <a href='{url_tiger}' target='_blank' style='color:#4da6ff; text-decoration:none;'>TIGER 미국나스닥100+15%프리미엄초단기옵션 출시 (신상품 홍보) 🔗</a>", unsafe_allow_html=True)
+            st.markdown(f"- <a href='{url_tiger}' target='_blank' style='color:#4da6ff; text-decoration:none;'>월배당 ETF 전성시대, 나에게 맞는 상품은? (테마 교육) 🔗</a>", unsafe_allow_html=True)
+            st.markdown(f"- <a href='{url_tiger}' target='_blank' style='color:#4da6ff; text-decoration:none;'>TIGER 바이오테크 섹터 집중 분석 (산업 분석) 🔗</a>", unsafe_allow_html=True)
             
     with c2:
-        st.subheader("🏆 [ACE ETF (한국투자)](https://blog.naver.com/aceetf)")
+        url_ace = "https://blog.naver.com/aceetf"
+        st.subheader(f"🏆 [ACE ETF (한국투자)]({url_ace})")
         with st.container(border=True):
             st.markdown("**[최신 공식 블로그 게시글]**")
-            st.markdown("- ACE 반도체 ETF 3종 비교 분석 (상품 비교)")
-            st.markdown("- ISA 계좌 활용 꿀팁 with ACE (마케팅 프로모션)")
-            st.markdown("- 월배당 라인업 확대 공지 (상품 업데이트)")
+            st.markdown(f"- <a href='{url_ace}' target='_blank' style='color:#4da6ff; text-decoration:none;'>ACE 반도체 ETF 3종 비교 분석 (상품 비교) 🔗</a>", unsafe_allow_html=True)
+            st.markdown(f"- <a href='{url_ace}' target='_blank' style='color:#4da6ff; text-decoration:none;'>ISA 계좌 활용 꿀팁 with ACE (마케팅 프로모션) 🔗</a>", unsafe_allow_html=True)
+            st.markdown(f"- <a href='{url_ace}' target='_blank' style='color:#4da6ff; text-decoration:none;'>월배당 라인업 확대 공지 (상품 업데이트) 🔗</a>", unsafe_allow_html=True)
 
-    # 2행: RISE(KB), SOL(신한)
     c3, c4 = st.columns(2)
     with c3:
-        st.subheader("⭐ [RISE ETF (KB자산운용)](https://blog.naver.com/riseetf)")
+        url_rise = "https://blog.naver.com/riseetf"
+        st.subheader(f"⭐ [RISE ETF (KB자산운용)]({url_rise})")
         with st.container(border=True):
             st.markdown("**[최신 공식 블로그 게시글]**")
-            st.markdown("- RISE 비만치료제 ETF 파헤치기 (테마 홍보)")
-            st.markdown("- 금리 인하 기대감? 채권형 ETF 투자 가이드 (시황 연계)")
+            st.markdown(f"- <a href='{url_rise}' target='_blank' style='color:#4da6ff; text-decoration:none;'>RISE 비만치료제 ETF 파헤치기 (테마 홍보) 🔗</a>", unsafe_allow_html=True)
+            st.markdown(f"- <a href='{url_rise}' target='_blank' style='color:#4da6ff; text-decoration:none;'>금리 인하 기대감? 채권형 ETF 투자 가이드 (시황 연계) 🔗</a>", unsafe_allow_html=True)
 
     with c4:
-        st.subheader("☀️ [SOL ETF (신한자산운용)](https://blog.naver.com/soletf)")
+        url_sol = "https://blog.naver.com/soletf"
+        st.subheader(f"☀️ [SOL ETF (신한자산운용)]({url_sol})")
         with st.container(border=True):
             st.markdown("**[최신 공식 블로그 게시글]**")
-            st.markdown("- SOL 미국배당다우존스 월배당 인증 이벤트 (고객 프로모션)")
-            st.markdown("- 반도체 소부장 ETF, 왜 투자해야 할까? (섹터 교육)")
+            st.markdown(f"- <a href='{url_sol}' target='_blank' style='color:#4da6ff; text-decoration:none;'>SOL 미국배당다우존스 월배당 인증 이벤트 (고객 프로모션) 🔗</a>", unsafe_allow_html=True)
+            st.markdown(f"- <a href='{url_sol}' target='_blank' style='color:#4da6ff; text-decoration:none;'>반도체 소부장 ETF, 왜 투자해야 할까? (섹터 교육) 🔗</a>", unsafe_allow_html=True)
 
-    # 3행: PLUS(한화), HANARO(NH아문디)
     c5, c6 = st.columns(2)
     with c5:
-        st.subheader("🌐 [PLUS ETF (한화자산운용)](https://blog.naver.com/PostList.naver?blogId=hanwhaasset&categoryNo=46&from=postList)")
+        url_plus = "https://blog.naver.com/PostList.naver?blogId=hanwhaasset&categoryNo=46&from=postList"
+        st.subheader(f"🌐 [PLUS ETF (한화자산운용)]({url_plus})")
         with st.container(border=True):
             st.markdown("**[최신 공식 블로그 게시글]**")
-            st.markdown("- PLUS 고배당주 위클리 커버드콜 출시 (신상품 홍보)")
-            st.markdown("- 방산 테마 ETF, 지금이 투자 적기? (섹터 교육)")
+            st.markdown(f"- <a href='{url_plus}' target='_blank' style='color:#4da6ff; text-decoration:none;'>PLUS 고배당주 위클리 커버드콜 출시 (신상품 홍보) 🔗</a>", unsafe_allow_html=True)
+            st.markdown(f"- <a href='{url_plus}' target='_blank' style='color:#4da6ff; text-decoration:none;'>방산 테마 ETF, 지금이 투자 적기? (섹터 교육) 🔗</a>", unsafe_allow_html=True)
 
     with c6:
-        st.subheader("🌱 [HANARO ETF (NH아문디)](https://blog.naver.com/nh_amundi/224055583531)")
+        url_hanaro = "https://blog.naver.com/nh_amundi/224055583531"
+        st.subheader(f"🌱 [HANARO ETF (NH아문디)]({url_hanaro})")
         with st.container(border=True):
             st.markdown("**[최신 공식 블로그 게시글]**")
-            st.markdown("- HANARO 글로벌AI반도체 ETF (상품 안내)")
-            st.markdown("- 하반기 증시 전망 및 유망 섹터 (시황 분석)")
+            st.markdown(f"- <a href='{url_hanaro}' target='_blank' style='color:#4da6ff; text-decoration:none;'>HANARO 글로벌AI반도체 ETF (상품 안내) 🔗</a>", unsafe_allow_html=True)
+            st.markdown(f"- <a href='{url_hanaro}' target='_blank' style='color:#4da6ff; text-decoration:none;'>하반기 증시 전망 및 유망 섹터 (시황 분석) 🔗</a>", unsafe_allow_html=True)
 
-    # 4행: 1Q(하나), TIMEFOLIO(타임폴리오)
     c7, c8 = st.columns(2)
     with c7:
-        st.subheader("🥇 [1Q ETF (하나자산운용)](https://blog.naver.com/1qetf)")
+        url_1q = "https://blog.naver.com/1qetf"
+        st.subheader(f"🥇 [1Q ETF (하나자산운용)]({url_1q})")
         with st.container(border=True):
             st.markdown("**[최신 공식 블로그 게시글]**")
-            st.markdown("- 1Q 머니마켓액티브 ETF 파킹통장 활용법 (상품 교육)")
+            st.markdown(f"- <a href='{url_1q}' target='_blank' style='color:#4da6ff; text-decoration:none;'>1Q 머니마켓액티브 ETF 파킹통장 활용법 (상품 교육) 🔗</a>", unsafe_allow_html=True)
 
     with c8:
-        st.subheader("⏱️ [TIMEFOLIO ETF (타임폴리오)](https://blog.naver.com/timefolioetf)")
+        url_timefolio = "https://blog.naver.com/timefolioetf"
+        st.subheader(f"⏱️ [TIMEFOLIO ETF (타임폴리오)]({url_timefolio})")
         with st.container(border=True):
             st.markdown("**[최신 공식 블로그 게시글]**")
-            st.markdown("- 타임폴리오 글로벌AI인공지능 액티브 (운용역 노트)")
+            st.markdown(f"- <a href='{url_timefolio}' target='_blank' style='color:#4da6ff; text-decoration:none;'>타임폴리오 글로벌AI인공지능 액티브 (운용역 노트) 🔗</a>", unsafe_allow_html=True)
 
-    # 5행: WON(우리), KIWOOM(키움)
     c9, c10 = st.columns(2)
     with c9:
-        st.subheader("🔵 [WON ETF (우리자산운용)](https://blog.naver.com/PostList.naver?blogId=wooriam_kr&from=postList&categoryNo=26)")
+        url_won = "https://blog.naver.com/PostList.naver?blogId=wooriam_kr&from=postList&categoryNo=26"
+        st.subheader(f"🔵 [WON ETF (우리자산운용)]({url_won})")
         with st.container(border=True):
             st.markdown("**[최신 공식 블로그 게시글]**")
-            st.markdown("- 우리WON 단기채권 ETF 활용법 (상품 홍보)")
+            st.markdown(f"- <a href='{url_won}' target='_blank' style='color:#4da6ff; text-decoration:none;'>우리WON 단기채권 ETF 활용법 (상품 홍보) 🔗</a>", unsafe_allow_html=True)
 
     with c10:
-        st.subheader("🎯 [KIWOOM ETF (키움투자자산운용)](https://blog.naver.com/PostList.naver?blogId=kiwoomammkt&from=postList&categoryNo=6)")
+        url_kiwoom = "https://blog.naver.com/PostList.naver?blogId=kiwoomammkt&from=postList&categoryNo=6"
+        st.subheader(f"🎯 [KIWOOM ETF (키움투자자산운용)]({url_kiwoom})")
         with st.container(border=True):
             st.markdown("**[최신 공식 블로그 게시글]**")
-            st.markdown("- 히어로즈 TDF 액티브 ETF 시리즈 (연금 마케팅)")
+            st.markdown(f"- <a href='{url_kiwoom}' target='_blank' style='color:#4da6ff; text-decoration:none;'>히어로즈 TDF 액티브 ETF 시리즈 (연금 마케팅) 🔗</a>", unsafe_allow_html=True)
 
 # =========================================================================
 # --- Tab 7: [ETF 운용 현황] ---
