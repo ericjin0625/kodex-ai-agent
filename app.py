@@ -7,6 +7,7 @@ import requests
 from bs4 import BeautifulSoup
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
+import json # 표준 라이브러리 추가
 
 # 1. 페이지 레이아웃 및 기본 테마 설정
 st.set_page_config(page_title="ETF Monitoring AI Agent", layout="wide")
@@ -35,11 +36,12 @@ def assign_auto_theme(etf_name):
     else:
         return '📦 기타 섹터/테마'
 
-# 2. 실시간 데이터 파싱 함수 (일반 뉴스)
+# 2. 실시간 뉴스 파싱 함수
 @st.cache_data(ttl=3600)
-def get_realtime_news(keyword="ETF", max_items=5):
-    url = f"https://news.google.com/rss/search?q={keyword}+when:7d&hl=ko&gl=KR&ceid=KR:ko"
+def get_realtime_news(keyword="ETF", timeframe="7d", max_items=5):
+    url = f"https://news.google.com/rss/search?q={keyword}+when:{timeframe}&hl=ko&gl=KR&ceid=KR:ko"
     try:
+        # requests는 Streamlit 실행 환경에 이미 깔려있으므로 안전합니다.
         res = requests.get(url, timeout=5)
         root = ET.fromstring(res.text)
         
@@ -57,14 +59,80 @@ def get_realtime_news(keyword="ETF", max_items=5):
             })
             
         if not news_list:
-            return pd.DataFrame([{"게시일 / 출처": "-", "원본제목": f"'{keyword}' 관련 최근 뉴스가 없습니다.", "링크": ""}])
+            return pd.DataFrame([{"게시일 / 출처": "-", "원본제목": f"'{keyword}' 관련 뉴스가 없습니다.", "링크": ""}])
             
         return pd.DataFrame(news_list)
         
     except Exception as e:
         return pd.DataFrame([{"게시일 / 출처": "오류", "원본제목": "실시간 뉴스를 불러올 수 없습니다.", "링크": ""}])
 
-# ★ 실시간 데이터 파싱 함수 (이벤트 캘린더 전용)
+# ★ 실시간 애플 앱스토어 리뷰 파싱 함수 (외부 라이브러리 절대 사절 버전)
+@st.cache_data(ttl=1800)
+def get_apple_app_reviews():
+    # 타 컴퓨터에 문제 안 주는 표준 라이브러리만 사용 (requests, json, datetime)
+    apps = {
+        "삼성증권 mPOP": "418064117",
+        "미래에셋 M-STOCK": "1619623868",
+        "한국투자증권": "364506828",
+        "KB증권 M-able": "1198642398"
+    }
+    
+    three_months_ago = datetime.today() - timedelta(days=90)
+    all_bad_reviews = []
+    
+    # User-Agent를 설정해야 애플 서버가 데이터를 줍니다.
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    }
+
+    try:
+        for app_name, app_id in apps.items():
+            # 애플 앱스토어 전용 RSS API (json 포맷) 사용
+            url = f"https://itunes.apple.com/kr/rss/customerreviews/id={app_id}/sortby=mostrecent/json"
+            
+            res = requests.get(url, headers=headers, timeout=7)
+            if res.status_code != 200:
+                continue
+                
+            data = res.json()
+            
+            # 리뷰 데이터 진입점 확인
+            feed = data.get("feed", {})
+            entries = feed.get("entry", [])
+            
+            if not entries or len(entries) <= 1: # 첫번째 entry는 앱 정보일 수 있음
+                continue
+                
+            # entries[1:] 부터 진짜 리뷰
+            for entry in entries[1:]:
+                try:
+                    score = int(entry.get("im:rating", {}).get("label", "5"))
+                    date_str = entry.get("updated", {}).get("label", "")[:10] # YYYY-MM-DD
+                    review_date = datetime.strptime(date_str, "%Y-%m-%d")
+                    content = entry.get("content", {}).get("label", "내용 없음")
+                    title = entry.get("title", {}).get("label", "제목 없음")
+                    
+                    # 별점 1~2점 & 3개월 이내 데이터만 표준 로직으로 필터링
+                    if score <= 2 and review_date >= three_months_ago:
+                        all_bad_reviews.append({
+                            "app": app_name,
+                            "score": score,
+                            "date": date_str,
+                            "title": title,
+                            "content": content
+                        })
+                except:
+                    continue
+                    
+        # 전체 수집된 찐 악플들을 최신날짜순으로 정렬
+        all_bad_reviews.sort(key=lambda x: x['date'], reverse=True)
+        return all_bad_reviews[:10] # 가장 최신 악플 10개만 리턴
+        
+    except Exception as e:
+        # 시연 중 에러 발생 시 Hallucination 대신 에러 메시지 출력
+        return [{"error": f"앱스토어 실시간 연동 중 일시적 오류가 발생했습니다: {e}"}]
+
+# 실시간 데이터 파싱 함수 (이벤트 캘린더 전용)
 @st.cache_data(ttl=3600)
 def get_event_news(keyword, start_date, end_date, max_items=4):
     start_str = start_date.strftime("%Y-%m-%d")
@@ -411,7 +479,7 @@ with tabs[2]:
     st.markdown("### 📰 실시간 마켓 센티먼트 및 뉴스 요약")
     
     with st.spinner("최신 마켓 트렌드를 AI가 분석하고 있습니다..."):
-        df_real_news = get_realtime_news("ETF")
+        df_real_news = get_realtime_news("ETF", timeframe="7d")
         
         market_sentiment = generate_market_sentiment(df_real_news)
         st.session_state['market_sentiment'] = market_sentiment
@@ -519,7 +587,7 @@ with tabs[3]:
         st.info("좌측 사이드바에 엑셀 데이터를 업로드해주세요.")
 
 # =========================================================================
-# --- ★ Tab 4: [진행 이벤트] (분석 차트 최상단 배치 및 뉴스 스크랩 하단 배치) ---
+# --- Tab 4: [진행 이벤트] ---
 # =========================================================================
 with tabs[4]:
     # --- 📊 이벤트 성과 분석기 (반자동) ---
@@ -606,7 +674,6 @@ with tabs[4]:
 
     st.divider()
 
-    # --- 🎉 운용사별 뉴스 스크랩 (하단 이동) ---
     st.markdown("### 🎉 운용사별 ETF 진행 이벤트 (뉴스 보도자료 스크랩)")
     st.caption("선택하신 날짜 구간 동안 언론에 배포된 각 운용사의 이벤트 및 신규 상장 프로모션 기사를 실시간으로 수집합니다.")
     
@@ -659,37 +726,45 @@ with tabs[4]:
                 st.info("해당 기간 동안 검색된 이벤트나 상장 프로모션 보도자료가 없습니다.")
 
 # =========================================================================
-# --- Tab 5: [고객 UX 분석] ---
+# --- ★ Tab 5: [고객 UX 분석] (표준 라이브러리 기반 앱스토어 패치) ---
 # =========================================================================
 with tabs[5]:
-    st.markdown("### 🗣️ 고객 Voice (VOC) & Pain Point 분석 (실시간 연동)")
-    st.caption("증권 앱 불편사항 및 ETF 단점 관련 실시간 기사/블로그 검색결과를 스크랩합니다.")
+    st.markdown("### 🗣️ 고객 Voice (VOC) & 시스템 리스크 모니터링 (최근 3개월)")
+    st.caption("외부 라이브러리 설치 없이 표준 로직으로 애플 앱스토어의 찐 별점 1~2점 리뷰와 언론 중대 오류 기사를 비교 모니터링합니다.")
     st.divider()
 
-    col_app, col_blog = st.columns(2)
+    col_app, col_news = st.columns(2)
+    
     with col_app:
-        st.subheader("📱 증권앱 불편사항 (실시간 스크랩)")
-        with st.spinner("앱 리뷰/오류 관련 최신 뉴스를 수집 중입니다..."):
-            df_app_voc = get_realtime_news("증권앱 오류 불편 불만", max_items=4)
+        st.subheader("📱 주요 증권앱 최신 불만 리뷰 (App Store)")
+        with st.spinner("삼성, 미래, 한투 등 주요 앱스토어의 1~2점짜리 최신 날것의 리뷰를 긁어오는 중입니다..."):
+            # halluciation 0% 보장하는 실제 애플 앱스토어 RSS API 데이터 호출
+            bad_reviews = get_apple_app_reviews()
+            
+            if bad_reviews and "error" in bad_reviews[0]:
+                st.error(bad_reviews[0]["error"])
+            elif bad_reviews:
+                for r in bad_reviews:
+                    with st.container(border=True):
+                        st.markdown(f"**[{r['app']}]** ⭐{r['score']}점 - **{r['title']}**")
+                        st.caption(f"📅 {r['date']}")
+                        st.write(f"\"{r['content']}\"")
+            else:
+                st.info("최근 3개월 내 주요 증권앱의 치명적인 별점 1~2점 리뷰가 애플 앱스토어에 없습니다.")
+        
+    with col_news:
+        st.subheader("📰 언론 보도 증권앱/MTS 중대 오류 이슈")
+        with st.spinner("최근 3개월간 언론에 터진 대형 시스템 오류 기사를 수집 중입니다..."):
+            # timeframe을 3m(3개월)로 세팅하여 빈 화면 방지 및 리스크 필터링
+            df_app_voc = get_realtime_news("증권앱 (오류 OR 접속지연 OR 마비 OR 먹통)", timeframe="3m", max_items=5)
+            
             if "링크" in df_app_voc.columns and df_app_voc["링크"].iloc[0] != "":
                 for idx, row in df_app_voc.iterrows():
                     with st.container(border=True):
                         st.markdown(f"🚨 <a href='{row['링크']}' target='_blank' style='color:#ff4d4d; text-decoration:none;'>{row['원본제목']} 🔗</a>", unsafe_allow_html=True)
-                        st.caption(f"{row['게시일 / 출처']}")
+                        st.caption(f"📅 {row['게시일 / 출처']}")
             else:
-                st.info("최근 7일간 감지된 증권앱 중대 오류 기사가 없습니다.")
-            
-    with col_blog:
-        st.subheader("✍️ ETF 투자자 Pain Point (실시간 스크랩)")
-        with st.spinner("ETF 괴리율, 단점 관련 블로그/뉴스를 수집 중입니다..."):
-            df_blog_voc = get_realtime_news("KODEX 단점 괴리율 불만", max_items=4)
-            if "링크" in df_blog_voc.columns and df_blog_voc["링크"].iloc[0] != "":
-                for idx, row in df_blog_voc.iterrows():
-                    with st.container(border=True):
-                        st.markdown(f"💡 <a href='{row['링크']}' target='_blank' style='color:#ffb04d; text-decoration:none;'>{row['원본제목']} 🔗</a>", unsafe_allow_html=True)
-                        st.caption(f"{row['게시일 / 출처']}")
-            else:
-                st.info("최근 7일간 감지된 주요 불만 리뷰가 없습니다.")
+                st.info("최근 3개월간 보도된 증권앱 중대 오류 기사가 없습니다.")
 
 # =========================================================================
 # --- Tab 6: [경쟁사 동향] ---
@@ -883,7 +958,7 @@ with tabs[8]:
     trend_strengths = []
     with st.spinner("각 테마별 실시간 뉴스 관심도를 측정 중입니다..."):
         for kw in raw_keywords:
-            temp_df = get_realtime_news(kw, max_items=10) 
+            temp_df = get_realtime_news(kw, timeframe="7d", max_items=10) 
             count = len(temp_df) if not temp_df.empty and temp_df.iloc[0]["게시일 / 출처"] != "-" else 0
             if count >= 8: strength = "🔥🔥🔥 최고조"
             elif count >= 3: strength = "🔥🔥 강세"
@@ -918,7 +993,7 @@ with tabs[8]:
     
     st.markdown(f"#### 📡 `[실시간 연동]` {selected_trend_label} 관련 정책/규제 뉴스")
     with st.spinner(f"'{selected_trend_label}' 관련 최신 동향을 수집 중입니다..."):
-        df_gap_news = get_realtime_news(selected_trend_label + " 금융위 규제") 
+        df_gap_news = get_realtime_news(selected_trend_label + " 금융위 규제", timeframe="7d") 
         
         if "링크" in df_gap_news.columns and df_gap_news["링크"].iloc[0] != "":
             cols_grid = st.columns(2)
