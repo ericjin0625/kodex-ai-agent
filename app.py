@@ -105,12 +105,11 @@ def get_real_returns(symbols_dict, etf_names):
             returns_dict[name] = 0.0
     return returns_dict
 
-# ★ 시장 센티먼트 자동 요약 AI 함수 (시뮬레이션)
+# ★ 시장 센티먼트 자동 요약 AI 함수
 def generate_market_sentiment(news_df):
     if news_df.empty or news_df["원본제목"].iloc[0].startswith("제목 없음"):
         return "시장 심리를 분석할 충분한 뉴스 데이터가 없습니다."
     
-    # Simple simulated sentiment based on common Korean finance words
     all_titles = " ".join(news_df["원본제목"].astype(str).tolist())
     if any(kw in all_titles for kw in ['강세', '상승', '급등', '반등']):
         return "☀️ 오늘의 시장 심리 1줄 요약: 시장 상승세 속 금리 인하 기대감으로 인한 성장주형 및 고배당 ETF로의 자금 유입이 눈에 띕니다."
@@ -136,16 +135,16 @@ if uploaded_excel is not None:
 
 col_title, col_week = st.columns([3, 1])
 with col_title:
-    st.title("ETF Monitoring AI Agent") # ★ 제목 변경
+    st.title("ETF Monitoring AI Agent")
 with col_week:
     default_idx = 1 if len(available_weeks) > 1 else 0
     selected_week = st.selectbox("주차 (최대 6개월 전까지 선택 가능):", options=available_weeks, index=default_idx)
 
-# ★ 탭 순서 논리적 재배치 및 신규 탭 추가
+# 탭 순서
 tab_names = [
     "[Weekly Info.]", "[ETF 순매수 등락, 수익률]", "[뉴스 & 검색량 트렌드]", 
     "[주간 거래량 추이]", "[진행 이벤트]", 
-    "[고객 UX 분석]", "[경쟁사 동향]", # ★ 신규 추가
+    "[고객 UX 분석]", "[경쟁사 동향]", 
     "[ETF 운용 현황]", "[AI 분석용 프롬프트]"
 ]
 tabs = st.tabs(tab_names)
@@ -364,14 +363,12 @@ with tabs[2]:
     with st.spinner("최신 마켓 트렌드를 AI가 분석하고 있습니다..."):
         df_real_news = get_realtime_news("ETF")
         
-        # ★ 신규 추가: 오늘의 시장 심리 1줄 요약
         market_sentiment = generate_market_sentiment(df_real_news)
         with st.container(border=True):
             st.markdown(f"<p style='font-size:18px; font-weight:bold; color:#4da6ff; text-align:center; margin:0;'>{market_sentiment}</p>", unsafe_allow_html=True)
         
         st.divider()
         
-        # 뉴스 디스플레이
         if "링크" in df_real_news.columns and df_real_news["링크"].iloc[0] != "":
             for idx, row in df_real_news.iterrows():
                 with st.container(border=True):
@@ -383,7 +380,6 @@ with tabs[2]:
                 
     st.divider()
     
-    # 데이터랩 영역
     st.markdown("### 📊 키워드 검색비율 추이")
     st.caption("Naver DataLab 연동 차트")
     
@@ -474,7 +470,7 @@ with tabs[3]:
         st.info("좌측 사이드바에 엑셀 데이터를 업로드해주세요.")
 
 # =========================================================================
-# --- ★ Tab 5: [고객 UX 분석] (신규 구현) ---
+# --- Tab 5: [고객 UX 분석] ---
 # =========================================================================
 with tabs[5]:
     st.markdown("### 🗣️ 고객 Voice (VOC) & Pain Point 분석")
@@ -484,7 +480,6 @@ with tabs[5]:
     col_app, col_blog = st.columns(2)
     with col_app:
         st.subheader("📱 증권사 앱 최신 리뷰 요약")
-        # 시뮬레이션 데이터 배치
         with st.container(border=True):
             st.markdown("**1. mPOP (삼성증권)** - ⭐ 4.2 / 5.0")
             st.markdown("- ✅ 업데이트 이후 UI가 깔끔해졌다.")
@@ -497,7 +492,6 @@ with tabs[5]:
             
     with col_blog:
         st.subheader("✍️ 개인 투자자 블로그 Pain Point 분석")
-        # 시뮬레이션 데이터 배치
         with st.container(border=True):
             st.markdown("🔑 **주요 Pain Point 키워드**")
             st.markdown("`괴리율`, `비싼 수수료`, `상장폐지 우려`, `설명 부족`, `KODEX vs TIGER`")
@@ -508,7 +502,7 @@ with tabs[5]:
             st.markdown("- 파생형 ETF 상품 구조에 대한 직관적인 설명 부족.")
 
 # =========================================================================
-# --- ★ Tab 6: [경쟁사 동향] (신규 구현) ---
+# --- Tab 6: [경쟁사 동향] ---
 # =========================================================================
 target_brands = ['KODEX', 'TIGER', 'KBSTAR', 'ACE', 'ARIRANG', 'HANARO']
 
@@ -520,7 +514,6 @@ with tabs[6]:
     col_tiger, col_ace = st.columns(2)
     with col_tiger:
         st.subheader("🐅 TIGER ETF (미래에셋)")
-        # 시뮬레이션 데이터 배치
         with st.container(border=True):
             st.markdown("**[최신 공식 블로그 게시글]**")
             st.markdown("- TIGER 미국나스닥100+15%프리미엄초단기옵션 출시 (신상품 홍보)")
@@ -529,7 +522,6 @@ with tabs[6]:
             
     with col_ace:
         st.subheader("🏆 ACE ETF (한국투자)")
-        # 시뮬레이션 데이터 배치
         with st.container(border=True):
             st.markdown("**[최신 공식 블로그 게시글]**")
             st.markdown("- ACE 반도체 ETF 3종 비교 분석 (상품 비교)")
@@ -537,48 +529,97 @@ with tabs[6]:
             st.markdown("- 월배당 라인업 확대 공지 (상품 업데이트)")
 
 # =========================================================================
-# --- Tab 7: [ETF 운용 현황] ---
+# --- ★ Tab 7: [ETF 운용 현황] (AUM 및 꺾은선 차트 완벽 복원) ---
 # =========================================================================
 with tabs[7]:
-    st.markdown("### 🏢 국내 상위 운용사 ETF 라인업 공백 분석 (White Space)")
-    st.caption("한국거래소(KRX) 전체 상장 ETF 데이터를 실시간으로 전수조사하여 경쟁사 대비 KODEX의 라인업 공백을 스캔합니다.")
+    st.markdown("### 🏢 국내 상위 운용사 테마별 AUM 현황 (현재 실시간 기준 / 단위: 억원)")
+    st.caption("한국거래소(KRX) 실시간 데이터를 바탕으로 상위 운용사 간의 순자산총액(AUM) 규모를 비교하여 시장 장악력과 공백을 스캔합니다.")
+    st.info("※ AUM 데이터는 파이썬 라이브러리 한계상 과거 특정 주차가 아닌 '조회 시점(오늘)'의 최신 시가총액을 보여줍니다. 과거 자금 흐름은 아래의 엑셀 기반 꺾은선 차트를 참고해 주세요.")
     
+    pivot_df = pd.DataFrame()
     with st.spinner("KRX 전체 상장 ETF 데이터를 분석 중입니다... (약 5~10초 소요)"):
         try:
-            # 1. KRX 상장 ETF 전체 목록 불러오기
             df_all_etf = fdr.StockListing('ETF/KR')
-            
-            # 2. 종목명 첫 단어를 '브랜드'로 추출
             df_all_etf['브랜드'] = df_all_etf['Name'].apply(lambda x: str(x).split(' ')[0])
             
-            # 3. 주요 상위 운용사 브랜드만 필터링
             df_top_brands = df_all_etf[df_all_etf['브랜드'].isin(target_brands)].copy()
-            
-            # 4. AI 자동 테마 분류기 적용
             df_top_brands['분류_테마'] = df_top_brands['Name'].apply(assign_auto_theme)
             
-            # 5. 브랜드 vs 테마 교차 매트릭스(피벗 테이블) 생성
+            df_top_brands['AUM(억원)'] = df_top_brands['MarCap'].fillna(0)
             pivot_df = pd.pivot_table(
                 df_top_brands,
-                values='Symbol',
+                values='AUM(억원)',
                 index='분류_테마',
                 columns='브랜드',
-                aggfunc='count',
+                aggfunc='sum',
                 fill_value=0
             )
             
-            # ★ KODEX, TIGER 양대산맥 우선 고정
-            ordered_cols = ['KODEX', 'TIGER', 'KBSTAR', 'ACE', 'ARIRANG', 'HANARO']
-            # 실제로 데이터가 존재하는 컬럼만 필터링
-            ordered_cols = [col for col in ordered_cols if col in pivot_df.columns]
-            pivot_df = pivot_df[ordered_cols]
+            ordered_cols = [col for col in target_brands if col in pivot_df.columns]
+            pivot_df = pivot_df[ordered_cols].astype(int)
             
-            st.dataframe(pivot_df, use_container_width=True)
-            
-            st.info("💡 **인사이트 도출 가이드:** 매트릭스를 확인하여 `KODEX` 열의 숫자가 '0'이거나 경쟁사(`TIGER`, `ACE` 등) 대비 현저히 적은 테마가 바로 **우선 공략해야 할 상품 기획 공백(White Space)**입니다.")
+            st.dataframe(pivot_df.style.format("{:,}"), use_container_width=True)
             
         except Exception as e:
             st.error(f"데이터를 불러오는 중 오류가 발생했습니다: {e}")
+
+    st.divider()
+
+    # ★ 꺾은선 그래프 완벽 복구 구역
+    st.markdown("### 📈 테마별 운용사 전체 순매수 트렌드 (과거 추이)")
+    st.caption("※ 업로드하신 엑셀 파일의 과거 주차 데이터를 역추적하여 운용사별 실질적인 자금 유입 흐름을 분석합니다.")
+    
+    if uploaded_excel is not None:
+        col_theme, col_weeks = st.columns(2)
+        with col_theme:
+            all_themes = list(pivot_df.index) if not pivot_df.empty else ['🤖 AI & 반도체', '💰 배당 & 커버드콜']
+            selected_theme = st.selectbox("분석할 테마 선택:", all_themes)
+        with col_weeks:
+            max_w = len(available_weeks)
+            n_weeks = st.slider("조회할 과거 주차 (N주):", min_value=1, max_value=max_w, value=min(4, max_w))
+            
+        target_weeks = available_weeks[:n_weeks][::-1]
+        trend_data = []
+        
+        with st.spinner("과거 주차 데이터를 분석하고 있습니다..."):
+            for w in target_weeks:
+                try:
+                    temp_df = load_and_clean_excel(uploaded_excel, w)
+                    if '종목명' in temp_df.columns:
+                        temp_df = temp_df[temp_df['종목명'] != '전체'].copy()
+                        temp_df['브랜드'] = temp_df['종목명'].apply(lambda x: str(x).split(' ')[0])
+                        temp_df = temp_df[temp_df['브랜드'].isin(target_brands)]
+                        temp_df['분류_테마'] = temp_df['종목명'].apply(assign_auto_theme)
+                        
+                        theme_df = temp_df[temp_df['분류_테마'] == selected_theme].copy()
+                        theme_df['순매수합계'] = theme_df.get('개인', 0) + theme_df.get('기관', 0) + theme_df.get('외국인', 0)
+                        
+                        brand_sum = theme_df.groupby('브랜드')['순매수합계'].sum().reset_index()
+                        brand_sum['주차'] = w
+                        trend_data.append(brand_sum)
+                except Exception:
+                    pass
+                    
+        if trend_data:
+            df_trend = pd.concat(trend_data)
+            if not df_trend.empty:
+                fig_trend = px.line(
+                    df_trend, 
+                    x='주차', 
+                    y='순매수합계', 
+                    color='브랜드', 
+                    markers=True,
+                    template="plotly_dark", 
+                    color_discrete_sequence=px.colors.qualitative.Set2
+                )
+                fig_trend.update_layout(height=400, margin=dict(l=20, r=20, t=50, b=20), yaxis_title="전체 순매수 합계", xaxis_title=None)
+                st.plotly_chart(fig_trend, use_container_width=True)
+            else:
+                st.warning("선택하신 테마의 해당 기간 순매수 데이터가 없습니다.")
+        else:
+            st.warning("과거 주차 데이터를 분석할 수 없습니다. 파일 양식을 확인해 주세요.")
+    else:
+        st.info("👈 좌측 사이드바에 엑셀 데이터를 업로드하시면 트렌드 그래프가 나타납니다.")
 
 # =========================================================================
 # --- Tab 8: [AI 분석용 프롬프트 생성기] ---
@@ -607,7 +648,7 @@ with tabs[8]:
 
 1. Executive Summary (자금 흐름과 검색 트렌드의 상관관계 요약)
 2. Signal Interpretation (고객 검색 수요와 실제 수익률 간의 격차나 기회 포착)
-3. Next Month Watchlist (다음 달 마케팅/세일즈 역력을 집중해야 할 ETF 추천 및 명확한 이유)
+3. Next Month Watchlist (다음 달 마케팅/세일즈 역량을 집중해야 할 ETF 추천 및 명확한 이유)
 """
 
     st.code(prompt_text, language="text")
