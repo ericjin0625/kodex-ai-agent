@@ -35,7 +35,7 @@ def assign_auto_theme(etf_name):
     else:
         return '📦 기타 섹터/테마'
 
-# 2. 실시간 데이터 파싱 함수 (뉴스 연동)
+# 2. 실시간 데이터 파싱 함수 (뉴스 연동 - ★ 한줄 요약 로직 제거 및 뼈대 최적화)
 @st.cache_data(ttl=3600)
 def get_realtime_news(keyword="ETF"):
     url = f"https://news.google.com/rss/search?q={keyword}+when:7d&hl=ko&gl=KR&ceid=KR:ko"
@@ -50,32 +50,19 @@ def get_realtime_news(keyword="ETF"):
             pubDate = item.find('pubDate').text[5:16] if item.find('pubDate') is not None else ""
             source = item.find('source').text if item.find('source') is not None else "Google News"
             
-            desc_html = item.find('description').text if item.find('description') is not None else ""
-            desc_text = BeautifulSoup(desc_html, 'html.parser').get_text(separator=' ', strip=True)
-            
-            clean_text = desc_text.split("...")[0].strip() if "..." in desc_text else desc_text
-            if "다." in clean_text:
-                one_line = clean_text.split("다.")[0].strip() + "다."
-            else:
-                one_line = clean_text
-                
-            if len(one_line) < 10 and desc_text:
-                one_line = desc_text[:60] + "..."
-            
             news_list.append({
                 "게시일 / 출처": f"{pubDate} / {source}", 
                 "원본제목": title, 
-                "링크": link,
-                "본문 한 줄 요약": f"👉 {one_line}"
+                "링크": link
             })
             
         if not news_list:
-            return pd.DataFrame([{"게시일 / 출처": "-", "원본제목": "뉴스 검색 결과가 없습니다.", "링크": "", "본문 한 줄 요약": "-"}])
+            return pd.DataFrame([{"게시일 / 출처": "-", "원본제목": "뉴스 검색 결과가 없습니다.", "링크": ""}])
             
         return pd.DataFrame(news_list)
         
     except Exception as e:
-        return pd.DataFrame([{"게시일 / 출처": "오류", "원본제목": "실시간 뉴스를 불러올 수 없습니다.", "링크": "", "본문 한 줄 요약": str(e)}])
+        return pd.DataFrame([{"게시일 / 출처": "오류", "원본제목": "실시간 뉴스를 불러올 수 없습니다.", "링크": ""}])
 
 @st.cache_data(ttl=86400)
 def get_etf_mapping():
@@ -112,7 +99,7 @@ def generate_market_sentiment(news_df):
     
     all_titles = " ".join(news_df["원본제목"].astype(str).tolist())
     if any(kw in all_titles for kw in ['강세', '상승', '급등', '반등']):
-        return "☀️ 오늘의 시장 심리 1줄 요약: 시장 상승세 속 금리 인하 기대감으로 인한 성장주형 및 고배당 ETF로의 자금 유입이 눈에 띕니다."
+        return "☀️ 오늘의 시장 심리 1줄 요약: 시장 상승세 속 금리 인하 기대감으로 인한 성장주형 및 고배당 ETF로의 자금 유입이 눈에 땕니다."
     elif any(kw in all_titles for kw in ['하락', '약세', '급락', '둔화']):
         return "☁️ 오늘의 시장 심리 1줄 요약: 금리 우려 재점화로 인한 방어적 포트폴리오 구축 전략이 우세하며 채권 및 인버스 ETF 관심이 고조됩니다."
     return "⚖️ 오늘의 시장 심리 1줄 요약: 특별한 모멘텀 없는 혼조세 속에서 섹터별 테마별 순환매가 지속되고 있습니다."
@@ -140,7 +127,7 @@ with col_week:
     default_idx = 1 if len(available_weeks) > 1 else 0
     selected_week = st.selectbox("주차 (최대 6개월 전까지 선택 가능):", options=available_weeks, index=default_idx)
 
-# ★ 탭 순서 논리적 재배치 및 신규 탭 추가 (기존 탭 100% 보존)
+# 탭 순서 배치
 tab_names = [
     "[Weekly Info.]", "[ETF 순매수 등락, 수익률]", "[뉴스 & 검색량 트렌드]", 
     "[주간 거래량 추이]", "[진행 이벤트]", 
@@ -355,7 +342,7 @@ with tabs[1]:
                 st.warning("직전 주차 데이터가 없어 증감률을 비교할 수 없습니다.")
 
 # =========================================================================
-# --- Tab 2: [뉴스 & 검색량 트렌드] ---
+# --- Tab 2: [뉴스 & 검색량 트렌드] (★ "👉 요약" 코드 제거 패치 완료) ---
 # =========================================================================
 with tabs[2]:
     st.markdown("### 📰 실시간 마켓 센티먼트 및 뉴스 요약")
@@ -374,7 +361,7 @@ with tabs[2]:
                 with st.container(border=True):
                     st.caption(f"📅 {row['게시일 / 출처']}")
                     st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:15px; font-weight:bold; color:#4da6ff; text-decoration:none;'>{row['원본제목']} 🔗</a>", unsafe_allow_html=True)
-                    st.markdown(f"<p style='font-size:13px; margin-top:4px; color:#cccccc;'>{row['본문 한 줄 요약']}</p>", unsafe_allow_html=True)
+                    # ★ 요약 파트 완전 도려냄
         else:
             st.dataframe(df_real_news, use_container_width=True, hide_index=True)
                 
@@ -504,8 +491,6 @@ with tabs[5]:
 # =========================================================================
 # --- Tab 6: [경쟁사 동향] ---
 # =========================================================================
-target_brands = ['KODEX', 'TIGER', 'KBSTAR', 'ACE', 'ARIRANG', 'HANARO']
-
 with tabs[6]:
     st.markdown("### 🏢 타사 공식 마케팅 채널 동향")
     st.caption("경쟁 운용사(TIGER, ACE 등)의 공식 블로그 및 채널 업데이트 내용을 모니터링하여 마케팅 소구점(Selling Point)을 파악합니다.")
@@ -526,7 +511,7 @@ with tabs[6]:
             st.markdown("**[최신 공식 블로그 게시글]**")
             st.markdown("- ACE 반도체 ETF 3종 비교 분석 (상품 비교)")
             st.markdown("- ISA 계좌 활용 꿀팁 with ACE (마케팅 프로모션)")
-            st.markdown("- 월배당 라인업 확대 공지 (상품 업데이트)")
+            st.markdown("- 월배당 확대 공지 (상품 업데이트)")
 
 # =========================================================================
 # --- Tab 7: [ETF 운용 현황] ---
@@ -621,21 +606,23 @@ with tabs[7]:
         st.info("👈 좌측 사이드바에 엑셀 데이터를 업로드하시면 트렌드 그래프가 나타납니다.")
 
 # =========================================================================
-# --- ★ Tab 8: [글로벌 공백 & 정책 동향] (신규 구현) ---
+# --- Tab 8: [글로벌 공백 & 정책 동향] (★ 동적 드롭다운 & 뉴스 요약 제거) ---
 # =========================================================================
 with tabs[8]:
     st.markdown("### 🇺🇸 글로벌 혁신 구조 공백 분석 (US Mega Trends vs KODEX)")
     st.caption("미국 ETF 시장에서 최근 자금 유입이 폭발하고 있는 '금융 혁신 구조'와 KODEX 라인업을 교차 대조하여 선점 기회를 발굴합니다.")
     
-    # AI가 분석한 미국 혁신 구조 매트릭스 시뮬레이션
+    # 1. 상단 마켓 트렌드 마스터 프레임 설정
+    raw_keywords = [
+        "🎯 타겟 인컴 (Defined Outcome / 버퍼형)", 
+        "⚡ 0DTE 초단기 옵션 커버드콜", 
+        "🪙 가상자산 현물 (Bitcoin/Ether)", 
+        "🏢 기업성장집합투자기구 (BDC)",
+        "🛡️ 100% 하방 방어형 (100% Buffer)"
+    ]
+    
     us_trends_df = pd.DataFrame({
-        "혁신 상품 구조 (미국 메가 트렌드)": [
-            "🎯 타겟 인컴 (Defined Outcome / 버퍼형)", 
-            "⚡ 0DTE 초단기 옵션 커버드콜", 
-            "🪙 가상자산 현물 (Bitcoin/Ether)", 
-            "🏢 기업성장집합투자기구 (BDC)",
-            "🛡️ 100% 하방 방어형 (100% Buffer)"
-        ],
+        "혁신 상품 구조 (미국 메가 트렌드)": raw_keywords,
         "미국 시장 AUM 규모": ["$ 35B+", "$ 55B+", "$ 70B+", "$ 40B+", "$ 20B+"],
         "최근 3개월 유입 강도": ["🔥🔥 강세", "🔥🔥🔥 최고조", "🔥🔥🔥 최고조", "🔥 꾸준함", "🔥🔥 강세"],
         "KODEX 라인업 현황": ["공백 (0개)", "일부 유사 (1개)", "규제 한계 (0개)", "규제 한계 (0개)", "공백 (0개)"],
@@ -649,42 +636,49 @@ with tabs[8]:
     })
     
     st.dataframe(us_trends_df, use_container_width=True, hide_index=True)
-    
     st.info("💡 **인사이트 도출 가이드:** '공백' 상태인 혁신 구조는 즉각적인 상품 기획 회의 안건으로 상정하고, '규제 한계' 상태인 테마는 하단의 규제 동향 뉴스 피드를 통해 당국의 해소 타이밍을 엿봐야 합니다.")
-    
     st.divider()
 
-    # 정책 시그널 핀포인트 크롤링
+    # ★ 2. 동적 드롭다운 세팅 (표의 키워드 추출용 가시성 텍스트 매핑)
     st.markdown("### ⚖️ 규제 및 정책 시그널 집중 모니터링 (Regulatory Signals)")
     st.caption("국내 공백의 주요 원인인 '규제 장벽' 해소 타이밍을 선제적으로 포착하기 위해 금융위 법안 및 당국 기류를 실시간 스크랩합니다.")
     
-    col_crypto, col_bdc = st.columns(2)
+    cleaned_options = [
+        "타겟 인컴 ETF 버퍼형",
+        "0DTE 초단기 옵션 커버드콜 ETF",
+        "가상자산 비트코인 현물 ETF 금융위",
+        "BDC 기업성장집합투자기구 대체투자",
+        "하방 방어형 버퍼 ETF"
+    ]
     
-    with col_crypto:
-        st.subheader("🪙 가상자산 현물 ETF 기류")
-        with st.spinner("가상자산 규제 뉴스를 수집 중입니다..."):
-            # 가상자산/비트코인 ETF 관련 핀포인트 뉴스
-            df_crypto_news = get_realtime_news("가상자산 비트코인 현물 ETF 금융위 허용")
-            if "링크" in df_crypto_news.columns and df_crypto_news["링크"].iloc[0] != "":
-                for idx, row in df_crypto_news.iterrows():
+    # 드롭바 매핑 사전 구축
+    display_to_query = dict(zip(raw_keywords, cleaned_options))
+    
+    # UI 배치용 드롭다운 렌더링
+    selected_trend_label = st.selectbox(
+        "🔍 분석 및 실시간 뉴스 크롤링을 진행할 미국 혁신 테마 선택:",
+        options=raw_keywords,
+        index=2 # 기본값: 가상자산 현물
+    )
+    
+    # 선택된 라벨에 대한 쿼리 자동 바인딩
+    active_query = display_to_query[selected_trend_label]
+    
+    # 3. 실시간 크롤링 연동 및 렌더링 (★ 손가락 요약 완전 제거 및 카드 가독성 확보)
+    st.markdown(f"#### 📡 `[실시간 연동]` {selected_trend_label} 관련 정책/규제 뉴스")
+    with st.spinner(f"'{selected_trend_label}' 관련 최신 동향을 수집 중입니다..."):
+        df_gap_news = get_realtime_news(active_query)
+        
+        if "링크" in df_gap_news.columns and df_gap_news["링크"].iloc[0] != "":
+            # 2열 격자 배치로 시각적 균형감 부여
+            cols_grid = st.columns(2)
+            for idx, row in df_gap_news.iterrows():
+                with cols_grid[idx % 2]:
                     with st.container(border=True):
                         st.caption(f"📅 {row['게시일 / 출처']}")
-                        st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:14px; font-weight:bold; color:#ffb04d; text-decoration:none;'>[규제기류] {row['원본제목']} 🔗</a>", unsafe_allow_html=True)
-            else:
-                st.info("관련 최신 정책 뉴스가 없습니다.")
-
-    with col_bdc:
-        st.subheader("🏢 BDC & 대체투자 규제 동향")
-        with st.spinner("BDC 및 대체투자 뉴스를 수집 중입니다..."):
-            # BDC/대체투자 관련 핀포인트 뉴스
-            df_bdc_news = get_realtime_news("BDC 기업성장집합투자기구 대체투자 ETF 규제완화")
-            if "링크" in df_bdc_news.columns and df_bdc_news["링크"].iloc[0] != "":
-                for idx, row in df_bdc_news.iterrows():
-                    with st.container(border=True):
-                        st.caption(f"📅 {row['게시일 / 출처']}")
-                        st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:14px; font-weight:bold; color:#ffb04d; text-decoration:none;'>[법안동향] {row['원본제목']} 🔗</a>", unsafe_allow_html=True)
-            else:
-                st.info("관련 최신 법안 뉴스가 없습니다.")
+                        st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:14px; font-weight:bold; color:#ffb04d; text-decoration:none;'>[규제/법안 동향] {row['원본제목']} 🔗</a>", unsafe_allow_html=True)
+        else:
+            st.info("관련된 최신 정책 뉴스 피드가 존재하지 않습니다.")
 
 # =========================================================================
 # --- Tab 9: [AI 분석용 프롬프트 생성기] ---
