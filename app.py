@@ -140,12 +140,12 @@ with col_week:
     default_idx = 1 if len(available_weeks) > 1 else 0
     selected_week = st.selectbox("주차 (최대 6개월 전까지 선택 가능):", options=available_weeks, index=default_idx)
 
-# 탭 순서
+# ★ 탭 순서 논리적 재배치 및 신규 탭 추가 (기존 탭 100% 보존)
 tab_names = [
     "[Weekly Info.]", "[ETF 순매수 등락, 수익률]", "[뉴스 & 검색량 트렌드]", 
     "[주간 거래량 추이]", "[진행 이벤트]", 
     "[고객 UX 분석]", "[경쟁사 동향]", 
-    "[ETF 운용 현황]", "[AI 분석용 프롬프트]"
+    "[ETF 운용 현황]", "[글로벌 공백 & 정책 동향]", "[AI 분석용 프롬프트]"
 ]
 tabs = st.tabs(tab_names)
 
@@ -529,7 +529,7 @@ with tabs[6]:
             st.markdown("- 월배당 라인업 확대 공지 (상품 업데이트)")
 
 # =========================================================================
-# --- ★ Tab 7: [ETF 운용 현황] (AUM 및 꺾은선 차트 완벽 복원) ---
+# --- Tab 7: [ETF 운용 현황] ---
 # =========================================================================
 with tabs[7]:
     st.markdown("### 🏢 국내 상위 운용사 테마별 AUM 현황 (현재 실시간 기준 / 단위: 억원)")
@@ -565,7 +565,6 @@ with tabs[7]:
 
     st.divider()
 
-    # ★ 꺾은선 그래프 완벽 복구 구역
     st.markdown("### 📈 테마별 운용사 전체 순매수 트렌드 (과거 추이)")
     st.caption("※ 업로드하신 엑셀 파일의 과거 주차 데이터를 역추적하여 운용사별 실질적인 자금 유입 흐름을 분석합니다.")
     
@@ -622,9 +621,75 @@ with tabs[7]:
         st.info("👈 좌측 사이드바에 엑셀 데이터를 업로드하시면 트렌드 그래프가 나타납니다.")
 
 # =========================================================================
-# --- Tab 8: [AI 분석용 프롬프트 생성기] ---
+# --- ★ Tab 8: [글로벌 공백 & 정책 동향] (신규 구현) ---
 # =========================================================================
 with tabs[8]:
+    st.markdown("### 🇺🇸 글로벌 혁신 구조 공백 분석 (US Mega Trends vs KODEX)")
+    st.caption("미국 ETF 시장에서 최근 자금 유입이 폭발하고 있는 '금융 혁신 구조'와 KODEX 라인업을 교차 대조하여 선점 기회를 발굴합니다.")
+    
+    # AI가 분석한 미국 혁신 구조 매트릭스 시뮬레이션
+    us_trends_df = pd.DataFrame({
+        "혁신 상품 구조 (미국 메가 트렌드)": [
+            "🎯 타겟 인컴 (Defined Outcome / 버퍼형)", 
+            "⚡ 0DTE 초단기 옵션 커버드콜", 
+            "🪙 가상자산 현물 (Bitcoin/Ether)", 
+            "🏢 기업성장집합투자기구 (BDC)",
+            "🛡️ 100% 하방 방어형 (100% Buffer)"
+        ],
+        "미국 시장 AUM 규모": ["$ 35B+", "$ 55B+", "$ 70B+", "$ 40B+", "$ 20B+"],
+        "최근 3개월 유입 강도": ["🔥🔥 강세", "🔥🔥🔥 최고조", "🔥🔥🔥 최고조", "🔥 꾸준함", "🔥🔥 강세"],
+        "KODEX 라인업 현황": ["공백 (0개)", "일부 유사 (1개)", "규제 한계 (0개)", "규제 한계 (0개)", "공백 (0개)"],
+        "전략적 제언 (Action Plan)": [
+            "즉시 벤치마킹 및 상품 기획 TF 가동", 
+            "분배율 및 마케팅 메시지 고도화", 
+            "하단 정책 시그널 집중 모니터링", 
+            "법안 통과 즉시 선점 준비", 
+            "하락장 방어 포트폴리오로 즉시 도입 검토"
+        ]
+    })
+    
+    st.dataframe(us_trends_df, use_container_width=True, hide_index=True)
+    
+    st.info("💡 **인사이트 도출 가이드:** '공백' 상태인 혁신 구조는 즉각적인 상품 기획 회의 안건으로 상정하고, '규제 한계' 상태인 테마는 하단의 규제 동향 뉴스 피드를 통해 당국의 해소 타이밍을 엿봐야 합니다.")
+    
+    st.divider()
+
+    # 정책 시그널 핀포인트 크롤링
+    st.markdown("### ⚖️ 규제 및 정책 시그널 집중 모니터링 (Regulatory Signals)")
+    st.caption("국내 공백의 주요 원인인 '규제 장벽' 해소 타이밍을 선제적으로 포착하기 위해 금융위 법안 및 당국 기류를 실시간 스크랩합니다.")
+    
+    col_crypto, col_bdc = st.columns(2)
+    
+    with col_crypto:
+        st.subheader("🪙 가상자산 현물 ETF 기류")
+        with st.spinner("가상자산 규제 뉴스를 수집 중입니다..."):
+            # 가상자산/비트코인 ETF 관련 핀포인트 뉴스
+            df_crypto_news = get_realtime_news("가상자산 비트코인 현물 ETF 금융위 허용")
+            if "링크" in df_crypto_news.columns and df_crypto_news["링크"].iloc[0] != "":
+                for idx, row in df_crypto_news.iterrows():
+                    with st.container(border=True):
+                        st.caption(f"📅 {row['게시일 / 출처']}")
+                        st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:14px; font-weight:bold; color:#ffb04d; text-decoration:none;'>[규제기류] {row['원본제목']} 🔗</a>", unsafe_allow_html=True)
+            else:
+                st.info("관련 최신 정책 뉴스가 없습니다.")
+
+    with col_bdc:
+        st.subheader("🏢 BDC & 대체투자 규제 동향")
+        with st.spinner("BDC 및 대체투자 뉴스를 수집 중입니다..."):
+            # BDC/대체투자 관련 핀포인트 뉴스
+            df_bdc_news = get_realtime_news("BDC 기업성장집합투자기구 대체투자 ETF 규제완화")
+            if "링크" in df_bdc_news.columns and df_bdc_news["링크"].iloc[0] != "":
+                for idx, row in df_bdc_news.iterrows():
+                    with st.container(border=True):
+                        st.caption(f"📅 {row['게시일 / 출처']}")
+                        st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:14px; font-weight:bold; color:#ffb04d; text-decoration:none;'>[법안동향] {row['원본제목']} 🔗</a>", unsafe_allow_html=True)
+            else:
+                st.info("관련 최신 법안 뉴스가 없습니다.")
+
+# =========================================================================
+# --- Tab 9: [AI 분석용 프롬프트 생성기] ---
+# =========================================================================
+with tabs[9]:
     st.markdown("### 🧠 AI 분석용 프롬프트 자동 생성기")
     st.caption("실시간으로 연산된 자금 흐름과 고객 검색 트렌드 데이터를 복사하여, 사용 중인 AI에 직접 붙여넣고 완벽한 인사이트를 도출하세요.")
 
