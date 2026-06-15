@@ -198,12 +198,31 @@ def get_real_returns(symbols_dict, etf_names):
         else: returns_dict[name] = 0.0
     return returns_dict
 
+# 시장 심리 3줄 요약 (불릿포인트 형태)로 업그레이드
 def generate_market_sentiment(news_df):
-    if news_df.empty or news_df["원본제목"].iloc[0].startswith("'"): return "시장 심리를 분석할 충분한 뉴스 데이터가 없습니다."
+    if news_df.empty or news_df["원본제목"].iloc[0].startswith("'"): 
+        return "<ul><li>뉴스 데이터가 충분하지 않아 시장 심리를 분석할 수 없습니다.</li></ul>"
+    
     all_titles = " ".join(news_df["원본제목"].astype(str).tolist())
-    if any(kw in all_titles for kw in ['강세', '상승', '급등', '반등']): return "☀️ 오늘의 시장 심리 1줄 요약: 시장 상승세 속 금리 인하 기대감으로 인한 성장주형 및 고배당 ETF로 자금 유입이 기대됩니다."
-    elif any(kw in all_titles for kw in ['하락', '약세', '급락', '둔화']): return "☁️ 오늘의 시장 심리 1줄 요약: 금리 우려 재점화로 방어적 포트폴리오 구축 전략이 우세하며 채권 및 인버스 ETF 관심이 고조됩니다."
-    return "⚖️ 오늘의 시장 심리 1줄 요약: 특별한 모멘텀 없는 혼조세 속에서 섹터별 테마별 순환매가 지속되고 있습니다."
+    
+    bullet1 = "<li>📈 <b>전반적 흐름</b>: "
+    bullet2 = "<li>💡 <b>수급 모멘텀</b>: "
+    bullet3 = "<li>⚠️ <b>투자자 심리</b>: "
+
+    if any(kw in all_titles for kw in ['강세', '상승', '급등', '반등']): 
+        bullet1 += "시장 상승세 속에서 금리 인하 기대감이 시장을 주도하고 있습니다.</li>"
+        bullet2 += "성장주 및 고배당 ETF를 중심으로 자금 유입이 뚜렷하게 나타납니다.</li>"
+        bullet3 += "단기 차익 실현보다는 중장기적 관점의 매수 심리가 우세합니다.</li>"
+    elif any(kw in all_titles for kw in ['하락', '약세', '급락', '둔화']): 
+        bullet1 += "금리 및 매크로 우려 재점화로 시장 변동성이 확대되는 구간입니다.</li>"
+        bullet2 += "채권 및 인버스 ETF 등 방어적 포트폴리오로 자금이 이동하고 있습니다.</li>"
+        bullet3 += "위험 자산 회피 심리가 강해지며 관망세가 짙어지고 있습니다.</li>"
+    else: 
+        bullet1 += "특별한 상승/하락 모멘텀 없이 시장 전반이 혼조세를 보이고 있습니다.</li>"
+        bullet2 += "섹터별, 테마별로 짧은 주기의 순환매 장세가 지속 중입니다.</li>"
+        bullet3 += "명확한 방향성이 부재하여 투자자들의 신중한 접근이 요구됩니다.</li>"
+        
+    return f"<ul style='margin-bottom:0;'>{bullet1}{bullet2}{bullet3}</ul>"
 
 @st.cache_data
 def load_and_clean_excel(file, sheet_name):
@@ -219,16 +238,14 @@ def load_and_clean_excel(file, sheet_name):
 
 
 # =========================================================================
-# ★ 2. 메인 화면 3단 분할 비율 조정 (메인 85% / 우측 컨트롤 타워 15%로 날씬하게)
+# ★ 메인 화면 3단 분할 (메인 85% / 우측 컨트롤 타워 15%)
 # =========================================================================
-# 기존 [4, 0.1, 1.2]에서 컨트롤 타워의 너비를 대폭 줄여 65% 수준인 0.8로 세팅
 col_main, col_spacing, col_right = st.columns([4.5, 0.1, 0.8])
 
 # ---------------------------------------------------------
-# [우측 패널] 타이틀 & 얇아진 데이터 컨트롤 센터
+# [우측 패널] 타이틀 & 데이터 컨트롤 센터
 # ---------------------------------------------------------
 with col_right:
-    # 1. 우측 상단 메인 텍스트 (타이틀 폰트 크기 대폭 확대: 24px -> 36px)
     st.markdown(
         """
         <div style='text-align: right; margin-bottom: 25px; margin-top: 5px;'>
@@ -240,16 +257,13 @@ with col_right:
         """, unsafe_allow_html=True
     )
 
-    # 2. 데이터 컨트롤 타워 (주차 선택 최상단 배치)
     with st.container(border=True):
         st.markdown("<h4 style='text-align:center; font-size: 16px;'>🎛️ 데이터 컨트롤</h4>", unsafe_allow_html=True)
         st.divider()
         
-        # 엑셀 업로더 (주차 추출용으로 먼저 렌더링되지만 UI 배치는 아래로)
         available_weeks = ["데이터 없음"]
-        uploaded_excel_temp = st.session_state.get('excel_main') # 상태 보존용
+        uploaded_excel_temp = st.session_state.get('excel_main') 
         
-        # UI 배치를 위한 Placeholder
         week_placeholder = st.empty()
         st.divider()
         uploaded_excel = st.file_uploader("📈 ETF 순매수 엑셀", type=["xlsx", "xls"], key="excel_main")
@@ -262,24 +276,23 @@ with col_right:
                     available_weeks = sheet_names[::-1] 
             except: pass
 
-        # Placeholder에 주차 선택 박스를 엑셀 업로드 위로 주입
         default_idx = 1 if len(available_weeks) > 1 else 0
         selected_week = week_placeholder.selectbox("📆 조회 기준 주차", options=available_weeks, index=default_idx)
         
         st.divider()
         uploaded_dl = st.file_uploader("🔍 DataLab 검색량", type=["csv", "xlsx", "xls"], key="dl_main")
 
-    # 3. 우측 하단 로고
     st.markdown("<br><br><br>", unsafe_allow_html=True)
     st.markdown("<p style='text-align:right; color: #64748b; font-size: 10px; letter-spacing: 2px; font-weight: 600; margin-bottom: 10px;'>POWERED BY</p>", unsafe_allow_html=True)
     
-    try:
-        # 공간이 좁아졌으므로 우측 정렬로 꽉 차게 배치
-        st.image("20220927092603_1800954_640_640.png", use_container_width=True)
-        st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
-        st.image("커리어하이 로고(하양).png", use_container_width=True)
-    except:
-        st.markdown("<p style='text-align:right; color:#94a3b8; font-size:12px;'>삼성자산운용 x 커리어하이</p>", unsafe_allow_html=True)
+    _, col_logo_r = st.columns([1, 1.5])
+    with col_logo_r:
+        try:
+            st.image("20220927092603_1800954_640_640.png", use_container_width=True)
+            st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
+            st.image("커리어하이 로고(하양).png", use_container_width=True)
+        except:
+            st.markdown("<p style='text-align:right; color:#94a3b8; font-size:12px;'>삼성자산운용 x 커리어하이</p>", unsafe_allow_html=True)
 
 # ---------------------------------------------------------
 # [중앙 화면] 가로형 탭 복구 (데이터 100% 실시간 자동 연동)
@@ -376,18 +389,22 @@ with col_main:
         else:
             st.info("👉 우측 패널에 ETF 순매수 엑셀 데이터를 업로드해주세요.")
 
-    # === Tab 2: 순매수 등락, 수익률 ===
+    # === Tab 2: 순매수 등락, 수익률 (레이아웃 가로 배치 및 드롭다운 이동 수정) ===
     with tabs[2]:
         if uploaded_excel is not None and selected_week != "데이터 없음" and len(available_weeks) > 1:
             st.markdown("### 📈 기간별 ETF 순매수 현황")
-            col_start, col_text, col_slider = st.columns([1.5, 3.5, 3])
+            col_start, col_text, col_slider, col_inv = st.columns([1.5, 3, 3, 1.5])
             with col_start:
                 start_week = st.selectbox("시작 주차:", options=available_weeks[::-1], index=0, key="start_week")
             with col_text:
-                st.markdown(f"<p style='margin-top: 30px; font-weight: bold;'>부터 &nbsp;&nbsp; {selected_week} (현재 선택 주차) 까지의</p>", unsafe_allow_html=True)
+                st.markdown(f"<p style='margin-top: 30px; font-weight: bold;'>부터 &nbsp;&nbsp; {selected_week} 까지의</p>", unsafe_allow_html=True)
             with col_slider:
                 top_n_tab2 = st.slider("TOP N개 ETF 순매수 순위:", 10, 100, 50, 10, key="top_n_tab2", label_visibility="collapsed")
                 st.markdown(f"<p style='text-align:right; color:red; font-weight:bold; margin-top:-10px;'>{top_n_tab2}</p>", unsafe_allow_html=True)
+            with col_inv:
+                # 투자자 선택 바를 슬라이더 오른쪽 상단으로 이동
+                st.markdown("<div style='margin-bottom:-15px; font-size:13px; color:#94a3b8;'>분석 주체:</div>", unsafe_allow_html=True)
+                inv_type_tab2 = st.selectbox("투자자 선택", ["개인", "기관", "외국인"], label_visibility="collapsed", key="inv_type_tab2")
             
             st.divider()
 
@@ -408,33 +425,30 @@ with col_main:
                     df_tab2_combined = pd.concat(all_sheets_data).groupby('종목명').sum().reset_index()
 
             if not df_tab2_combined.empty:
-                st.markdown("#### 전체 순매수 금액")
-                df_total = df_tab2_combined.sort_values(by="전체순매수", ascending=False).head(top_n_tab2)
-                with st.container(border=True):
-                    fig_total = px.bar(df_total, x="전체순매수", y="종목명", orientation='h', color_discrete_sequence=['#4da6ff'])
-                    fig_total.update_layout(yaxis={'categoryorder':'total ascending'}, height=500, template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                    st.plotly_chart(fig_total, use_container_width=True)
+                col_chart1, col_chart2 = st.columns(2)
+                
+                with col_chart1:
+                    st.markdown("#### 전체 순매수 금액")
+                    df_total = df_tab2_combined.sort_values(by="전체순매수", ascending=False).head(top_n_tab2)
+                    with st.container(border=True):
+                        fig_total = px.bar(df_total, x="전체순매수", y="종목명", orientation='h', color_discrete_sequence=['#4da6ff'])
+                        fig_total.update_layout(yaxis={'categoryorder':'total ascending'}, height=500, template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=10, r=10, t=10, b=10))
+                        st.plotly_chart(fig_total, use_container_width=True)
 
-                st.divider()
-
-                col_inv_title, col_inv_drop = st.columns([2, 8])
-                with col_inv_title:
-                    st.markdown("#### 투자자별 순매수 금액")
-                with col_inv_drop:
-                    inv_type_tab2 = st.selectbox("투자자 선택", ["개인", "기관", "외국인"], label_visibility="collapsed", key="inv_type_tab2")
-                    
-                df_inv = df_tab2_combined.sort_values(by=inv_type_tab2, ascending=False).head(top_n_tab2)
-                with st.container(border=True):
-                    fig_inv = px.bar(df_inv, x=inv_type_tab2, y="종목명", orientation='h', color_discrete_sequence=['#4da6ff'])
-                    fig_inv.update_layout(yaxis={'categoryorder':'total ascending'}, height=500, template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                    st.plotly_chart(fig_inv, use_container_width=True)
+                with col_chart2:
+                    st.markdown(f"#### {inv_type_tab2}별 순매수 금액")
+                    df_inv = df_tab2_combined.sort_values(by=inv_type_tab2, ascending=False).head(top_n_tab2)
+                    with st.container(border=True):
+                        fig_inv = px.bar(df_inv, x=inv_type_tab2, y="종목명", orientation='h', color_discrete_sequence=['#ff4d4d'])
+                        fig_inv.update_layout(yaxis={'categoryorder':'total ascending'}, height=500, template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=10, r=10, t=10, b=10))
+                        st.plotly_chart(fig_inv, use_container_width=True)
 
                 st.divider()
                 
                 st.markdown("### 🎯 주간 수익률 vs. 투자자별 순매수 증감률 산점도 (실시간 연동)")
                 col_subject_tab2_scatter, _ = st.columns([2, 8])
                 with col_subject_tab2_scatter:
-                    subject_tab2_scatter = st.selectbox("분석 주체 선택:", ["개인", "기관", "외국인"], key="subject_tab2_scatter")
+                    subject_tab2_scatter = st.selectbox("산점도 분석 주체 선택:", ["개인", "기관", "외국인"], key="subject_tab2_scatter")
 
                 current_idx = available_weeks.index(selected_week)
                 if current_idx + 1 < len(available_weeks):
@@ -460,7 +474,6 @@ with col_main:
                                 
                                 df_scatter_filtered = df_merged[df_merged['종목명'].isin(selected_scatter_etfs)].copy()
                                 df_scatter_filtered['주간 수익률(%)'] = df_scatter_filtered['종목명'].map(real_returns)
-                                # 글로벌 변수 갱신으로 10번 프롬프트 탭 자동 연동
                                 df_scatter = df_scatter_filtered.dropna()
                                 
                                 fig_scatter = px.scatter(df_scatter, x="주간 수익률(%)", y="순매수 증감률(%)", text="종목명", hover_data=["이번주", "지난주"], title=f"**실제 수익률 vs. {subject_tab2_scatter} 순매수 증감률**")
@@ -470,7 +483,16 @@ with col_main:
                                     r_value = np.corrcoef(x_data, y_data)[0, 1]
                                     z = np.polyfit(x_data, y_data, 1)
                                     p = np.poly1d(z)
+                                    
+                                    # 상관계수 해석 로직
+                                    if r_value >= 0.7: r_text = "강한 양(+)의 상관관계"
+                                    elif r_value >= 0.3: r_text = "뚜렷한 양(+)의 상관관계"
+                                    elif r_value > -0.3: r_text = "유의미한 상관관계 없음"
+                                    elif r_value > -0.7: r_text = "뚜렷한 음(-)의 상관관계"
+                                    else: r_text = "강한 음(-)의 상관관계"
+                                    
                                     fig_scatter.add_scatter(x=x_data, y=p(x_data), mode='lines', name=f'상관관계(Trendline)<br>Pearson: {r_value:.2f}', line=dict(color='#ff4d4d', dash='dot'))
+                                    st.info(f"💡 **상관관계 분석:** 현재 선택된 종목들의 주간 수익률과 {subject_tab2_scatter} 순매수 증감률 간의 피어슨 상관계수는 **{r_value:.2f}**로, **{r_text}**를 보이고 있습니다.")
 
                                 fig_scatter.update_traces(textposition='top center', marker=dict(size=10, color='#4da6ff', opacity=0.7), textfont=dict(size=11, color='lightgray'))
                                 fig_scatter.add_vline(x=0, line_dash="dash", line_color="gray", opacity=0.5)
@@ -482,21 +504,32 @@ with col_main:
         else:
             st.info("👉 우측 패널에 엑셀 데이터를 업로드해주세요. (비교를 위해 2주 이상의 데이터가 필요합니다)")
 
-    # === Tab 3: 뉴스 & 검색 트렌드 ===
+    # === Tab 3: 뉴스 & 검색 트렌드 (6개 확장 & 2x3 배열 & 불릿 요약) ===
     with tabs[3]:
         st.markdown("### 📰 실시간 마켓 센티먼트 및 뉴스 요약")
-        with st.spinner("최신 마켓 트렌드를 AI가 분석하고 있습니다..."):
-            df_real_news = get_realtime_news("ETF", timeframe="7d")
+        with st.spinner("최신 마켓 트렌드를 AI가 3줄 요약하고 있습니다..."):
+            # 기사 수 6개로 확장
+            df_real_news = get_realtime_news("ETF", timeframe="7d", max_items=6)
             market_sentiment = generate_market_sentiment(df_real_news)
             st.session_state['market_sentiment'] = market_sentiment
+            
             with st.container(border=True):
-                st.markdown(f"<p style='font-size:18px; font-weight:bold; color:#4da6ff; text-align:center; margin:0;'>{market_sentiment}</p>", unsafe_allow_html=True)
+                # 3줄 요약 포맷 (불릿포인트) 출력
+                st.markdown(f"<div style='font-size:15px; color:#e2e8f0; line-height:1.8; padding:5px;'>{market_sentiment}</div>", unsafe_allow_html=True)
+            
             st.divider()
+            
             if "링크" in df_real_news.columns and df_real_news["링크"].iloc[0] != "":
-                for idx, row in df_real_news.iterrows():
-                    with st.container(border=True):
-                        st.caption(f"📅 {row['게시일 / 출처']}")
-                        st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:15px; font-weight:bold; color:#4da6ff; text-decoration:none;'>{row['원본제목']} 🔗</a>", unsafe_allow_html=True)
+                # 기사를 2x3 배열(2열)로 깔끔하게 배치
+                for i in range(0, len(df_real_news), 2):
+                    cols = st.columns(2)
+                    for j in range(2):
+                        if i + j < len(df_real_news):
+                            row = df_real_news.iloc[i + j]
+                            with cols[j]:
+                                with st.container(border=True):
+                                    st.caption(f"📅 {row['게시일 / 출처']}")
+                                    st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:15px; font-weight:bold; color:#4da6ff; text-decoration:none;'>{row['원본제목']} 🔗</a>", unsafe_allow_html=True)
             else:
                 st.dataframe(df_real_news, use_container_width=True, hide_index=True)
                     
@@ -816,14 +849,19 @@ with col_main:
 
         data_context = df_scatter.sort_values(by='주간 수익률(%)', ascending=False).head(20).to_string(index=False) if not df_scatter.empty else "데이터가 부족합니다. (우측 패널에 엑셀 데이터를 업로드해주세요.)"
         dl_context = st.session_state.get('dl_summary', "데이터랩 미연동")
-        market_sentiment = st.session_state.get('market_sentiment', "혼조세 지속")
+        
+        raw_sentiment = st.session_state.get('market_sentiment', "혼조세 지속")
+        if "<ul>" in raw_sentiment:
+            clean_sentiment = raw_sentiment.replace("<ul>", "").replace("</ul>", "").replace("<li>", "- ").replace("</li>", "\n").replace("<b>", "").replace("</b>", "")
+        else:
+            clean_sentiment = raw_sentiment
         
         try:
             current_trend = st.session_state.get('selected_trend_label', "가상자산/옵션형")
         except:
             current_trend = "가상자산/옵션형"
 
-        prompt_1 = f"너는 KODEX 마케팅 총괄 최고책임자(CMO)야. 다음 지표를 기반으로 마케팅 전술 리포트를 세부 작성해줘.\n\n[수급현황]\n{data_context}\n\n[포털 검색량]\n{dl_context}\n\n[시장심리]\n{market_sentiment}"
+        prompt_1 = f"너는 KODEX 마케팅 총괄 최고책임자(CMO)야. 다음 지표를 기반으로 마케팅 전술 리포트를 세부 작성해줘.\n\n[수급현황]\n{data_context}\n\n[포털 검색량]\n{dl_context}\n\n[시장심리 요약]\n{clean_sentiment}"
         prompt_2 = f"너는 KODEX 신상품 전략 수석 기획자야. 미국 {current_trend} 자금 쏠림 현상과 국내 규제 리스크 장벽을 해소하며 선점할 수 있는 차기 ETF 기획 초안을 설계해줘."
         
         st.markdown("#### 🔵 `[Track 1]` 주간 마케팅 & 세일즈 대응 전략 도출용")
