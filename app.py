@@ -90,44 +90,50 @@ def assign_auto_theme(etf_name):
 
 @st.cache_data(ttl=1800)
 def get_macro_snapshot():
+    # 100% 정직한 초기값 설정 (가짜 데이터 제거)
     snapshot = {
         "indices": {
-            "코스피": {"val": "2,750.20", "delta": "+15.30", "pct": "+0.56%", "is_up": True},
-            "코스닥": {"val": "860.50", "delta": "-2.10", "pct": "-0.24%", "is_up": False},
-            "S&P 500": {"val": "5,304.72", "delta": "-10.20", "pct": "-0.19%", "is_up": False},
-            "나스닥": {"val": "18,920.58", "delta": "-45.10", "pct": "-0.26%", "is_up": False},
-            "다우존스": {"val": "38,500.12", "delta": "+50.20", "pct": "+0.13%", "is_up": True}
+            "코스피": {"val": "데이터 없음"},
+            "코스닥": {"val": "데이터 없음"},
+            "S&P 500": {"val": "데이터 없음"},
+            "나스닥": {"val": "데이터 없음"},
+            "다우존스": {"val": "데이터 없음"}
         },
         "forex": {
-            "미국 USD": {"val": "1,365.50", "delta": "+2.50", "pct": "+0.18%", "is_up": True},
-            "일본 JPY 100": {"val": "875.20", "delta": "-1.50", "pct": "-0.17%", "is_up": False},
-            "유럽연합 EUR": {"val": "1,480.12", "delta": "+3.10", "pct": "+0.21%", "is_up": True},
-            "중국 CNY": {"val": "188.40", "delta": "-0.50", "pct": "-0.26%", "is_up": False},
-            "영국 GBP": {"val": "1,740.50", "delta": "+5.20", "pct": "+0.30%", "is_up": True},
-            "호주 AUD": {"val": "910.30", "delta": "+1.10", "pct": "+0.12%", "is_up": True}
+            "미국 USD": {"val": "데이터 없음"},
+            "일본 JPY 100": {"val": "데이터 없음"},
+            "유럽연합 EUR": {"val": "데이터 없음"}
         },
         "rates": {
-            "콜금리": {"val": "3.520%", "delta": "+0.010", "pct": "+0.28%", "is_up": True},
-            "CD(91일)": {"val": "3.610%", "delta": "+0.020", "pct": "+0.55%", "is_up": True},
-            "국고채(3년)": {"val": "3.415%", "delta": "-0.012", "pct": "-0.35%", "is_up": False}
+            "국고채(3년)": {"val": "데이터 없음"}
         },
         "others": {
-            "VIX 지수": {"val": "13.45", "delta": "+0.25", "pct": "+1.89%", "is_up": True},
-            "금 가격": {"val": "$2,350.10", "delta": "-5.50", "pct": "-0.23%", "is_up": False},
-            "비트코인 (BTC)": {"val": "₩99,089,024", "delta": "+1,200,000", "pct": "+1.22%", "is_up": True}
+            "VIX 지수": {"val": "데이터 없음"},
+            "금 가격": {"val": "데이터 없음"},
+            "비트코인 (BTC)": {"val": "데이터 없음"}
         }
     }
+    
+    # fdr을 통해 실제로 불러올 수 있는 데이터만 덮어씌움
     try:
         end = datetime.today()
         start = end - timedelta(days=10)
-        df_usd = fdr.DataReader('USD/KRW', start, end)
-        if len(df_usd) >= 2:
-            c, p = df_usd['Close'].iloc[-1], df_usd['Close'].iloc[-2]
-            snapshot["forex"]["미국 USD"] = {"val": f"{c:,.2f}", "delta": f"{c-p:+,.2f}", "pct": f"{(c-p)/p*100:+.2f}%", "is_up": c >= p}
+        
         df_ks = fdr.DataReader('KS11', start, end)
         if len(df_ks) >= 2:
             c, p = df_ks['Close'].iloc[-1], df_ks['Close'].iloc[-2]
             snapshot["indices"]["코스피"] = {"val": f"{c:,.2f}", "delta": f"{c-p:+,.2f}", "pct": f"{(c-p)/p*100:+.2f}%", "is_up": c >= p}
+            
+        df_kq = fdr.DataReader('KQ11', start, end)
+        if len(df_kq) >= 2:
+            c, p = df_kq['Close'].iloc[-1], df_kq['Close'].iloc[-2]
+            snapshot["indices"]["코스닥"] = {"val": f"{c:,.2f}", "delta": f"{c-p:+,.2f}", "pct": f"{(c-p)/p*100:+.2f}%", "is_up": c >= p}
+            
+        df_usd = fdr.DataReader('USD/KRW', start, end)
+        if len(df_usd) >= 2:
+            c, p = df_usd['Close'].iloc[-1], df_usd['Close'].iloc[-2]
+            snapshot["forex"]["미국 USD"] = {"val": f"{c:,.2f}", "delta": f"{c-p:+,.2f}", "pct": f"{(c-p)/p*100:+.2f}%", "is_up": c >= p}
+            
         df_btc = fdr.DataReader('BTC/KRW', start, end)
         if len(df_btc) >= 2:
             c, p = df_btc['Close'].iloc[-1], df_btc['Close'].iloc[-2]
@@ -136,6 +142,17 @@ def get_macro_snapshot():
     return snapshot
 
 def render_compact_metric(title, data):
+    # 가짜 데이터 대신 "정보 불러올 수 없음" 처리
+    if data['val'] == "데이터 없음":
+        return f"""
+        <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 12px 16px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+            <div style="color: #cbd5e1; font-size: 15px; font-weight: 600;">{title}</div>
+            <div style="text-align: right;">
+                <div style="color: #64748b; font-size: 13px; font-weight: 600;">정보 불러올 수 없음</div>
+            </div>
+        </div>
+        """
+    
     color = "#ff4d4d" if data['is_up'] else "#4da6ff"
     arrow = "▲" if data['is_up'] else "▼"
     delta_str = str(data['delta']).replace('+', '').replace('-', '')
@@ -221,12 +238,7 @@ def get_kodex_official_events():
                         break
     except: pass
     
-    if not events:
-        events = [
-            {"title": "[🎁 공식홈페이지] KODEX 현대차로보틱스밸류체인 TOP3plus 신규상장 이벤트", "link": static_safe_link, "date": "26.06.09 ~ 26.07.31"},
-            {"title": "[🎁 공식홈페이지] [6~8월 릴레이] Kodex ETF 순자산 200조 돌파 기념", "link": static_safe_link, "date": "26.06.01 ~ 26.06.30"},
-            {"title": "[🎁 공식홈페이지] 차곡차곡 미국대표지수 ETF 모으기! 적립식 매수 이벤트", "link": static_safe_link, "date": "26.06.01 ~ 26.12.31"}
-        ]
+    # ★ 가짜 하드코딩 리스트 삭제. 못 불러오면 빈 리스트 반환
     return events
 
 @st.cache_data(ttl=1800)
@@ -309,18 +321,6 @@ def scrape_youtube_videos_real(url):
     except: pass
     return feed[:2] 
 
-def generate_fact_based_summary(brand, events, generals):
-    summary_parts = []
-    if events:
-        evt_title = events[0]['title'].replace('[🎁 경품/매수] ', '').replace('[📢 세미나] ', '').replace('[🎁 공식홈페이지] ', '')
-        summary_parts.append(f"이벤트/세미나 방면에서는 **'{evt_title[:25]}...'** 프로모션을 중심으로 세일즈를 전개 중입니다")
-    if not summary_parts and generals:
-        gen_title = generals[0]['title']
-        summary_parts.append(f"현재 특별한 이벤트보다 **'{gen_title[:25]}...'** 중심의 정보성 마케팅을 유지하고 있습니다")
-    if not summary_parts:
-        return f"💡 **{brand} 주간 동향:** 최근 1주일간 포착된 신규 세일즈 이벤트나 콘텐츠 활동이 없습니다."
-    return f"💡 **{brand} 주간 동향 요약:** " + " / ".join(summary_parts) + "."
-
 @st.cache_data(ttl=86400)
 def get_etf_mapping():
     try:
@@ -344,27 +344,6 @@ def get_real_returns(symbols_dict, etf_names):
             except: returns_dict[name] = 0.0
         else: returns_dict[name] = 0.0
     return returns_dict
-
-def generate_market_sentiment(news_df):
-    if news_df.empty or news_df["원본제목"].iloc[0].startswith("'"): 
-        return "<ul><li>뉴스 데이터가 충분하지 않아 시장 심리를 분석할 수 없습니다.</li></ul>"
-    all_titles = " ".join(news_df["원본제목"].astype(str).tolist())
-    bullet1 = "<li>📈 <b>전반적 흐름</b>: "
-    bullet2 = "<li>💡 <b>수급 모멘텀</b>: "
-    bullet3 = "<li>⚠️ <b>투자자 심리</b>: "
-    if any(kw in all_titles for kw in ['강세', '상승', '급등', '반등']): 
-        bullet1 += "시장 상승세 속에서 금리 인하 기대감이 시장을 주도하고 있습니다.</li>"
-        bullet2 += "성장주 및 고배당 ETF를 중심으로 자금 유입이 뚜렷하게 나타납니다.</li>"
-        bullet3 += "단기 차익 실현보다는 중장기적 관점의 매수 심리가 우세합니다.</li>"
-    elif any(kw in all_titles for kw in ['하락', '약세', '급락', '둔화']): 
-        bullet1 += "금리 및 매크로 우려 재점화로 시장 변동성이 확대되는 구간입니다.</li>"
-        bullet2 += "채권 및 인버스 ETF 등 방어적 포트폴리오로 자금이 이동하고 있습니다.</li>"
-        bullet3 += "위험 자산 회피 심리가 강해지며 관망세가 짙어지고 있습니다.</li>"
-    else: 
-        bullet1 += "특별한 상승/하락 모멘텀 없이 시장 전반이 혼조세를 보이고 있습니다.</li>"
-        bullet2 += "섹터별, 테마별로 짧은 주기의 순환매 장세가 지속 중입니다.</li>"
-        bullet3 += "명확한 방향성이 부재하여 투자자들의 신중한 접근이 요구됩니다.</li>"
-    return f"<ul style='margin-bottom:0;'>{bullet1}{bullet2}{bullet3}</ul>"
 
 @st.cache_data
 def load_and_clean_excel(file, sheet_name):
@@ -562,7 +541,6 @@ with col_main:
                                 df_scatter = df_scatter_filtered.dropna()
                                 fig_scatter = px.scatter(df_scatter, x="주간 수익률(%)", y="순매수 증감률(%)", text="종목명", hover_data=["이번주", "지난주"], title=f"**실제 수익률 vs. {subject_tab2_scatter} 순매수 증감률**")
                                 
-                                # ★ Tab 2 상관계수 텍스트 렌더링 복구
                                 if len(df_scatter) > 1:
                                     x_data, y_data = df_scatter["주간 수익률(%)"], df_scatter["순매수 증감률(%)"]
                                     r_value = np.corrcoef(x_data, y_data)[0, 1]
@@ -588,29 +566,26 @@ with col_main:
 
     # === Tab 3 ===
     with tabs[3]:
-        st.markdown("### 📰 실시간 마켓 센티먼트 및 뉴스 요약")
-        with st.spinner("최신 마켓 트렌드를 AI가 3줄 요약하고 있습니다..."):
-            df_real_news = get_realtime_news("ETF", timeframe="7d", max_items=6)
-            market_sentiment = generate_market_sentiment(df_real_news)
-            st.session_state['market_sentiment'] = market_sentiment
-            with st.container(border=True):
-                st.markdown(f"<div style='font-size:15px; color:#e2e8f0; line-height:1.8; padding:5px;'>{market_sentiment}</div>", unsafe_allow_html=True)
-            st.divider()
-            if "링크" in df_real_news.columns and df_real_news["링크"].iloc[0] != "":
-                for i in range(0, len(df_real_news), 2):
-                    cols = st.columns(2)
-                    for j in range(2):
-                        if i + j < len(df_real_news):
-                            row = df_real_news.iloc[i + j]
-                            with cols[j]:
-                                with st.container(border=True):
-                                    st.caption(f"📅 {row['게시일 / 출처']}")
-                                    st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:15px; font-weight:bold; color:#4da6ff; text-decoration:none;'>{row['원본제목']} 🔗</a>", unsafe_allow_html=True)
-            else: st.dataframe(df_real_news, use_container_width=True, hide_index=True)
+        st.markdown("### 📰 실시간 뉴스 리스트")
+        st.caption("관련 검색어 기반의 실시간 최신 뉴스 피드입니다.")
+        df_real_news = get_realtime_news("ETF", timeframe="7d", max_items=10)
+        
+        st.divider()
+        if "링크" in df_real_news.columns and df_real_news["링크"].iloc[0] != "":
+            for i in range(0, len(df_real_news), 2):
+                cols = st.columns(2)
+                for j in range(2):
+                    if i + j < len(df_real_news):
+                        row = df_real_news.iloc[i + j]
+                        with cols[j]:
+                            with st.container(border=True):
+                                st.caption(f"📅 {row['게시일 / 출처']}")
+                                st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:15px; font-weight:bold; color:#4da6ff; text-decoration:none;'>{row['원본제목']} 🔗</a>", unsafe_allow_html=True)
+        else: st.dataframe(df_real_news, use_container_width=True, hide_index=True)
+            
         st.divider()
         st.markdown("### 📊 키워드 검색비율 추이 (다중 비교 지원)")
         
-        # ★ Tab 3 데이터랩 1xN 그리드 확장 (세로 나열)
         if uploaded_dls:
             dl_summaries = []
             for dl_file in uploaded_dls:
@@ -664,7 +639,7 @@ with col_main:
                                     except: st.error(f"{etf_name}의 데이터를 불러오지 못했습니다.")
         else: st.info("👉 우측 패널에 엑셀 데이터를 업로드해주세요.")
 
-    # === Tab 5: 🎉 경쟁사 이벤트/동향 (★ 촉매 분석기 삭제 & X축 마커 도입) ===
+    # === Tab 5: 🎉 경쟁사 이벤트/동향 ===
     with tabs[5]:
         st.markdown("### 📊 마케팅 촉매(이벤트/영상) 임팩트 분석기")
         st.caption("선택한 영상 배포 주간(하이라이트)을 마커로 표시하여, 거시적 수급 트렌드에서 실제 펌핑 효과를 직관적으로 분석합니다.")
@@ -686,7 +661,6 @@ with col_main:
                     with c_a1: ana_start = st.selectbox("📈 전체 분석 시작 주차:", options=available_weeks[::-1], index=0)
                     with c_a2: ana_end = st.selectbox("📈 전체 분석 종료 주차:", options=available_weeks, index=0)
                     c_h1, c_h2 = st.columns(2)
-                    # 하이라이트를 단순한 '마커'로 대체하기 위해 시작 주차만 받음
                     with c_h1: hl_start = st.selectbox("🎥 유튜브/쇼츠 릴리즈 주차 (마커 표시):", options=available_weeks[::-1], index=0)
 
                 s_idx = available_weeks.index(ana_start)
@@ -708,9 +682,7 @@ with col_main:
                         df_trend = pd.concat(trend_data)
                         fig_evt = px.line(df_trend, x='주차', y='전체순매수', color='종목명', markers=True, template="plotly_dark", color_discrete_map={target_etf: '#ff4d4d', comp_etf: '#4da6ff'})
                         
-                        # ★ X축 하단 화살표 마커 적용
                         try:
-                            # 펌핑 분석란을 지우고 100% 가로 너비로 차트를 뿌림
                             fig_evt.add_annotation(
                                 x=hl_start, 
                                 y=0,
@@ -726,7 +698,6 @@ with col_main:
                                 ay=40,
                                 font=dict(color="#ffb04d", size=12, weight="bold")
                             )
-                            # 마커가 보이도록 Y 범위를 살짝 여유있게 잡아줌
                             fig_evt.add_vline(x=hl_start, line_width=1, line_dash="dash", line_color="#ffb04d")
                         except: pass
                         
@@ -736,7 +707,7 @@ with col_main:
         else: st.info("👉 우측 패널에 엑셀 데이터를 업로드하시면 성과 분석기 차트가 활성화됩니다.")
 
         st.divider()
-        st.markdown("### 🏢 운용사별 세일즈 액션 및 마케팅 동향 (통합 인텔리전스)")
+        st.markdown("### 🏢 운용사별 세일즈 액션 및 마케팅 동향 (블로그 피드)")
         brand_mappings = {
             "KODEX (삼성)": {"blog": "samsung_fund"}, "TIGER (미래에셋)": {"blog": "m_invest"},
             "ACE (한국투자)": {"blog": "aceetf"}, "RISE (KB)": {"blog": "riseetf"},
@@ -748,24 +719,24 @@ with col_main:
         for brand, items in brand_mappings.items():
             events = get_kodex_official_events() if brand == "KODEX (삼성)" else []
             _, generals = parse_competitor_blog(items['blog'])
-            with st.expander(f"🔵 **{brand}** 마케팅 동향", expanded=(brand=="KODEX (삼성)")):
-                st.markdown(generate_fact_based_summary(brand, events, generals))
-                st.write("")
+            with st.expander(f"🔵 **{brand}** 블로그 동향", expanded=(brand=="KODEX (삼성)")):
                 c1, c2 = st.columns(2)
                 with c1:
                     st.markdown("**🔥 세일즈 프로모션/세미나**")
                     if events:
                         for e in events: st.write(f"- [{e['date']}] [{e['title']}]({e['link']})")
-                    else: st.write("- 진행 중인 대형 프로모션 없음 (블로그 우회)")
+                    else: st.write("- 진행 중인 프로모션 데이터를 불러올 수 없거나 없습니다.")
                 with c2:
-                    st.markdown("**📝 최신 가공 일반 콘텐츠**")
-                    for g in generals[:3]: st.write(f"- [{g['date']}] [{g['title']}]({g['link']})")
+                    st.markdown("**📝 일반 블로그 콘텐츠**")
+                    if generals:
+                        for g in generals[:3]: st.write(f"- [{g['date']}] [{g['title']}]({g['link']})")
+                    else: st.write("- 최신 게시글이 없습니다.")
 
         st.divider()
-        st.markdown("### 📡 타 운용사 실시간 유튜브 미디어 피드 (KODEX 제외, 텍스트 중심)")
-        st.caption("발행 주기가 긴 타 운용사 채널의 최신 롱폼 및 쇼츠 업로드 상태를 썸네일 노이즈 없이 실시간 텍스트 요약 정보로 모니터링합니다.")
+        st.markdown("### 📡 실시간 유튜브 미디어 피드 모니터링 (텍스트 요약)")
         
         comp_yt_links = {
+            "KODEX (삼성)": "https://www.youtube.com/@KODEXETF/videos",
             "TIGER (미래에셋)": "https://www.youtube.com/@tiger_etf/videos",
             "ACE (한국투자)": "https://www.youtube.com/@ace_etf/videos",
             "RISE (KB)": "https://www.youtube.com/@RISE_ETF/videos",
@@ -787,12 +758,12 @@ with col_main:
                     if vids:
                         for v in vids[:2]:
                             st.markdown(f"* **제목**: [{v['title']}]({v['link']})\n* **트래픽**: `👁️ {v['views']}` ({v['date']})")
-                    else: st.caption("최근 업데이트된 신규 영상 피드가 없습니다.")
+                    else: st.caption("최근 업데이트된 영상이 없거나 데이터를 불러올 수 없습니다.")
 
     # === Tab 6 ===
     with tabs[6]:
         st.markdown("### 🗣️ 고객 Voice (VOC) & 시스템 리스크 모니터링")
-        st.caption("외부 라이브러리 없이 애플 앱스토어의 최근 찐 불만 리뷰(1~3점)와 기사화된 중대 오작동 리스크를 1:1 비교합니다.")
+        st.caption("외부 라이브러리 없이 애플 앱스토어의 최근 불만 리뷰(1~3점)와 기사화된 중대 오작동 리스크를 1:1 비교합니다.")
         st.divider()
         col_app, col_news = st.columns(2)
         with col_app:
@@ -818,7 +789,7 @@ with col_main:
                             st.caption(f"📅 {row['게시일 / 출처']}")
                 else: st.info("검색 범위(최대 1년) 내 포착된 리스크성 기사가 없습니다.")
 
-    # === Tab 7: 운용 현황 및 점유율 (★ 빈 행 제거 및 420px 높이 맞춤 완료) ===
+    # === Tab 7 ===
     with tabs[7]:
         st.markdown("### 🏢 국내 ETF 운용사 AUM 시장 점유율 및 테마별 현황 (실시간 기준)")
         col_pie, col_table = st.columns([1, 2])
@@ -850,9 +821,7 @@ with col_main:
                         pivot_df = pivot_df[[c for col in target_brands if col in pivot_df.columns for c in [col]]].astype(int)
                         if '📦 기타 섹터/테마' in pivot_df.index: pivot_df = pivot_df.reindex([i for i in pivot_df.index if i != '📦 기타 섹터/테마'] + ['📦 기타 섹터/테마'])
                         
-                        # ★ 값이 전부 0인 불필요한 빈 행 제거 로직
                         pivot_df = pivot_df.loc[(pivot_df != 0).any(axis=1)]
-                        # ★ 좌측 파이 차트와 완벽히 동일한 420px 높이 지정
                         st.dataframe(pivot_df.style.format("{:,}"), use_container_width=True, height=420)
             except Exception as e: st.error(f"오류: {e}")
 
@@ -918,12 +887,9 @@ with col_main:
 
         data_context = df_scatter.sort_values(by='주간 수익률(%)', ascending=False).head(20).to_string(index=False) if not df_scatter.empty else "데이터가 부족합니다. (우측 패널에 엑셀 데이터를 업로드해주세요.)"
         dl_context = st.session_state.get('dl_summary', "데이터랩 미연동")
-        raw_sentiment = st.session_state.get('market_sentiment', "혼조세 지속")
-        if "<ul>" in raw_sentiment: clean_sentiment = raw_sentiment.replace("<ul>", "").replace("</ul>", "").replace("<li>", "- ").replace("</li>", "\n").replace("<b>", "").replace("</b>", "")
-        else: clean_sentiment = raw_sentiment
 
         st.markdown("#### 📥 [Step 1] 데이터 주입 및 컨텍스트 세팅")
-        prompt_1 = f"너는 KODEX 마케팅 총괄 최고책임자(CMO)를 보좌하는 수석 AI 에이전트야. 다음 제공되는 주간 대시보드 데이터를 완벽하게 숙지하고 분석해. 아직 리포트를 작성하지 말고, '데이터 숙지 완료. 다음 지시를 대기 중입니다.'라고만 대답해.\n\n[수급현황]\n{data_context}\n\n[포털 검색량]\n{dl_context}\n\n[시장심리 요약]\n{clean_sentiment}"
+        prompt_1 = f"너는 KODEX 마케팅 총괄 최고책임자(CMO)를 보좌하는 수석 AI 에이전트야. 다음 제공되는 주간 대시보드 데이터를 완벽하게 숙지하고 분석해. 아직 리포트를 작성하지 말고, '데이터 숙지 완료. 다음 지시를 대기 중입니다.'라고만 대답해.\n\n[수급현황]\n{data_context}\n\n[포털 검색량]\n{dl_context}"
         st.code(prompt_1, language="text")
 
         st.markdown("#### 📝 [Step 2] 섹션 1. 시장 환경 및 수급 요약 작성")
