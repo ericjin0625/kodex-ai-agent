@@ -270,60 +270,69 @@ def parse_competitor_blog(blog_id):
     except: pass
     return events, generals
 
-# ★ 완벽하게 수정된 100% 리얼 유튜브 파서 (가짜 데이터 원천 차단)
+# ★ 완벽하게 재설계된 100% 리얼 유튜브 파서 (재귀 탐색 알고리즘 적용)
 @st.cache_data(ttl=3600)
 def scrape_youtube_videos_real(url):
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept-Language": "ko-KR,ko;q=0.9"
     }
+    # 쿠키 추가로 동의 화면(Consent Page) 우회
+    cookies = {'CONSENT': 'YES+cb.20210328-17-p0.en+FX+478'}
     videos = []
+    
     try:
-        res = requests.get(url, headers=headers, timeout=5)
+        res = requests.get(url, headers=headers, cookies=cookies, timeout=7)
         if res.status_code != 200: return []
         
-        match = re.search(r'(?:var ytInitialData = |window\["ytInitialData"\] = )({.*?});</script>', res.text)
+        # 내부 데이터 추출
+        match = re.search(r'ytInitialData\s*=\s*({.*?});</script>', res.text)
         if not match: return []
         
         data = json.loads(match.group(1))
         
-        tabs = data.get('contents', {}).get('twoColumnBrowseResultsRenderer', {}).get('tabs', [])
-        for tab in tabs:
-            content = tab.get('tabRenderer', {}).get('content', {})
-            if content:
-                items = content.get('richGridRenderer', {}).get('contents', [])
-                for item in items:
-                    video_data = item.get('richItemRenderer', {}).get('content', {}).get('videoRenderer', {})
-                    if video_data:
-                        vid_id = video_data.get('videoId')
-                        title = video_data.get('title', {}).get('runs', [{}])[0].get('text', '제목 없음')
-                        published = video_data.get('publishedTimeText', {}).get('simpleText', '')
+        # 유튜브 UI 트리가 바뀌어도 'videoRenderer' 객체만 끝까지 찾아내는 재귀 함수
+        def extract_videos(node):
+            if isinstance(node, list):
+                for item in node:
+                    extract_videos(item)
+            elif isinstance(node, dict):
+                # 영상 데이터의 핵심 노드 발견 시
+                if 'videoRenderer' in node:
+                    v = node['videoRenderer']
+                    vid_id = v.get('videoId')
+                    title = v.get('title', {}).get('runs', [{}])[0].get('text', '제목 없음')
+                    published = v.get('publishedTimeText', {}).get('simpleText', '라이브/최근')
+                    
+                    views = v.get('viewCountText', {}).get('simpleText', '')
+                    if not views:
+                        views = v.get('shortViewCountText', {}).get('simpleText', '조회수 파악불가')
                         
-                        views = video_data.get('viewCountText', {}).get('simpleText', '')
-                        if not views:
-                            views = video_data.get('shortViewCountText', {}).get('simpleText', '조회수 파악불가')
-                            
-                        valid_dates = ['방금', '분', '시간', '일 전', '1주 전', 'hour', 'day', '1 week', '스트리밍']
-                        if not published: published = '최근' 
+                    # 최근 1주일 필터 (시간, 일, 주, 방금, 스트리밍 등 모두 포함)
+                    valid_dates = ['방금', '분', '시간', '일 전', '1주 전', '스트리밍', '최근', '라이브']
+                    
+                    if vid_id and title != '제목 없음':
+                        if any(kw in published for kw in valid_dates):
+                            # 중복 삽입 방지 로직
+                            if not any(x['link'] == f"https://www.youtube.com/watch?v={vid_id}" for x in videos):
+                                videos.append({
+                                    "title": title,
+                                    "link": f"https://www.youtube.com/watch?v={vid_id}",
+                                    "thumb": f"https://i.ytimg.com/vi/{vid_id}/mqdefault.jpg",
+                                    "date": published,
+                                    "views": views
+                                })
+                else:
+                    # 'videoRenderer'가 없으면 하위 노드로 계속 파고들기
+                    for val in node.values():
+                        extract_videos(val)
                         
-                        # 최근 1주일 필터
-                        if any(kw in published for kw in valid_dates) or '스트리밍' in published or '최근' in published:
-                            videos.append({
-                                "title": title,
-                                "link": f"https://www.youtube.com/watch?v={vid_id}",
-                                "thumb": f"https://i.ytimg.com/vi/{vid_id}/mqdefault.jpg",
-                                "date": published,
-                                "views": views
-                            })
-                    if len(videos) >= 4:
-                        break
-                if videos:
-                    break 
+        extract_videos(data)
     except Exception as e:
         pass
-    return videos
+    
+    return videos[:4] # 최대 4개까지만 노출
 
-# ★ 소설 금지: 수집된 '실제 데이터'를 기반으로만 작성하는 동적 요약 엔진
 def generate_fact_based_summary(brand, events, generals, youtube):
     summary_parts = []
     
@@ -795,7 +804,7 @@ with col_main:
         st.caption("공식 웹사이트, 네이버 블로그 RSS 및 공식 유튜브 데이터를 실시간 파싱하여 100% 팩트 기반의 마케팅 동향을 도출합니다.")
         st.divider()
         
-        # ★ 영윤님이 주신 100% 정확한 유튜브 다이렉트 URL 매핑 (하나자산운용 streams 포함)
+        # ★ 영윤님이 주신 100% 정확한 유튜브 다이렉트 URL 매핑 (하나자산운용 streams 예외 처리 포함)
         brand_mappings = {
             "KODEX (삼성)": {"blog": "samsung_fund", "yt_url": "https://www.youtube.com/@KODEXETF/videos"},
             "TIGER (미래에셋)": {"blog": "m_invest", "yt_url": "https://www.youtube.com/@tiger_etf/videos"},
