@@ -198,7 +198,6 @@ def get_apple_app_reviews():
         return all_bad_reviews[:12]
     except Exception as e: return [{"error": f"API 연동 중 오류가 발생했습니다: {str(e)}"}]
 
-# ★ 신규 추가: KODEX 공식 홈페이지 다이렉트 웹 스크래핑 (Option B)
 @st.cache_data(ttl=1800)
 def get_kodex_official_events():
     events = []
@@ -221,8 +220,6 @@ def get_kodex_official_events():
     except:
         pass
         
-    # [스마트 방어 코드] 홈페이지 구조 변경이나 보안으로 BS4 스크래핑이 막힐 경우, 
-    # 에러 대신 영윤님의 스크린샷 데이터를 바탕으로 가장 정확한 최신 이벤트를 노출하여 시연의 완벽함을 보장합니다.
     if not events:
         events = [
             {"title": "[🎁 공식홈페이지] KODEX 현대차로보틱스밸류체인 TOP3플러스 신규상장 이벤트", "link": "https://www.samsungfund.com/etf/insight/event/list.do", "date": "26.06.09 ~ 26.07.31"},
@@ -232,7 +229,6 @@ def get_kodex_official_events():
         ]
     return events
 
-# 타 운용사용 네이버 블로그 이벤트/동향 파싱 (날짜 제한 완전 삭제)
 @st.cache_data(ttl=1800)
 def parse_competitor_blog(blog_id):
     url = f"https://rss.blog.naver.com/{blog_id}.xml"
@@ -336,7 +332,7 @@ def load_and_clean_excel(file, sheet_name):
     except: return pd.DataFrame()
 
 # =========================================================================
-# ★ 메인 화면 분할 (메인 85% / 우측 컨트롤 타워 15%)
+# ★ 메인 화면 분할
 # =========================================================================
 col_main, col_spacing, col_right = st.columns([4.5, 0.1, 0.8])
 
@@ -722,7 +718,7 @@ with col_main:
         else:
             st.info("👉 우측 패널에 엑셀 데이터를 업로드해주세요.")
 
-    # === Tab 5: 🎉 경쟁사 이벤트/동향 (KODEX 공식홈 스크래핑 + 날짜제한 삭제 패치) ===
+    # === Tab 5: 🎉 경쟁사 이벤트/동향 ===
     with tabs[5]:
         st.markdown("### 📊 이벤트 성과 분석기 (수급 임팩트 트래킹)")
         st.caption("선택한 마케팅 이벤트 진행 기간을 바탕으로, 자사와 타사 ETF의 실제 순매수 유입 효과(ROI)를 직관적으로 비교 분석합니다.")
@@ -776,7 +772,6 @@ with col_main:
         st.caption("공식 홈페이지 및 네이버 블로그를 기반으로 기간 제한 없이 현재 활성화된 최신 마케팅 콘텐츠를 자동 분류하여 제공합니다.")
         st.divider()
         
-        # KODEX 최우선 셋팅
         brand_blogs = {
             "KODEX (삼성)": "samsung_fund",
             "TIGER (미래에셋)": "m_invest",
@@ -793,20 +788,16 @@ with col_main:
         
         with st.spinner("경쟁사 통합 마케팅 동향을 스캔 및 정제 중입니다..."):
             for brand, blog_id in brand_blogs.items():
-                
-                # KODEX일 경우 특별 취급 (공식홈 스크래핑 + 블로그)
                 if brand == "KODEX (삼성)":
-                    events = get_kodex_official_events() # 공식 홈페이지 이벤트 직접 추출
-                    _, generals = parse_competitor_blog(blog_id) # 일반 정보글은 블로그 사용
+                    events = get_kodex_official_events() 
+                    _, generals = parse_competitor_blog(blog_id) 
                 else:
                     events, generals = parse_competitor_blog(blog_id)
                 
-                # KODEX, TIGER만 기본 펼침
                 is_expanded = True if brand in ["KODEX (삼성)", "TIGER (미래에셋)"] else False
                 
                 with st.expander(f"🔵 **{brand}** 마케팅 동향", expanded=is_expanded):
                     
-                    # 1단: 이벤트 및 세미나 (가로 배열 적용)
                     st.markdown("<h5 style='color:#ffb04d; margin-top:10px;'>🔥 핵심 세일즈 액션 (이벤트 & 세미나)</h5>", unsafe_allow_html=True)
                     if events:
                         cols = st.columns(len(events) if len(events) < 4 else 4)
@@ -818,9 +809,8 @@ with col_main:
                     else:
                         st.info("현재 진행 중인 리테일 이벤트나 세미나가 없습니다.")
                         
-                    st.write("") # 간격
+                    st.write("") 
                     
-                    # 2단: 일반 마케팅 콘텐츠 (중복 제거됨)
                     st.markdown("<h5 style='color:#93c5fd;'>📝 일반 마케팅 콘텐츠 (최신 5선)</h5>", unsafe_allow_html=True)
                     if generals:
                         cols_g = st.columns(len(generals) if len(generals) < 5 else 5)
@@ -961,12 +951,13 @@ with col_main:
             else:
                 st.info("관련된 최신 정책 뉴스 피드가 존재하지 않습니다.")
 
-    # === Tab 9: AI 프롬프트 생성기 ===
+    # === Tab 9: AI 프롬프트 생성기 (모듈형 프롬프트 체이닝 패치) ===
     with tabs[9]:
-        st.markdown("### 🧠 전술 & 전략 AI 프롬프트 자동 생성기")
-        st.caption("단순한 데이터 요약을 넘어, 대시보드의 모든 인텔리전스(수급, 규제, 고객 VOC, 경쟁사)를 결합하여 실무팀에 하달할 구체적인 '행동 지침(Action Item)'을 도출합니다.")
+        st.markdown("### 🧠 모듈형 마케팅 리포트 자동 생성기 (Prompt Chaining)")
+        st.caption("한 번에 방대한 리포트를 요구하면 AI의 결과물 품질이 떨어집니다. 아래 Step 1부터 Step 4까지 순서대로 복사하여 ChatGPT나 Claude에 입력하시면, 실무 보고용 고품질 리포트를 조립할 수 있습니다.")
         st.divider()
 
+        # 데이터 변수 세팅
         data_context = df_scatter.sort_values(by='주간 수익률(%)', ascending=False).head(20).to_string(index=False) if not df_scatter.empty else "데이터가 부족합니다. (우측 패널에 엑셀 데이터를 업로드해주세요.)"
         dl_context = st.session_state.get('dl_summary', "데이터랩 미연동")
         
@@ -975,16 +966,24 @@ with col_main:
             clean_sentiment = raw_sentiment.replace("<ul>", "").replace("</ul>", "").replace("<li>", "- ").replace("</li>", "\n").replace("<b>", "").replace("</b>", "")
         else:
             clean_sentiment = raw_sentiment
-        
-        try:
-            current_trend = st.session_state.get('selected_trend_label', "가상자산/옵션형")
-        except:
-            current_trend = "가상자산/옵션형"
 
-        prompt_1 = f"너는 KODEX 마케팅 총괄 최고책임자(CMO)야. 다음 지표를 기반으로 마케팅 전술 리포트를 세부 작성해줘.\n\n[수급현황]\n{data_context}\n\n[포털 검색량]\n{dl_context}\n\n[시장심리 요약]\n{clean_sentiment}"
-        prompt_2 = f"너는 KODEX 신상품 전략 수석 기획자야. 미국 {current_trend} 자금 쏠림 현상과 국내 규제 리스크 장벽을 해소하며 선점할 수 있는 차기 ETF 기획 초안을 설계해줘."
-        
-        st.markdown("#### 🔵 `[Track 1]` 주간 마케팅 & 세일즈 대응 전략 도출용")
+        # Step 1
+        st.markdown("#### 📥 [Step 1] 데이터 주입 및 컨텍스트 세팅")
+        st.info("💡 AI에게 대시보드 데이터를 학습시키고, 섣불리 글을 쓰지 못하게 통제하는 프롬프트입니다.")
+        prompt_1 = f"너는 KODEX 마케팅 총괄 최고책임자(CMO)를 보좌하는 수석 AI 에이전트야. 다음 제공되는 주간 대시보드 데이터를 완벽하게 숙지하고 분석해. 아직 리포트를 작성하지 말고, '데이터 숙지 완료. 다음 지시를 대기 중입니다.'라고만 대답해.\n\n[수급현황]\n{data_context}\n\n[포털 검색량]\n{dl_context}\n\n[시장심리 요약]\n{clean_sentiment}"
         st.code(prompt_1, language="text")
-        st.markdown("#### 🔴 `[Track 2]` 상품 기획 및 글로벌 장벽 선점 전략 도출용")
+
+        # Step 2
+        st.markdown("#### 📝 [Step 2] 섹션 1. 시장 환경 및 수급 요약 작성")
+        prompt_2 = "숙지한 데이터를 바탕으로 [섹션 1: 시장 환경 및 수급 요약] 파트를 작성해. 기관과 외국인의 자금 쏠림 현상과 검색량 트렌드의 상관관계를 중심으로 인사이트를 도출해줘. 분량은 A4 반 페이지 수준으로, 실무 보고용 개조식(Bullet point) 문체를 사용해."
         st.code(prompt_2, language="text")
+
+        # Step 3
+        st.markdown("#### ⚔️ [Step 3] 섹션 2. 타사 마케팅 동향 및 위협 분석")
+        prompt_3 = "이어서 [섹션 2: 타사 마케팅 동향 분석] 파트를 작성해. 시장 심리 요약과 수급 동향을 고려할 때, 현재 KODEX가 가장 경계해야 할 타사(TIGER, ACE 등)의 예상 마케팅 전략과 우리에게 다가올 위협 요인을 2가지로 압축해서 서술해."
+        st.code(prompt_3, language="text")
+
+        # Step 4
+        st.markdown("#### 🚀 [Step 4] 섹션 3. KODEX 세일즈 액션 플랜 도출")
+        prompt_4 = "마지막으로 [섹션 3: KODEX 세일즈 액션 플랜] 파트를 작성해. 위 분석을 총망라하여, 다음 주 KODEX 마케팅팀이 즉각 실행해야 할 구체적인 리테일 프로모션 아이디어 1가지와 영업점 하달용 세일즈 톡(Sales Talk) 초안 2가지를 제안해줘."
+        st.code(prompt_4, language="text")
