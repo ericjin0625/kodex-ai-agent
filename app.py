@@ -10,24 +10,20 @@ from datetime import datetime, timedelta
 import json 
 import time
 
-# 1. 페이지 레이아웃 및 기본 테마 설정 (사이드바 기본 숨김 처리)
+# 1. 페이지 레이아웃 및 기본 테마 설정
 st.set_page_config(page_title="ETF Monitoring AI Agent", layout="wide", initial_sidebar_state="collapsed")
 
-# 전역 데이터 변수 (탭 간 원활한 데이터 100% 동기화를 위함)
 df_scatter = pd.DataFrame()
 
 # ==========================================
-# ★ Glassmorphism 커스텀 CSS (가로형 탭 최적화)
+# ★ Glassmorphism 커스텀 CSS
 # ==========================================
 glassmorphism_css = """
 <style>
-/* 1. 전체 배경: 딥 네이비 & 퍼플 프리미엄 오로라 그라데이션 */
 .stApp {
     background: linear-gradient(135deg, #0b101e 0%, #171b3c 50%, #0f172a 100%);
     background-attachment: fixed;
 }
-
-/* 2. 우측 컨트롤 타워 및 컨테이너: 은은한 글래스 광택 */
 [data-testid="stVerticalBlockBorderWrapper"] {
     background: rgba(255, 255, 255, 0.02) !important;
     backdrop-filter: blur(16px) !important;
@@ -40,8 +36,6 @@ glassmorphism_css = """
 .stDataFrame {
     background: transparent !important;
 }
-
-/* 3. 중앙 가로형 탭(Tabs) 디자인: 둥글고 트렌디한 캡슐 알약(Pill) 스타일 */
 [data-baseweb="tab-list"] {
     gap: 8px;
     padding-bottom: 12px;
@@ -61,8 +55,6 @@ glassmorphism_css = """
     box-shadow: 0 0 12px rgba(77, 166, 255, 0.25) !important;
     font-weight: 600 !important;
 }
-
-/* 4. 독립 솔루션 마감을 위한 기본 UI 강제 숨김 */
 #MainMenu {visibility: hidden;}
 header {visibility: hidden;}
 footer {visibility: hidden;}
@@ -89,58 +81,74 @@ def assign_auto_theme(etf_name):
     except:
         return '📦 기타 섹터/테마'
 
-# ★ 실시간 매크로 지표 파싱 함수 (에러 방어용 기본값 내장)
+# ★ 홈 화면용 실시간 매크로 지표 (3단 분할 맞춤형)
 @st.cache_data(ttl=1800)
 def get_macro_snapshot():
-    # 인터넷/API 에러 시 화면 깨짐을 방지하기 위한 현실적인 예비 데이터 세팅
+    # 17개 지표 과부하 방지용 빠르고 안정적인 기본값 세팅
     snapshot = {
-        "KOSPI": {"val": "2,750.20", "delta": "+15.30", "pct": "+0.56%", "is_up": True},
-        "S&P 500": {"val": "5,304.72", "delta": "-10.20", "pct": "-0.19%", "is_up": False},
-        "NASDAQ 100": {"val": "18,920.58", "delta": "-45.10", "pct": "-0.26%", "is_up": False},
-        "VIX (공포지수)": {"val": "13.45", "delta": "+0.25", "pct": "+1.89%", "is_up": True},
-        "USD/KRW (환율)": {"val": "1,365.50", "delta": "+2.50", "pct": "+0.18%", "is_up": True},
-        "JPY/KRW (100엔)": {"val": "875.20", "delta": "-1.50", "pct": "-0.17%", "is_up": False},
-        "국고채 3년물": {"val": "3.415%", "delta": "-0.012", "pct": "-0.35%", "is_up": False},
-        "Bitcoin (BTC)": {"val": "$68,450", "delta": "+1,200", "pct": "+1.78%", "is_up": True}
+        "indices": {
+            "코스피": {"val": "2,750.20", "delta": "+15.30", "pct": "+0.56%", "is_up": True},
+            "코스닥": {"val": "860.50", "delta": "-2.10", "pct": "-0.24%", "is_up": False},
+            "S&P 500": {"val": "5,304.72", "delta": "-10.20", "pct": "-0.19%", "is_up": False},
+            "나스닥": {"val": "18,920.58", "delta": "-45.10", "pct": "-0.26%", "is_up": False},
+            "다우존스": {"val": "38,500.12", "delta": "+50.20", "pct": "+0.13%", "is_up": True}
+        },
+        "forex": {
+            "미국 USD": {"val": "1,365.50", "delta": "+2.50", "pct": "+0.18%", "is_up": True},
+            "일본 JPY 100": {"val": "875.20", "delta": "-1.50", "pct": "-0.17%", "is_up": False},
+            "유럽연합 EUR": {"val": "1,480.12", "delta": "+3.10", "pct": "+0.21%", "is_up": True},
+            "중국 CNY": {"val": "188.40", "delta": "-0.50", "pct": "-0.26%", "is_up": False},
+            "영국 GBP": {"val": "1,740.50", "delta": "+5.20", "pct": "+0.30%", "is_up": True},
+            "호주 AUD": {"val": "910.30", "delta": "+1.10", "pct": "+0.12%", "is_up": True}
+        },
+        "rates": {
+            "콜금리": {"val": "3.520%", "delta": "+0.010", "pct": "+0.28%", "is_up": True},
+            "CD(91일)": {"val": "3.610%", "delta": "+0.020", "pct": "+0.55%", "is_up": True},
+            "국고채(3년)": {"val": "3.415%", "delta": "-0.012", "pct": "-0.35%", "is_up": False}
+        },
+        "others": {
+            "VIX 지수": {"val": "13.45", "delta": "+0.25", "pct": "+1.89%", "is_up": True},
+            "금 가격": {"val": "$2,350.10", "delta": "-5.50", "pct": "-0.23%", "is_up": False},
+            "비트코인 (BTC)": {"val": "₩99,089,024", "delta": "+1,200,000", "pct": "+1.22%", "is_up": True}
+        }
     }
     
+    # 일부 핵심 지표만 FDR로 실시간 오버라이드 (API 지연 방지)
     try:
         end = datetime.today()
         start = end - timedelta(days=10)
         
-        # 1. 환율 (USD/KRW)
         df_usd = fdr.DataReader('USD/KRW', start, end)
         if len(df_usd) >= 2:
             c, p = df_usd['Close'].iloc[-1], df_usd['Close'].iloc[-2]
-            snapshot["USD/KRW (환율)"] = {"val": f"{c:,.2f}", "delta": f"{c-p:+,.2f}", "pct": f"{(c-p)/p*100:+.2f}%", "is_up": c >= p}
+            snapshot["forex"]["미국 USD"] = {"val": f"{c:,.2f}", "delta": f"{c-p:+,.2f}", "pct": f"{(c-p)/p*100:+.2f}%", "is_up": c >= p}
             
-        # 2. 코스피 (KS11)
         df_ks = fdr.DataReader('KS11', start, end)
         if len(df_ks) >= 2:
             c, p = df_ks['Close'].iloc[-1], df_ks['Close'].iloc[-2]
-            snapshot["KOSPI"] = {"val": f"{c:,.2f}", "delta": f"{c-p:+,.2f}", "pct": f"{(c-p)/p*100:+.2f}%", "is_up": c >= p}
+            snapshot["indices"]["코스피"] = {"val": f"{c:,.2f}", "delta": f"{c-p:+,.2f}", "pct": f"{(c-p)/p*100:+.2f}%", "is_up": c >= p}
             
-        # 3. 비트코인 (BTC/KRW)
         df_btc = fdr.DataReader('BTC/KRW', start, end)
         if len(df_btc) >= 2:
             c, p = df_btc['Close'].iloc[-1], df_btc['Close'].iloc[-2]
-            snapshot["Bitcoin (BTC)"] = {"val": f"₩{c:,.0f}", "delta": f"{c-p:+,.0f}", "pct": f"{(c-p)/p*100:+.2f}%", "is_up": c >= p}
-    except:
-        pass # 파싱 실패 시 방어 코드로 기본 snapshot 반환
+            snapshot["others"]["비트코인 (BTC)"] = {"val": f"₩{c:,.0f}", "delta": f"{c-p:+,.0f}", "pct": f"{(c-p)/p*100:+.2f}%", "is_up": c >= p}
+    except: pass
         
     return snapshot
 
-# 매크로 지표 HTML 렌더링 함수
-def render_metric_card(title, data):
-    color = "#ff4d4d" if data['is_up'] else "#4da6ff" # 한국 주식 기준: 상승=빨강, 하락=파랑
+# 세로형 컴팩트 UI 렌더링 함수
+def render_compact_metric(title, data):
+    color = "#ff4d4d" if data['is_up'] else "#4da6ff"
     arrow = "▲" if data['is_up'] else "▼"
-    delta_str = str(data['delta']).replace('+', '').replace('-', '') # 부호 중복 방지
+    delta_str = str(data['delta']).replace('+', '').replace('-', '')
     
     return f"""
-    <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 16px; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
-        <div style="color: #94a3b8; font-size: 13px; font-weight: 600; margin-bottom: 8px;">{title}</div>
-        <div style="color: #ffffff; font-size: 24px; font-weight: 800; letter-spacing: 0.5px;">{data['val']}</div>
-        <div style="color: {color}; font-size: 13.5px; font-weight: 600; margin-top: 4px;">{arrow} {delta_str} ({data['pct']})</div>
+    <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 12px 16px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+        <div style="color: #cbd5e1; font-size: 15px; font-weight: 600;">{title}</div>
+        <div style="text-align: right;">
+            <div style="color: #ffffff; font-size: 17px; font-weight: 800;">{data['val']}</div>
+            <div style="color: {color}; font-size: 12px; font-weight: 600; margin-top: 2px;">{arrow} {delta_str} ({data['pct']})</div>
+        </div>
     </div>
     """
 
@@ -256,13 +264,10 @@ def get_real_returns(symbols_dict, etf_names):
 def generate_market_sentiment(news_df):
     if news_df.empty or news_df["원본제목"].iloc[0].startswith("'"): 
         return "<ul><li>뉴스 데이터가 충분하지 않아 시장 심리를 분석할 수 없습니다.</li></ul>"
-    
     all_titles = " ".join(news_df["원본제목"].astype(str).tolist())
-    
     bullet1 = "<li>📈 <b>전반적 흐름</b>: "
     bullet2 = "<li>💡 <b>수급 모멘텀</b>: "
     bullet3 = "<li>⚠️ <b>투자자 심리</b>: "
-
     if any(kw in all_titles for kw in ['강세', '상승', '급등', '반등']): 
         bullet1 += "시장 상승세 속에서 금리 인하 기대감이 시장을 주도하고 있습니다.</li>"
         bullet2 += "성장주 및 고배당 ETF를 중심으로 자금 유입이 뚜렷하게 나타납니다.</li>"
@@ -275,7 +280,6 @@ def generate_market_sentiment(news_df):
         bullet1 += "특별한 상승/하락 모멘텀 없이 시장 전반이 혼조세를 보이고 있습니다.</li>"
         bullet2 += "섹터별, 테마별로 짧은 주기의 순환매 장세가 지속 중입니다.</li>"
         bullet3 += "명확한 방향성이 부재하여 투자자들의 신중한 접근이 요구됩니다.</li>"
-        
     return f"<ul style='margin-bottom:0;'>{bullet1}{bullet2}{bullet3}</ul>"
 
 @st.cache_data
@@ -292,7 +296,7 @@ def load_and_clean_excel(file, sheet_name):
 
 
 # =========================================================================
-# ★ 메인 화면 3단 분할 (메인 85% / 우측 컨트롤 타워 15%)
+# ★ 메인 화면 분할 (메인 85% / 우측 컨트롤 타워 15%)
 # =========================================================================
 col_main, col_spacing, col_right = st.columns([4.5, 0.1, 0.8])
 
@@ -349,7 +353,7 @@ with col_right:
             st.markdown("<p style='text-align:right; color:#94a3b8; font-size:12px;'>삼성자산운용 x 커리어하이</p>", unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# [중앙 화면] 가로형 탭 구동
+# [중앙 화면] 가로형 탭 복구
 # ---------------------------------------------------------
 with col_main:
     st.session_state.setdefault('dl_summary', "DataLab 데이터가 업로드되지 않았습니다.")
@@ -361,7 +365,7 @@ with col_main:
     ]
     tabs = st.tabs(tab_names)
 
-    # === Tab 0: Home (매크로 모닝보드 패치 완료) ===
+    # === Tab 0: Home (3단 모닝보드 패치) ===
     with tabs[0]:
         st.markdown("<br>", unsafe_allow_html=True)
         st.markdown(
@@ -378,44 +382,44 @@ with col_main:
         )
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # --- ★ 추가된 매크로 스냅샷 영역 ---
-        st.markdown("#### 🌍 Today's Macro Snapshot")
-        st.caption("주요 거시경제 지표 및 ETF 세일즈 핵심 트리거 (실시간)")
-        
+        # --- ★ 3단 분할 매크로 스냅샷 영역 ---
         macros = get_macro_snapshot()
         
-        # 첫 번째 행 (대표 지수 및 변동성)
-        c1, c2, c3, c4 = st.columns(4)
-        with c1: st.markdown(render_metric_card("KOSPI", macros["KOSPI"]), unsafe_allow_html=True)
-        with c2: st.markdown(render_metric_card("S&P 500", macros["S&P 500"]), unsafe_allow_html=True)
-        with c3: st.markdown(render_metric_card("NASDAQ 100", macros["NASDAQ 100"]), unsafe_allow_html=True)
-        with c4: st.markdown(render_metric_card("VIX (공포지수)", macros["VIX (공포지수)"]), unsafe_allow_html=True)
+        c_m1, c_m2, c_m3 = st.columns(3)
         
-        st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
-        
-        # 두 번째 행 (환율, 금리, 대체자산)
-        c5, c6, c7, c8 = st.columns(4)
-        with c5: st.markdown(render_metric_card("USD/KRW (원·달러 환율)", macros["USD/KRW (환율)"]), unsafe_allow_html=True)
-        with c6: st.markdown(render_metric_card("JPY/KRW (100엔 환율)", macros["JPY/KRW (100엔)"]), unsafe_allow_html=True)
-        with c7: st.markdown(render_metric_card("국고채 3년물 (기준금리)", macros["국고채 3년물"]), unsafe_allow_html=True)
-        with c8: st.markdown(render_metric_card("Bitcoin (BTC/KRW)", macros["Bitcoin (BTC)"]), unsafe_allow_html=True)
-        
-        st.markdown("<br><br>", unsafe_allow_html=True)
-        # -----------------------------------
-        
-        c_p1, c_p2, c_p3 = st.columns(3)
-        with c_p1:
+        # 1열: 핵심 대표 지수
+        with c_m1:
             with st.container(border=True):
-                st.markdown("### 📊 성과 어트리뷰션")
-                st.write("투자자별 주간 순매수 흐름을 분석하고, 마케팅 이벤트의 수급 기여도(ROI)를 직관적으로 추적합니다.")
-        with c_p2:
+                st.markdown("#### 📈 핵심 대표 지수")
+                st.divider()
+                for key, data in macros["indices"].items():
+                    st.markdown(render_compact_metric(key, data), unsafe_allow_html=True)
+                    
+        # 2열: 환율
+        with c_m2:
             with st.container(border=True):
-                st.markdown("### 📡 마켓 인텔리전스")
-                st.write("언론 뉴스 RSS 및 포털 검색량을 결합하여 시장의 실시간 센티먼트를 감지하고 시스템 리스크를 방어합니다.")
-        with c_p3:
+                st.markdown("#### 💱 주요 환율")
+                st.divider()
+                for key, data in macros["forex"].items():
+                    st.markdown(render_compact_metric(key, data), unsafe_allow_html=True)
+                    
+        # 3열: 금리
+        with c_m3:
             with st.container(border=True):
-                st.markdown("### 🧠 AI 프롬프트 빌더")
-                st.write("수집된 모든 지표와 규제 동향, 고객 Pain Point를 결합하여 실무팀 하달용 액션 플랜을 도출합니다.")
+                st.markdown("#### 🏦 금리 지표")
+                st.divider()
+                for key, data in macros["rates"].items():
+                    st.markdown(render_compact_metric(key, data), unsafe_allow_html=True)
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        # 4행 (하단): 기타 지표 (VIX, 금, 비트코인)
+        st.markdown("#### 📌 기타 주요 지표")
+        c_o1, c_o2, c_o3 = st.columns(3)
+        
+        with c_o1: st.markdown(render_compact_metric("VIX 지수", macros["others"]["VIX 지수"]), unsafe_allow_html=True)
+        with c_o2: st.markdown(render_compact_metric("금 가격", macros["others"]["금 가격"]), unsafe_allow_html=True)
+        with c_o3: st.markdown(render_compact_metric("비트코인 (BTC)", macros["others"]["비트코인 (BTC)"]), unsafe_allow_html=True)
 
     # === Tab 1: Weekly Info ===
     with tabs[1]:
