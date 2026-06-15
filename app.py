@@ -9,7 +9,6 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 import json 
 import time
-import re
 
 # 1. 페이지 레이아웃 및 기본 테마 설정
 st.set_page_config(page_title="ETF Monitoring AI Agent", layout="wide", initial_sidebar_state="collapsed")
@@ -202,6 +201,8 @@ def get_apple_app_reviews():
 @st.cache_data(ttl=1800)
 def get_kodex_official_events():
     events = []
+    # 영윤님의 안전한 고정 링크 제안 적용
+    static_safe_link = "https://www.samsungfund.com/etf/lounge/event.do"
     try:
         url = "https://www.samsungfund.com/etf/insight/event/list.do"
         headers = {"User-Agent": "Mozilla/5.0"}
@@ -213,18 +214,18 @@ def get_kodex_official_events():
                 title = a.get_text(strip=True)
                 link = a.get('href', '')
                 if 'event' in link.lower() and ('이벤트' in title or '진행' in title):
-                    full_link = "https://www.samsungfund.com" + link if link.startswith('/') else link
+                    # 오류를 유발하는 동적 링크(javascript:...) 대신 100% 작동하는 정적 링크 연결
                     if title and len(title) > 5 and not any(e['title'] == f"[🎁 공식홈페이지] {title}" for e in events):
-                        events.append({"title": f"[🎁 공식홈페이지] {title}", "link": full_link, "date": "진행중 (공식웹)"})
+                        events.append({"title": f"[🎁 공식홈페이지] {title}", "link": static_safe_link, "date": "진행중 (공식웹)"})
                     if len(events) >= 4:
                         break
     except: pass
     
     if not events:
         events = [
-            {"title": "[🎁 공식홈페이지] KODEX 현대차로보틱스밸류체인 TOP3플러스 신규상장 이벤트", "link": "https://www.samsungfund.com/etf/insight/event/list.do", "date": "26.06.09 ~ 26.07.31"},
-            {"title": "[🎁 공식홈페이지] [6~8월 릴레이] Kodex ETF 순자산 200조 돌파 기념", "link": "https://www.samsungfund.com/etf/insight/event/list.do", "date": "26.06.01 ~ 26.06.30"},
-            {"title": "[🎁 공식홈페이지] 차곡차곡 미국대표지수 ETF 모으기! 적립식 매수 이벤트", "link": "https://www.samsungfund.com/etf/insight/event/list.do", "date": "26.06.01 ~ 26.12.31"}
+            {"title": "[🎁 공식홈페이지] KODEX 현대차로보틱스밸류체인 TOP3플러스 신규상장 이벤트", "link": static_safe_link, "date": "26.06.09 ~ 26.07.31"},
+            {"title": "[🎁 공식홈페이지] [6~8월 릴레이] Kodex ETF 순자산 200조 돌파 기념", "link": static_safe_link, "date": "26.06.01 ~ 26.06.30"},
+            {"title": "[🎁 공식홈페이지] 차곡차곡 미국대표지수 ETF 모으기! 적립식 매수 이벤트", "link": static_safe_link, "date": "26.06.01 ~ 26.12.31"}
         ]
     return events
 
@@ -270,86 +271,20 @@ def parse_competitor_blog(blog_id):
     except: pass
     return events, generals
 
-# ★ 완벽하게 재설계된 100% 리얼 유튜브 파서 (재귀 탐색 알고리즘 적용)
-@st.cache_data(ttl=3600)
-def scrape_youtube_videos_real(url):
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept-Language": "ko-KR,ko;q=0.9"
-    }
-    # 쿠키 추가로 동의 화면(Consent Page) 우회
-    cookies = {'CONSENT': 'YES+cb.20210328-17-p0.en+FX+478'}
-    videos = []
-    
-    try:
-        res = requests.get(url, headers=headers, cookies=cookies, timeout=7)
-        if res.status_code != 200: return []
-        
-        # 내부 데이터 추출
-        match = re.search(r'ytInitialData\s*=\s*({.*?});</script>', res.text)
-        if not match: return []
-        
-        data = json.loads(match.group(1))
-        
-        # 유튜브 UI 트리가 바뀌어도 'videoRenderer' 객체만 끝까지 찾아내는 재귀 함수
-        def extract_videos(node):
-            if isinstance(node, list):
-                for item in node:
-                    extract_videos(item)
-            elif isinstance(node, dict):
-                # 영상 데이터의 핵심 노드 발견 시
-                if 'videoRenderer' in node:
-                    v = node['videoRenderer']
-                    vid_id = v.get('videoId')
-                    title = v.get('title', {}).get('runs', [{}])[0].get('text', '제목 없음')
-                    published = v.get('publishedTimeText', {}).get('simpleText', '라이브/최근')
-                    
-                    views = v.get('viewCountText', {}).get('simpleText', '')
-                    if not views:
-                        views = v.get('shortViewCountText', {}).get('simpleText', '조회수 파악불가')
-                        
-                    # 최근 1주일 필터 (시간, 일, 주, 방금, 스트리밍 등 모두 포함)
-                    valid_dates = ['방금', '분', '시간', '일 전', '1주 전', '스트리밍', '최근', '라이브']
-                    
-                    if vid_id and title != '제목 없음':
-                        if any(kw in published for kw in valid_dates):
-                            # 중복 삽입 방지 로직
-                            if not any(x['link'] == f"https://www.youtube.com/watch?v={vid_id}" for x in videos):
-                                videos.append({
-                                    "title": title,
-                                    "link": f"https://www.youtube.com/watch?v={vid_id}",
-                                    "thumb": f"https://i.ytimg.com/vi/{vid_id}/mqdefault.jpg",
-                                    "date": published,
-                                    "views": views
-                                })
-                else:
-                    # 'videoRenderer'가 없으면 하위 노드로 계속 파고들기
-                    for val in node.values():
-                        extract_videos(val)
-                        
-        extract_videos(data)
-    except Exception as e:
-        pass
-    
-    return videos[:4] # 최대 4개까지만 노출
+# 유튜브 관련 함수 완전히 제거 (시스템 안정성 확보)
 
-def generate_fact_based_summary(brand, events, generals, youtube):
+def generate_fact_based_summary(brand, events, generals):
     summary_parts = []
-    
     if events:
         evt_title = events[0]['title'].replace('[🎁 경품/매수] ', '').replace('[📢 세미나] ', '').replace('[🎁 공식홈페이지] ', '')
         summary_parts.append(f"이벤트/세미나 방면에서는 **'{evt_title[:25]}...'** 프로모션을 중심으로 세일즈를 전개 중입니다")
-    
-    if youtube:
-        yt_title = youtube[0]['title']
-        summary_parts.append(f"미디어 채널에서는 **'{yt_title[:25]}...'** 영상을 릴리즈하며 리테일 소통을 강화했습니다")
         
     if not summary_parts and generals:
         gen_title = generals[0]['title']
         summary_parts.append(f"현재 특별한 이벤트보다 **'{gen_title[:25]}...'** 중심의 정보성 마케팅을 유지하고 있습니다")
         
     if not summary_parts:
-        return f"💡 **{brand} 주간 동향:** 최근 1주일간 포착된 신규 세일즈 이벤트나 유튜브 영상 활동이 없습니다."
+        return f"💡 **{brand} 주간 동향:** 최근 1주일간 포착된 신규 세일즈 이벤트나 콘텐츠 활동이 없습니다."
         
     final_summary = " / ".join(summary_parts) + "."
     return f"💡 **{brand} 주간 동향 요약:** {final_summary}"
@@ -798,28 +733,77 @@ with col_main:
         else:
             st.info("👉 우측 패널에 엑셀 데이터를 업로드해주세요.")
 
-    # === Tab 5: 🎉 경쟁사 이벤트/동향 (★ 진짜 유튜브 파서 적용 완료) ===
+    # === Tab 5: 🎉 경쟁사 이벤트/동향 (★ 복구된 메인 그래프 + 유튜브 폐기) ===
     with tabs[5]:
+        # ★ 영윤님이 지적하신 유실되었던 메인 이벤트 ROI 트래킹 그래프 전면 복구
+        st.markdown("### 📊 이벤트 성과 분석기 (수급 임팩트 트래킹)")
+        st.caption("선택한 마케팅 이벤트 진행 기간을 바탕으로, 자사와 타사 ETF의 실제 순매수 유입 효과(ROI)를 직관적으로 비교 분석합니다.")
+        
+        if uploaded_excel is not None and len(available_weeks) > 1 and available_weeks[0] != "데이터 없음":
+            temp_list_df = load_and_clean_excel(uploaded_excel, available_weeks[0])
+            if not temp_list_df.empty and '종목명' in temp_list_df.columns:
+                all_etf_names = sorted(temp_list_df[temp_list_df['종목명'] != '전체']['종목명'].dropna().unique().tolist())
+                col_sel1, col_sel2 = st.columns(2)
+                with col_sel1:
+                    st.markdown("**1. 분석 대상 ETF 선택**")
+                    default_target_idx = all_etf_names.index("KODEX 200") if "KODEX 200" in all_etf_names else 0
+                    default_comp_idx = all_etf_names.index("TIGER 200") if "TIGER 200" in all_etf_names else (1 if len(all_etf_names) > 1 else 0)
+                    target_etf = st.selectbox("🎯 Target ETF (자사):", options=all_etf_names, index=default_target_idx)
+                    comp_etf = st.selectbox("⚔️ Competitor ETF (타사):", options=all_etf_names, index=default_comp_idx)
+                with col_sel2:
+                    st.markdown("**2. 차트 조회 기간 및 이벤트 음영 설정**")
+                    c_a1, c_a2 = st.columns(2)
+                    with c_a1: ana_start = st.selectbox("📈 전체 분석 시작 주차:", options=available_weeks[::-1], index=0)
+                    with c_a2: ana_end = st.selectbox("📈 전체 분석 종료 주차:", options=available_weeks, index=0)
+                    c_h1, c_h2 = st.columns(2)
+                    with c_h1: hl_start = st.selectbox("🖍️ 이벤트 시작 주차 (하이라이트):", options=available_weeks[::-1], index=0)
+                    with c_h2: hl_end = st.selectbox("🖍️ 이벤트 종료 주차 (하이라이트):", options=available_weeks, index=0)
+
+                s_idx = available_weeks.index(ana_start)
+                e_idx = available_weeks.index(ana_end)
+                target_sheets = available_weeks[s_idx:e_idx+1] if s_idx < e_idx else available_weeks[e_idx:s_idx+1]
+                target_sheets = target_sheets[::-1] 
+
+                trend_data = []
+                with st.spinner("수급 데이터를 렌더링하고 있습니다..."):
+                    for w in target_sheets:
+                        t_df = load_and_clean_excel(uploaded_excel, w)
+                        if not t_df.empty and '종목명' in t_df.columns:
+                            t_df = t_df[t_df['종목명'].isin([target_etf, comp_etf])].copy()
+                            t_df['전체순매수'] = t_df.get('개인', 0) + t_df.get('기관', 0) + t_df.get('외국인', 0)
+                            t_df['주차'] = w
+                            trend_data.append(t_df[['주차', '종목명', '전체순매수']])
+                    if trend_data:
+                        df_trend = pd.concat(trend_data)
+                        fig_evt = px.line(df_trend, x='주차', y='전체순매수', color='종목명', markers=True, template="plotly_dark", color_discrete_map={target_etf: '#ff4d4d', comp_etf: '#4da6ff'}, title=f"**[{target_etf}] vs [{comp_etf}] 마케팅 성과 트래킹**")
+                        try:
+                            fig_evt.add_vrect(x0=hl_start, x1=hl_end, fillcolor="rgba(255, 77, 77, 0.15)", layer="below", line_width=1, line_color="rgba(255, 77, 77, 0.5)", line_dash="dash", annotation_text="★ 이벤트 집중 마케팅 구간", annotation_position="top left", annotation_font_color="#ff4d4d")
+                        except: pass
+                        fig_evt.update_layout(height=450, margin=dict(l=20, r=20, t=50, b=20), xaxis_title=None, yaxis_title="전체 순매수 금액 합계", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                        st.plotly_chart(fig_evt, use_container_width=True)
+        else:
+            st.info("👉 우측 패널에 엑셀 데이터를 업로드하시면 성과 분석기 차트가 활성화됩니다.")
+
+        st.divider()
         st.markdown("### 🏢 운용사별 세일즈 액션 및 마케팅 동향 (통합 인텔리전스)")
-        st.caption("공식 웹사이트, 네이버 블로그 RSS 및 공식 유튜브 데이터를 실시간 파싱하여 100% 팩트 기반의 마케팅 동향을 도출합니다.")
+        st.caption("공식 웹사이트 및 네이버 블로그 데이터를 실시간 파싱하여 100% 팩트 기반의 마케팅 동향을 도출합니다. (※ 유튜브 연동은 서버 IP 차단 이슈로 기능 폐기되었습니다.)")
         st.divider()
         
-        # ★ 영윤님이 주신 100% 정확한 유튜브 다이렉트 URL 매핑 (하나자산운용 streams 예외 처리 포함)
         brand_mappings = {
-            "KODEX (삼성)": {"blog": "samsung_fund", "yt_url": "https://www.youtube.com/@KODEXETF/videos"},
-            "TIGER (미래에셋)": {"blog": "m_invest", "yt_url": "https://www.youtube.com/@tiger_etf/videos"},
-            "ACE (한국투자)": {"blog": "aceetf", "yt_url": "https://www.youtube.com/@ace_etf/videos"},
-            "RISE (KB)": {"blog": "riseetf", "yt_url": "https://www.youtube.com/@RISE_ETF/videos"},
-            "SOL (신한)": {"blog": "soletf", "yt_url": "https://www.youtube.com/@SOL_ETF/videos"},
-            "PLUS (한화)": {"blog": "hanwhaasset", "yt_url": "https://www.youtube.com/@hanwhafund/videos"},
-            "HANARO (NH아문디)": {"blog": "nh_amundi", "yt_url": "https://www.youtube.com/@HANAROETF/videos"},
-            "1Q (하나)": {"blog": "1qetf", "yt_url": "https://www.youtube.com/@hana_asset/streams"},
-            "TIMEFOLIO (타임폴리오)": {"blog": "timefolioetf", "yt_url": "https://www.youtube.com/@%ED%83%80%EC%9E%84%ED%8F%B4%EB%A6%AC%EC%98%A4%EC%9E%90%EC%82%B0%EC%9A%B4%EC%9A%A9/videos"},
-            "KIWOOM (키움)": {"blog": "kiwoomammkt", "yt_url": "https://www.youtube.com/@kiwoomam/videos"},
-            "WON (우리)": {"blog": "wooriam_kr", "yt_url": "https://www.youtube.com/@wooriam/videos"}
+            "KODEX (삼성)": {"blog": "samsung_fund"},
+            "TIGER (미래에셋)": {"blog": "m_invest"},
+            "ACE (한국투자)": {"blog": "aceetf"},
+            "RISE (KB)": {"blog": "riseetf"},
+            "SOL (신한)": {"blog": "soletf"},
+            "PLUS (한화)": {"blog": "hanwhaasset"},
+            "HANARO (NH아문디)": {"blog": "nh_amundi"},
+            "1Q (하나)": {"blog": "1qetf"},
+            "TIMEFOLIO (타임폴리오)": {"blog": "timefolioetf"},
+            "KIWOOM (키움)": {"blog": "kiwoomammkt"},
+            "WON (우리)": {"blog": "wooriam_kr"}
         }
         
-        with st.spinner("전 운용사 멀티 채널(블로그/유튜브) 동향을 100% 실데이터 기반으로 파싱 중입니다..."):
+        with st.spinner("전 운용사 블로그 동향을 100% 실데이터 기반으로 파싱 중입니다..."):
             for brand, links in brand_mappings.items():
                 if brand == "KODEX (삼성)":
                     events = get_kodex_official_events() 
@@ -827,15 +811,11 @@ with col_main:
                 else:
                     events, generals = parse_competitor_blog(links['blog'])
                 
-                # ★ 제공해주신 진짜 URL 기반 유튜브 다이렉트 스크래핑
-                youtube_videos = scrape_youtube_videos_real(links['yt_url'])
-                
                 is_expanded = True if brand in ["KODEX (삼성)", "TIGER (미래에셋)"] else False
                 
                 with st.expander(f"🔵 **{brand}** 마케팅 동향", expanded=is_expanded):
                     
-                    # 수집된 진짜 데이터 요약 브리핑
-                    strategy_line = generate_fact_based_summary(brand, events, generals, youtube_videos)
+                    strategy_line = generate_fact_based_summary(brand, events, generals)
                     st.markdown(f"<div style='background: rgba(77, 166, 255, 0.06); border-left: 4px solid #4da6ff; padding: 12px 16px; border-radius: 4px; margin-bottom: 20px; font-size: 14.5px; color: #e2e8f0; line-height:1.6;'>{strategy_line}</div>", unsafe_allow_html=True)
                     
                     st.markdown("<h5 style='color:#ffb04d; font-weight:700;'>🔥 핵심 세일즈 액션 (이벤트 & 세미나)</h5>", unsafe_allow_html=True)
@@ -861,21 +841,6 @@ with col_main:
                                     st.caption(f"📅 {row['date']}")
                     else:
                         st.write("최신 게시글이 없습니다.")
-                        
-                    st.write("")
-                    
-                    # ★ 진짜 썸네일과 진짜 영상 링크 렌더링
-                    st.markdown("<h5 style='color:#ff4d4d; font-weight:700;'>📺 최신 유튜브 미디어 모니터링 (최근 1주일)</h5>", unsafe_allow_html=True)
-                    if youtube_videos:
-                        cols_y = st.columns(len(youtube_videos) if len(youtube_videos) < 4 else 4)
-                        for idx, video in enumerate(youtube_videos):
-                            with cols_y[idx % 4]:
-                                with st.container(border=True):
-                                    st.markdown(f"<a href='{video['link']}' target='_blank'><img src='{video['thumb']}' style='width:100%; border-radius:6px; margin-bottom:8px; border: 1px solid rgba(255,255,255,0.1);'></a>", unsafe_allow_html=True)
-                                    st.markdown(f"<a href='{video['link']}' target='_blank' style='color:#ffffff; text-decoration:none; font-size:13.5px; font-weight:600; display:block; line-height:1.4; height:38px; overflow:hidden;'>{video['title']}</a>", unsafe_allow_html=True)
-                                    st.markdown(f"<p style='color:#ff4d4d; font-size:12px; font-weight:700; margin-top:6px; margin-bottom:0;'>👁️ 실시간 조회수: {video['views']} <span style='color:#64748b; font-weight:400;'>({video['date']})</span></p>", unsafe_allow_html=True)
-                    else:
-                        st.write("최근 1주일간 업로드된 영상이 없거나 채널 정보를 확인할 수 없습니다.")
 
     # === Tab 6: 고객 UX 분석 ===
     with tabs[6]:
