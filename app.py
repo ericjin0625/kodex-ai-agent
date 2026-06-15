@@ -89,7 +89,6 @@ def assign_auto_theme(etf_name):
     except:
         return '📦 기타 섹터/테마'
 
-# ★ 1번 수정: 날려버린 지표 100% 복구 및 다중 티커 방어 로직
 @st.cache_data(ttl=1800)
 def get_macro_snapshot():
     snapshot = {
@@ -109,7 +108,6 @@ def get_macro_snapshot():
         }
     }
     
-    # 각 티커별 크롤링 키워드
     tickers = {
         "indices": {
             "코스피": ["KS11"], 
@@ -145,12 +143,10 @@ def get_macro_snapshot():
         for name, ticker_list in items.items():
             for ticker in ticker_list:
                 try:
-                    # dropna()를 통해 휴장일 빈 값(NaN)으로 인한 화면 깨짐 방지
                     df = fdr.DataReader(ticker, start, end).dropna()
                     if len(df) >= 2:
                         c, p = df['Close'].iloc[-1], df['Close'].iloc[-2]
                         
-                        # 일본 JPY는 100엔당 원화로 보정
                         if name == "일본 JPY 100" and c < 50:
                             c, p = c * 100, p * 100
                             
@@ -171,12 +167,13 @@ def get_macro_snapshot():
     return snapshot
 
 def render_compact_metric(title, data):
+    # ★ 수정 요청 반영: 정보 불가 시 붉은색 (장마감/업데이트 전) 텍스트로 노출
     if data['val'] == "정보 불가":
         return f"""
         <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 12px 16px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
             <div style="color: #cbd5e1; font-size: 15px; font-weight: 600;">{title}</div>
             <div style="text-align: right;">
-                <div style="color: #64748b; font-size: 13px; font-weight: 600;">정보 불러올 수 없음</div>
+                <div style="color: #ff4d4d; font-size: 13px; font-weight: 600;">(장마감/업데이트 전)</div>
             </div>
         </div>
         """
@@ -245,26 +242,61 @@ def get_apple_app_reviews():
         return all_bad_reviews[:12]
     except Exception as e: return [{"error": f"API 연동 중 오류가 발생했습니다: {str(e)}"}]
 
+# ★ 2번 수정: KODEX 운용사 웹사이트 스크래핑 우회 헤더 보강 및 태그 최신화
 @st.cache_data(ttl=1800)
 def get_kodex_official_events():
     events = []
-    static_safe_link = "https://www.samsungfund.com/etf/lounge/event.do"
+    base_url = "https://www.samsungfund.com"
     try:
+        # 봇 차단을 뚫기 위한 강력한 우회 헤더 조합
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "none",
+            "Sec-Fetch-User": "?1"
+        }
+        
+        # 삼성자산운용 이벤트/프로모션 실제 리스트 URL (변경 가능성 대비)
         url = "https://www.samsungfund.com/etf/insight/event/list.do"
-        headers = {"User-Agent": "Mozilla/5.0"}
-        res = requests.get(url, headers=headers, timeout=5)
+        
+        res = requests.get(url, headers=headers, timeout=8)
         if res.status_code == 200:
             soup = BeautifulSoup(res.text, 'html.parser')
-            items = soup.select('a')
+            
+            # 1. 1차 타겟: div.event_list 내의 a 태그 등 보편적 구조 추적
+            items = soup.select('div.event_list ul li a, ul.list_type a, div.list_wrap a')
+            
+            # 2. 구조가 다를 경우 대비 포괄적 정규식 href 탐색 (Fallback)
+            if not items:
+                items = soup.find_all('a', href=re.compile(r'/event/|event.do|eventView'))
+                
             for a in items:
-                title = a.get_text(strip=True)
+                # 제목 텍스트 파싱 (보통 strong, p, span 태그로 감싸져 있음)
+                title_tag = a.find(['strong', 'p', 'span'], class_=re.compile('tit|name|txt'))
+                title = title_tag.get_text(strip=True) if title_tag else a.get_text(strip=True)
+                
+                # 기간 텍스트 파싱
+                date_tag = a.find(['span', 'p'], class_=re.compile('date|day|period'))
+                date_str = date_tag.get_text(strip=True) if date_tag else "진행중 (공식웹)"
+                
                 link = a.get('href', '')
-                if 'event' in link.lower() and ('이벤트' in title or '진행' in title):
-                    if title and len(title) > 5 and not any(e['title'] == f"[🎁 공식홈페이지] {title}" for e in events):
-                        events.append({"title": f"[🎁 공식홈페이지] {title}", "link": static_safe_link, "date": "진행중 (공식웹)"})
-                    if len(events) >= 4:
-                        break
-    except: pass
+                if not link.startswith('http'):
+                    link = base_url + link
+                    
+                # 유의미한 이벤트 제목만 필터링 후 적재
+                if title and len(title) > 5 and ('이벤트' in title or '진행' in title or '안내' in title or '오픈' in title):
+                    if not any(e['title'] == f"[🎁 공식홈페이지] {title}" for e in events):
+                        events.append({"title": f"[🎁 공식홈페이지] {title}", "link": link, "date": date_str})
+                        
+                if len(events) >= 4:
+                    break
+    except Exception as e:
+        pass
     return events
 
 @st.cache_data(ttl=1800)
@@ -420,7 +452,6 @@ with col_right:
         st.markdown("<h4 style='text-align:center; font-size: 16px;'>🎛️ 데이터 컨트롤</h4>", unsafe_allow_html=True)
         st.divider()
         
-        # ★ 2번 수정: 조회 기준 주차 드롭다운을 상단으로 이동 (st.empty 활용)
         week_placeholder = st.empty()
         
         st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
