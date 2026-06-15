@@ -90,60 +90,56 @@ def assign_auto_theme(etf_name):
 
 @st.cache_data(ttl=1800)
 def get_macro_snapshot():
-    # 100% 정직한 초기값 설정 (가짜 데이터 제거)
     snapshot = {
         "indices": {
-            "코스피": {"val": "데이터 없음"},
-            "코스닥": {"val": "데이터 없음"},
-            "S&P 500": {"val": "데이터 없음"},
-            "나스닥": {"val": "데이터 없음"},
-            "다우존스": {"val": "데이터 없음"}
+            "코스피": {"val": "정보 불가"}, "코스닥": {"val": "정보 불가"},
+            "S&P 500": {"val": "정보 불가"}, "나스닥": {"val": "정보 불가"}, "다우존스": {"val": "정보 불가"}
         },
         "forex": {
-            "미국 USD": {"val": "데이터 없음"},
-            "일본 JPY 100": {"val": "데이터 없음"},
-            "유럽연합 EUR": {"val": "데이터 없음"}
+            "미국 USD": {"val": "정보 불가"}, "일본 JPY 100": {"val": "정보 불가"}, "유럽연합 EUR": {"val": "정보 불가"}
         },
         "rates": {
-            "국고채(3년)": {"val": "데이터 없음"}
+            "국고채(3년)": {"val": "정보 불가"}
         },
         "others": {
-            "VIX 지수": {"val": "데이터 없음"},
-            "금 가격": {"val": "데이터 없음"},
-            "비트코인 (BTC)": {"val": "데이터 없음"}
+            "VIX 지수": {"val": "정보 불가"}, "금 가격": {"val": "정보 불가"}, "비트코인 (BTC)": {"val": "정보 불가"}
         }
     }
     
-    # fdr을 통해 실제로 불러올 수 있는 데이터만 덮어씌움
-    try:
-        end = datetime.today()
-        start = end - timedelta(days=10)
-        
-        df_ks = fdr.DataReader('KS11', start, end)
-        if len(df_ks) >= 2:
-            c, p = df_ks['Close'].iloc[-1], df_ks['Close'].iloc[-2]
-            snapshot["indices"]["코스피"] = {"val": f"{c:,.2f}", "delta": f"{c-p:+,.2f}", "pct": f"{(c-p)/p*100:+.2f}%", "is_up": c >= p}
-            
-        df_kq = fdr.DataReader('KQ11', start, end)
-        if len(df_kq) >= 2:
-            c, p = df_kq['Close'].iloc[-1], df_kq['Close'].iloc[-2]
-            snapshot["indices"]["코스닥"] = {"val": f"{c:,.2f}", "delta": f"{c-p:+,.2f}", "pct": f"{(c-p)/p*100:+.2f}%", "is_up": c >= p}
-            
-        df_usd = fdr.DataReader('USD/KRW', start, end)
-        if len(df_usd) >= 2:
-            c, p = df_usd['Close'].iloc[-1], df_usd['Close'].iloc[-2]
-            snapshot["forex"]["미국 USD"] = {"val": f"{c:,.2f}", "delta": f"{c-p:+,.2f}", "pct": f"{(c-p)/p*100:+.2f}%", "is_up": c >= p}
-            
-        df_btc = fdr.DataReader('BTC/KRW', start, end)
-        if len(df_btc) >= 2:
-            c, p = df_btc['Close'].iloc[-1], df_btc['Close'].iloc[-2]
-            snapshot["others"]["비트코인 (BTC)"] = {"val": f"₩{c:,.0f}", "delta": f"{c-p:+,.0f}", "pct": f"{(c-p)/p*100:+.2f}%", "is_up": c >= p}
-    except: pass
+    # ★ 수정: 각 티커별 독립적 크롤링 로직 적용 (하나가 실패해도 나머지는 정상 작동)
+    tickers = {
+        "indices": {"코스피": "KS11", "코스닥": "KQ11", "S&P 500": "US500", "나스닥": "IXIC", "다우존스": "DJI"},
+        "forex": {"미국 USD": "USD/KRW", "일본 JPY 100": "JPY/KRW", "유럽연합 EUR": "EUR/KRW"},
+        "others": {"VIX 지수": "VIX", "비트코인 (BTC)": "BTC/KRW"}
+    }
+    
+    end = datetime.today()
+    start = end - timedelta(days=14) # 주말/휴장일 고려하여 여유있게 14일치 호출
+    
+    for category, items in tickers.items():
+        for name, ticker in items.items():
+            try:
+                df = fdr.DataReader(ticker, start, end)
+                if len(df) >= 2:
+                    c, p = df['Close'].iloc[-1], df['Close'].iloc[-2]
+                    
+                    # 일본 JPY는 100엔 단위로 보정
+                    if ticker == "JPY/KRW" and c < 50:
+                        c, p = c * 100, p * 100
+                        
+                    if name == "비트코인 (BTC)":
+                        val_str, delta_str = f"₩{c:,.0f}", f"{c-p:+,.0f}"
+                    else:
+                        val_str, delta_str = f"{c:,.2f}", f"{c-p:+,.2f}"
+                        
+                    pct_str = f"{(c-p)/p*100:+.2f}%"
+                    snapshot[category][name] = {"val": val_str, "delta": delta_str, "pct": pct_str, "is_up": c >= p}
+            except: pass
+    
     return snapshot
 
 def render_compact_metric(title, data):
-    # 가짜 데이터 대신 "정보 불러올 수 없음" 처리
-    if data['val'] == "데이터 없음":
+    if data['val'] == "정보 불가":
         return f"""
         <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 12px 16px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
             <div style="color: #cbd5e1; font-size: 15px; font-weight: 600;">{title}</div>
@@ -237,8 +233,6 @@ def get_kodex_official_events():
                     if len(events) >= 4:
                         break
     except: pass
-    
-    # ★ 가짜 하드코딩 리스트 삭제. 못 불러오면 빈 리스트 반환
     return events
 
 @st.cache_data(ttl=1800)
@@ -789,7 +783,7 @@ with col_main:
                             st.caption(f"📅 {row['게시일 / 출처']}")
                 else: st.info("검색 범위(최대 1년) 내 포착된 리스크성 기사가 없습니다.")
 
-    # === Tab 7 ===
+    # === Tab 7: 운용 현황 및 점유율 (★ 빈 행 삭제 완료) ===
     with tabs[7]:
         st.markdown("### 🏢 국내 ETF 운용사 AUM 시장 점유율 및 테마별 현황 (실시간 기준)")
         col_pie, col_table = st.columns([1, 2])
@@ -821,8 +815,9 @@ with col_main:
                         pivot_df = pivot_df[[c for col in target_brands if col in pivot_df.columns for c in [col]]].astype(int)
                         if '📦 기타 섹터/테마' in pivot_df.index: pivot_df = pivot_df.reindex([i for i in pivot_df.index if i != '📦 기타 섹터/테마'] + ['📦 기타 섹터/테마'])
                         
+                        # ★ 값이 전부 0인 불필요한 빈 행 제거 로직 적용 완료
                         pivot_df = pivot_df.loc[(pivot_df != 0).any(axis=1)]
-                        st.dataframe(pivot_df.style.format("{:,}"), use_container_width=True, height=420)
+                        st.dataframe(pivot_df.style.format("{:,}"), use_container_width=True)
             except Exception as e: st.error(f"오류: {e}")
 
         st.divider()
