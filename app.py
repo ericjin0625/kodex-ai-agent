@@ -561,19 +561,30 @@ with col_main:
                                 df_scatter_filtered['주간 수익률(%)'] = df_scatter_filtered['종목명'].map(real_returns)
                                 df_scatter = df_scatter_filtered.dropna()
                                 fig_scatter = px.scatter(df_scatter, x="주간 수익률(%)", y="순매수 증감률(%)", text="종목명", hover_data=["이번주", "지난주"], title=f"**실제 수익률 vs. {subject_tab2_scatter} 순매수 증감률**")
+                                
+                                # ★ Tab 2 상관계수 텍스트 렌더링 복구
                                 if len(df_scatter) > 1:
                                     x_data, y_data = df_scatter["주간 수익률(%)"], df_scatter["순매수 증감률(%)"]
                                     r_value = np.corrcoef(x_data, y_data)[0, 1]
                                     z = np.polyfit(x_data, y_data, 1)
                                     p = np.poly1d(z)
                                     fig_scatter.add_scatter(x=x_data, y=p(x_data), mode='lines', name='추세선 (Trendline)', line=dict(color='#ff4d4d', dash='dot'))
+                                    
+                                    if r_value >= 0.7: r_text = "강한 양(+)의 상관관계"
+                                    elif r_value >= 0.3: r_text = "뚜렷한 양(+)의 상관관계"
+                                    elif r_value > -0.3: r_text = "유의미한 상관관계 없음"
+                                    elif r_value > -0.7: r_text = "뚜렷한 음(-)의 상관관계"
+                                    else: r_text = "강한 음(-)의 상관관계"
+                                    
+                                    st.info(f"💡 **상관관계 분석:** 현재 선택된 종목들의 주간 수익률과 {subject_tab2_scatter} 순매수 증감률 간의 피어슨 상관계수는 **{r_value:.2f}**로, **{r_text}**를 보이고 있습니다.")
+
                                 fig_scatter.update_traces(textposition='top center', marker=dict(size=10, color='#4da6ff', opacity=0.7), textfont=dict(size=11, color='lightgray'))
                                 fig_scatter.add_vline(x=0, line_dash="dash", line_color="gray", opacity=0.5)
                                 fig_scatter.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
                                 fig_scatter.update_layout(height=600, template="plotly_dark", xaxis_title="실제 주간 수익률 (%)", yaxis_title=f"{subject_tab2_scatter} 순매수 증감률 (%)", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                                 st.plotly_chart(fig_scatter, use_container_width=True)
                 else: st.warning("직전 주차 데이터가 없어 증감률을 비교할 수 없습니다.")
-        else: st.info("👉 우측 패널에 엑셀 데이터를 업로드해주세요.")
+        else: st.info("👉 우측 패널에 엑셀 데이터를 업로드해주세요. (비교를 위해 2주 이상의 데이터가 필요합니다)")
 
     # === Tab 3 ===
     with tabs[3]:
@@ -598,32 +609,29 @@ with col_main:
             else: st.dataframe(df_real_news, use_container_width=True, hide_index=True)
         st.divider()
         st.markdown("### 📊 키워드 검색비율 추이 (다중 비교 지원)")
+        
+        # ★ Tab 3 데이터랩 1xN 그리드 확장 (세로 나열)
         if uploaded_dls:
             dl_summaries = []
-            for i in range(0, len(uploaded_dls), 2):
-                cols = st.columns(2)
-                for j in range(2):
-                    if i + j < len(uploaded_dls):
-                        dl_file = uploaded_dls[i + j]
-                        with cols[j]:
-                            try:
-                                file_name_without_ext = dl_file.name.rsplit('.', 1)[0]
-                                st.markdown(f"#### 📉 {file_name_without_ext}")
-                                df_dl = pd.read_csv(dl_file, skiprows=6, encoding='cp949') if dl_file.name.endswith('csv') else pd.read_excel(dl_file, skiprows=6)
-                                if not df_dl.empty:
-                                    master_date = df_dl.iloc[:, 0]
-                                    value_cols = [col for col in df_dl.columns if '날짜' not in col and 'Unnamed' not in col]
-                                    clean_df = pd.DataFrame({'날짜': master_date})
-                                    for col in value_cols: clean_df[col] = df_dl[col]
-                                    clean_df['날짜'] = pd.to_datetime(clean_df['날짜'])
-                                    recent_14d_mean = clean_df.tail(14).mean(numeric_only=True).round(1)
-                                    dl_summaries.append(f"[{file_name_without_ext}]\n" + "\n".join([f"- {idx}: {val}" for idx, val in recent_14d_mean.items()]))
-                                    df_melted = clean_df.melt(id_vars=['날짜'], var_name='종목명', value_name='검색량')
-                                    with st.container(border=True):
-                                        fig_trend = px.line(df_melted, x='날짜', y='검색량', color='종목명', template="plotly_dark")
-                                        fig_trend.update_layout(height=350, xaxis_title=None, yaxis_title="상대적 검색량", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5))
-                                        st.plotly_chart(fig_trend, use_container_width=True)
-                            except: pass
+            for dl_file in uploaded_dls:
+                try:
+                    file_name_without_ext = dl_file.name.rsplit('.', 1)[0]
+                    st.markdown(f"#### 📉 {file_name_without_ext}")
+                    df_dl = pd.read_csv(dl_file, skiprows=6, encoding='cp949') if dl_file.name.endswith('csv') else pd.read_excel(dl_file, skiprows=6)
+                    if not df_dl.empty:
+                        master_date = df_dl.iloc[:, 0]
+                        value_cols = [col for col in df_dl.columns if '날짜' not in col and 'Unnamed' not in col]
+                        clean_df = pd.DataFrame({'날짜': master_date})
+                        for col in value_cols: clean_df[col] = df_dl[col]
+                        clean_df['날짜'] = pd.to_datetime(clean_df['날짜'])
+                        recent_14d_mean = clean_df.tail(14).mean(numeric_only=True).round(1)
+                        dl_summaries.append(f"[{file_name_without_ext}]\n" + "\n".join([f"- {idx}: {val}" for idx, val in recent_14d_mean.items()]))
+                        df_melted = clean_df.melt(id_vars=['날짜'], var_name='종목명', value_name='검색량')
+                        with st.container(border=True):
+                            fig_trend = px.line(df_melted, x='날짜', y='검색량', color='종목명', template="plotly_dark")
+                            fig_trend.update_layout(height=350, xaxis_title=None, yaxis_title="상대적 검색량", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5))
+                            st.plotly_chart(fig_trend, use_container_width=True)
+                except: pass
             st.session_state['dl_summary'] = "\n\n".join(dl_summaries) if dl_summaries else "데이터랩 연동 오류"
         else: st.info("👉 우측 패널에 Naver DataLab 파일을 업로드해 주세요.")
 
@@ -656,10 +664,10 @@ with col_main:
                                     except: st.error(f"{etf_name}의 데이터를 불러오지 못했습니다.")
         else: st.info("👉 우측 패널에 엑셀 데이터를 업로드해주세요.")
 
-    # === Tab 5: 🎉 경쟁사 이벤트/동향 (★ 통합 임팩트 분석기 탑재) ===
+    # === Tab 5: 🎉 경쟁사 이벤트/동향 (★ 촉매 분석기 삭제 & X축 마커 도입) ===
     with tabs[5]:
         st.markdown("### 📊 마케팅 촉매(이벤트/영상) 임팩트 분석기")
-        st.caption("선택한 이벤트 및 영상 배포 주간(하이라이트)을 기준으로, 거시적 수급 트렌드와 직전 주차 대비 실제 펌핑 효과를 직관적으로 분석합니다.")
+        st.caption("선택한 영상 배포 주간(하이라이트)을 마커로 표시하여, 거시적 수급 트렌드에서 실제 펌핑 효과를 직관적으로 분석합니다.")
         
         if uploaded_excel is not None and len(available_weeks) > 1 and available_weeks[0] != "데이터 없음":
             temp_list_df = load_and_clean_excel(uploaded_excel, available_weeks[0])
@@ -673,13 +681,13 @@ with col_main:
                     target_etf = st.selectbox("🎯 Target ETF (자사):", options=all_etf_names, index=default_target_idx)
                     comp_etf = st.selectbox("⚔️ Competitor ETF (타사):", options=all_etf_names, index=default_comp_idx)
                 with col_sel2:
-                    st.markdown("**2. 차트 조회 기간 및 이벤트 음영 설정**")
+                    st.markdown("**2. 차트 조회 기간 및 이벤트 발생 시점 설정**")
                     c_a1, c_a2 = st.columns(2)
                     with c_a1: ana_start = st.selectbox("📈 전체 분석 시작 주차:", options=available_weeks[::-1], index=0)
                     with c_a2: ana_end = st.selectbox("📈 전체 분석 종료 주차:", options=available_weeks, index=0)
                     c_h1, c_h2 = st.columns(2)
-                    with c_h1: hl_start = st.selectbox("🖍️ 촉매 발생 주차 (하이라이트 시작):", options=available_weeks[::-1], index=0)
-                    with c_h2: hl_end = st.selectbox("🖍️ 촉매 종료 주차 (하이라이트 종료):", options=available_weeks, index=0)
+                    # 하이라이트를 단순한 '마커'로 대체하기 위해 시작 주차만 받음
+                    with c_h1: hl_start = st.selectbox("🎥 유튜브/쇼츠 릴리즈 주차 (마커 표시):", options=available_weeks[::-1], index=0)
 
                 s_idx = available_weeks.index(ana_start)
                 e_idx = available_weeks.index(ana_end)
@@ -699,61 +707,32 @@ with col_main:
                     if trend_data:
                         df_trend = pd.concat(trend_data)
                         fig_evt = px.line(df_trend, x='주차', y='전체순매수', color='종목명', markers=True, template="plotly_dark", color_discrete_map={target_etf: '#ff4d4d', comp_etf: '#4da6ff'})
-                        try:
-                            fig_evt.add_vrect(x0=hl_start, x1=hl_end, fillcolor="rgba(255, 77, 77, 0.15)", layer="below", line_width=1, line_color="rgba(255, 77, 77, 0.5)", line_dash="dash", annotation_text="★ 마케팅/영상 촉매 구간", annotation_position="top left", annotation_font_color="#ff4d4d")
-                        except: pass
-                        fig_evt.update_layout(height=400, margin=dict(l=20, r=20, t=20, b=20), xaxis_title=None, yaxis_title="전체 순매수 금액 합계", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
                         
-                        # ★ 통합 UI 2단 분할 적용
-                        c_chart1, c_chart2 = st.columns([6, 4])
-                        with c_chart1:
-                            st.markdown("#### 📈 거시적 수급 트렌드 (타사 비교)")
-                            st.plotly_chart(fig_evt, use_container_width=True)
-                            
-                        with c_chart2:
-                            st.markdown("#### ⚡ 촉매 전/후 수급 펌핑 분석")
-                            if hl_start in available_weeks:
-                                hl_idx = available_weeks.index(hl_start)
-                                before_idx = hl_idx + 1 # 엑셀은 최신순 정렬이므로 +1이 직전 주차
-                                
-                                if before_idx < len(available_weeks):
-                                    before_week = available_weeks[before_idx]
-                                    after_week = hl_start
-                                    
-                                    df_before = load_and_clean_excel(uploaded_excel, before_week)
-                                    df_after = load_and_clean_excel(uploaded_excel, after_week)
-                                    
-                                    val_before = val_after = 0
-                                    
-                                    if not df_before.empty and target_etf in df_before['종목명'].values:
-                                        row_b = df_before[df_before['종목명'] == target_etf].iloc[0]
-                                        val_before = row_b.get('개인', 0)
-                                        
-                                    if not df_after.empty and target_etf in df_after['종목명'].values:
-                                        row_a = df_after[df_after['종목명'] == target_etf].iloc[0]
-                                        val_after = row_a.get('개인', 0)
-                                    
-                                    df_pump = pd.DataFrame({
-                                        "주차": [f"직전 ({before_week})", f"촉매 발생 ({after_week})"],
-                                        "개인순매수액": [val_before, val_after]
-                                    })
-                                    
-                                    fig_pump = px.bar(df_pump, x="주차", y="개인순매수액", text="개인순매수액", color="주차", color_discrete_sequence=['#64748b', '#ff4d4d'])
-                                    fig_pump.update_traces(texttemplate='%{text:,.0f}억', textposition='auto')
-                                    fig_pump.update_layout(height=300, margin=dict(l=20, r=20, t=20, b=20), template="plotly_dark", showlegend=False, xaxis_title=None, yaxis_title="개인 순매수 금액 (억원)", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                                    st.plotly_chart(fig_pump, use_container_width=True)
-                                    
-                                    if val_before != 0:
-                                        pct_change = ((val_after - val_before) / abs(val_before)) * 100
-                                    else:
-                                        pct_change = 0 if val_after == 0 else 999.9
-                                        
-                                    if pct_change > 0:
-                                        st.success(f"🔥 **타겟 분석:** 촉매 발생 주간에 직전 주차 대비 개인 수급이 **+{pct_change:,.1f}% 펌핑**되었습니다!")
-                                    else:
-                                        st.warning(f"📉 **타겟 분석:** 촉매 발생 주간에 직전 주차 대비 개인 수급이 **{pct_change:,.1f}% 하락**했습니다.")
-                                else:
-                                    st.info("선택하신 주차의 직전 데이터가 존재하지 않아 비교할 수 없습니다.")
+                        # ★ X축 하단 화살표 마커 적용
+                        try:
+                            # 펌핑 분석란을 지우고 100% 가로 너비로 차트를 뿌림
+                            fig_evt.add_annotation(
+                                x=hl_start, 
+                                y=0,
+                                yref="y",
+                                xref="x",
+                                text="🎥 영상/쇼츠 릴리즈",
+                                showarrow=True,
+                                arrowhead=2,
+                                arrowsize=1,
+                                arrowwidth=2,
+                                arrowcolor="#ffb04d",
+                                ax=0,
+                                ay=40,
+                                font=dict(color="#ffb04d", size=12, weight="bold")
+                            )
+                            # 마커가 보이도록 Y 범위를 살짝 여유있게 잡아줌
+                            fig_evt.add_vline(x=hl_start, line_width=1, line_dash="dash", line_color="#ffb04d")
+                        except: pass
+                        
+                        fig_evt.update_layout(height=450, margin=dict(l=20, r=20, t=20, b=20), xaxis_title=None, yaxis_title="전체 순매수 금액 합계", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
+                        st.plotly_chart(fig_evt, use_container_width=True)
+
         else: st.info("👉 우측 패널에 엑셀 데이터를 업로드하시면 성과 분석기 차트가 활성화됩니다.")
 
         st.divider()
@@ -808,7 +787,7 @@ with col_main:
                     if vids:
                         for v in vids[:2]:
                             st.markdown(f"* **제목**: [{v['title']}]({v['link']})\n* **트래픽**: `👁️ {v['views']}` ({v['date']})")
-                    else: st.caption("최신 업데이트된 신규 영상 피드가 없습니다.")
+                    else: st.caption("최근 업데이트된 신규 영상 피드가 없습니다.")
 
     # === Tab 6 ===
     with tabs[6]:
@@ -839,7 +818,7 @@ with col_main:
                             st.caption(f"📅 {row['게시일 / 출처']}")
                 else: st.info("검색 범위(최대 1년) 내 포착된 리스크성 기사가 없습니다.")
 
-    # === Tab 7 ===
+    # === Tab 7: 운용 현황 및 점유율 (★ 빈 행 제거 및 420px 높이 맞춤 완료) ===
     with tabs[7]:
         st.markdown("### 🏢 국내 ETF 운용사 AUM 시장 점유율 및 테마별 현황 (실시간 기준)")
         col_pie, col_table = st.columns([1, 2])
@@ -860,7 +839,7 @@ with col_main:
                         else: df_pie_final = df_brand_aum
                         fig_market_share = px.pie(df_pie_final, names='브랜드', values='AUM(억원)', hole=0.4, color_discrete_sequence=px.colors.sequential.Blues_r)
                         fig_market_share.update_traces(textposition='inside', textinfo='percent+label')
-                        fig_market_share.update_layout(height=420, template="plotly_dark", showlegend=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                        fig_market_share.update_layout(height=420, margin=dict(t=20, l=20, r=20, b=20), template="plotly_dark", showlegend=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                         st.plotly_chart(fig_market_share, use_container_width=True)
                     with col_table:
                         st.markdown("#### 📊 4대장 운용사 테마별 AUM 현황")
@@ -870,6 +849,10 @@ with col_main:
                         pivot_df = pd.pivot_table(df_top_brands, values='AUM(억원)', index='분류_테마', columns='브랜드', aggfunc='sum', fill_value=0)
                         pivot_df = pivot_df[[c for col in target_brands if col in pivot_df.columns for c in [col]]].astype(int)
                         if '📦 기타 섹터/테마' in pivot_df.index: pivot_df = pivot_df.reindex([i for i in pivot_df.index if i != '📦 기타 섹터/테마'] + ['📦 기타 섹터/테마'])
+                        
+                        # ★ 값이 전부 0인 불필요한 빈 행 제거 로직
+                        pivot_df = pivot_df.loc[(pivot_df != 0).any(axis=1)]
+                        # ★ 좌측 파이 차트와 완벽히 동일한 420px 높이 지정
                         st.dataframe(pivot_df.style.format("{:,}"), use_container_width=True, height=420)
             except Exception as e: st.error(f"오류: {e}")
 
