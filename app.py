@@ -10,9 +10,10 @@ from datetime import datetime, timedelta
 import json 
 import time
 
-# 1. 페이지 레이아웃 및 기본 테마 설정
+# 1. 페이지 레이아웃 및 기본 테마 설정 (사이드바 기본 숨김 처리)
 st.set_page_config(page_title="ETF Monitoring AI Agent", layout="wide", initial_sidebar_state="collapsed")
 
+# 전역 데이터 변수
 df_scatter = pd.DataFrame()
 
 # ==========================================
@@ -81,10 +82,8 @@ def assign_auto_theme(etf_name):
     except:
         return '📦 기타 섹터/테마'
 
-# ★ 홈 화면용 실시간 매크로 지표 (3단 분할 맞춤형)
 @st.cache_data(ttl=1800)
 def get_macro_snapshot():
-    # 17개 지표 과부하 방지용 빠르고 안정적인 기본값 세팅
     snapshot = {
         "indices": {
             "코스피": {"val": "2,750.20", "delta": "+15.30", "pct": "+0.56%", "is_up": True},
@@ -113,7 +112,6 @@ def get_macro_snapshot():
         }
     }
     
-    # 일부 핵심 지표만 FDR로 실시간 오버라이드 (API 지연 방지)
     try:
         end = datetime.today()
         start = end - timedelta(days=10)
@@ -133,10 +131,8 @@ def get_macro_snapshot():
             c, p = df_btc['Close'].iloc[-1], df_btc['Close'].iloc[-2]
             snapshot["others"]["비트코인 (BTC)"] = {"val": f"₩{c:,.0f}", "delta": f"{c-p:+,.0f}", "pct": f"{(c-p)/p*100:+.2f}%", "is_up": c >= p}
     except: pass
-        
     return snapshot
 
-# 세로형 컴팩트 UI 렌더링 함수
 def render_compact_metric(title, data):
     color = "#ff4d4d" if data['is_up'] else "#4da6ff"
     arrow = "▲" if data['is_up'] else "▼"
@@ -338,7 +334,8 @@ with col_right:
         selected_week = week_placeholder.selectbox("📆 조회 기준 주차", options=available_weeks, index=default_idx)
         
         st.divider()
-        uploaded_dl = st.file_uploader("🔍 DataLab 검색량", type=["csv", "xlsx", "xls"], key="dl_main")
+        # ★ DataLab 검색량 파일을 무제한 다중 선택 가능하도록 accept_multiple_files=True 적용
+        uploaded_dls = st.file_uploader("🔍 DataLab 다중 비교", type=["csv", "xlsx", "xls"], key="dl_main", accept_multiple_files=True)
 
     st.markdown("<br><br><br>", unsafe_allow_html=True)
     st.markdown("<p style='text-align:right; color: #64748b; font-size: 10px; letter-spacing: 2px; font-weight: 600; margin-bottom: 10px;'>POWERED BY</p>", unsafe_allow_html=True)
@@ -353,7 +350,7 @@ with col_right:
             st.markdown("<p style='text-align:right; color:#94a3b8; font-size:12px;'>삼성자산운용 x 커리어하이</p>", unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# [중앙 화면] 가로형 탭 복구
+# [중앙 화면] 가로형 탭 로직
 # ---------------------------------------------------------
 with col_main:
     st.session_state.setdefault('dl_summary', "DataLab 데이터가 업로드되지 않았습니다.")
@@ -365,7 +362,7 @@ with col_main:
     ]
     tabs = st.tabs(tab_names)
 
-    # === Tab 0: Home (3단 모닝보드 패치) ===
+    # === Tab 0: Home ===
     with tabs[0]:
         st.markdown("<br>", unsafe_allow_html=True)
         st.markdown(
@@ -382,28 +379,21 @@ with col_main:
         )
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # --- ★ 3단 분할 매크로 스냅샷 영역 ---
         macros = get_macro_snapshot()
         
         c_m1, c_m2, c_m3 = st.columns(3)
-        
-        # 1열: 핵심 대표 지수
         with c_m1:
             with st.container(border=True):
                 st.markdown("#### 📈 핵심 대표 지수")
                 st.divider()
                 for key, data in macros["indices"].items():
                     st.markdown(render_compact_metric(key, data), unsafe_allow_html=True)
-                    
-        # 2열: 환율
         with c_m2:
             with st.container(border=True):
                 st.markdown("#### 💱 주요 환율")
                 st.divider()
                 for key, data in macros["forex"].items():
                     st.markdown(render_compact_metric(key, data), unsafe_allow_html=True)
-                    
-        # 3열: 금리
         with c_m3:
             with st.container(border=True):
                 st.markdown("#### 🏦 금리 지표")
@@ -413,10 +403,8 @@ with col_main:
         
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # 4행 (하단): 기타 지표 (VIX, 금, 비트코인)
         st.markdown("#### 📌 기타 주요 지표")
         c_o1, c_o2, c_o3 = st.columns(3)
-        
         with c_o1: st.markdown(render_compact_metric("VIX 지수", macros["others"]["VIX 지수"]), unsafe_allow_html=True)
         with c_o2: st.markdown(render_compact_metric("금 가격", macros["others"]["금 가격"]), unsafe_allow_html=True)
         with c_o3: st.markdown(render_compact_metric("비트코인 (BTC)", macros["others"]["비트코인 (BTC)"]), unsafe_allow_html=True)
@@ -586,7 +574,7 @@ with col_main:
         else:
             st.info("👉 우측 패널에 엑셀 데이터를 업로드해주세요. (비교를 위해 2주 이상의 데이터가 필요합니다)")
 
-    # === Tab 3: 뉴스 & 검색 트렌드 ===
+    # === Tab 3: 뉴스 & 검색 트렌드 (DataLab 다중 업로드 & 자동 2열 그리드 로직) ===
     with tabs[3]:
         st.markdown("### 📰 실시간 마켓 센티먼트 및 뉴스 요약")
         with st.spinner("최신 마켓 트렌드를 AI가 3줄 요약하고 있습니다..."):
@@ -613,31 +601,59 @@ with col_main:
                 st.dataframe(df_real_news, use_container_width=True, hide_index=True)
                     
         st.divider()
-        st.markdown("### 📊 키워드 검색비율 추이")
-        st.caption("Naver DataLab 연동 차트")
-        if uploaded_dl is not None:
-            try:
-                file_ext = uploaded_dl.name.split('.')[-1].lower()
-                if file_ext == 'csv': df_dl = pd.read_csv(uploaded_dl, skiprows=6, encoding='cp949')
-                else: df_dl = pd.read_excel(uploaded_dl, skiprows=6)
+        st.markdown("### 📊 키워드 검색비율 추이 (다중 비교 지원)")
+        st.caption("Naver DataLab 연동 차트 (우측 패널에 여러 개의 파일을 업로드하시면 2열로 나란히 비교할 수 있습니다.)")
+        
+        if uploaded_dls:
+            dl_summaries = []
+            
+            # 업로드된 여러 파일을 2열(2xN) 배열로 깔끔하게 렌더링
+            for i in range(0, len(uploaded_dls), 2):
+                cols = st.columns(2)
+                for j in range(2):
+                    if i + j < len(uploaded_dls):
+                        dl_file = uploaded_dls[i + j]
+                        with cols[j]:
+                            try:
+                                # 파일명을 차트 소제목으로 활용 (.csv, .xlsx 확장자 절삭)
+                                file_name_without_ext = dl_file.name.rsplit('.', 1)[0]
+                                st.markdown(f"#### 📉 {file_name_without_ext}")
+                                
+                                file_ext = dl_file.name.split('.')[-1].lower()
+                                if file_ext == 'csv': 
+                                    df_dl = pd.read_csv(dl_file, skiprows=6, encoding='cp949')
+                                else: 
+                                    df_dl = pd.read_excel(dl_file, skiprows=6)
 
-                if not df_dl.empty:
-                    master_date = df_dl.iloc[:, 0]
-                    value_cols = [col for col in df_dl.columns if '날짜' not in col and 'Unnamed' not in col]
-                    clean_df = pd.DataFrame({'날짜': master_date})
-                    for col in value_cols: clean_df[col] = df_dl[col]
-                    clean_df['날짜'] = pd.to_datetime(clean_df['날짜'])
-                    recent_14d_mean = clean_df.tail(14).mean(numeric_only=True).round(1)
-                    st.session_state['dl_summary'] = "\n".join([f"- {idx}: {val}" for idx, val in recent_14d_mean.items()])
-                    df_melted = clean_df.melt(id_vars=['날짜'], var_name='종목명', value_name='검색량')
-                    
-                    fig_trend = px.line(df_melted, x='날짜', y='검색량', color='종목명', template="plotly_dark")
-                    fig_trend.update_layout(height=450, margin=dict(l=20, r=20, t=20, b=20), xaxis_title=None, yaxis_title="상대적 검색량 (최대 100)", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                    st.plotly_chart(fig_trend, use_container_width=True)
-            except Exception as e:
-                st.error(f"파일 처리 중 오류가 발생했습니다: {e}")
+                                if not df_dl.empty:
+                                    master_date = df_dl.iloc[:, 0]
+                                    value_cols = [col for col in df_dl.columns if '날짜' not in col and 'Unnamed' not in col]
+                                    clean_df = pd.DataFrame({'날짜': master_date})
+                                    for col in value_cols: clean_df[col] = df_dl[col]
+                                    clean_df['날짜'] = pd.to_datetime(clean_df['날짜'])
+                                    
+                                    # 프롬프트 생성용 통합 요약 데이터 구축
+                                    recent_14d_mean = clean_df.tail(14).mean(numeric_only=True).round(1)
+                                    dl_summaries.append(f"[{file_name_without_ext}]\n" + "\n".join([f"- {idx}: {val}" for idx, val in recent_14d_mean.items()]))
+                                    
+                                    df_melted = clean_df.melt(id_vars=['날짜'], var_name='종목명', value_name='검색량')
+                                    
+                                    with st.container(border=True):
+                                        fig_trend = px.line(df_melted, x='날짜', y='검색량', color='종목명', template="plotly_dark")
+                                        fig_trend.update_layout(
+                                            height=350, margin=dict(l=10, r=10, t=10, b=10), 
+                                            xaxis_title=None, yaxis_title="상대적 검색량", 
+                                            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                                            legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5) # 범례를 하단으로 내려 공간 확보
+                                        )
+                                        st.plotly_chart(fig_trend, use_container_width=True)
+                            except Exception as e:
+                                st.error(f"{dl_file.name} 처리 중 오류 발생: {e}")
+            
+            # 다중 파일 요약을 글로벌 변수로 통합 전달
+            st.session_state['dl_summary'] = "\n\n".join(dl_summaries) if dl_summaries else "데이터랩 연동 오류"
         else:
-            st.info("👉 우측 패널에 Naver DataLab 파일을 업로드하시면 트렌드 차트가 활성화됩니다.")
+            st.info("👉 우측 패널에 Naver DataLab 파일을 업로드해 주세요.")
 
     # === Tab 4: 주간 거래량 추이 ===
     with tabs[4]:
