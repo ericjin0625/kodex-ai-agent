@@ -159,7 +159,7 @@ def get_realtime_news(keyword="ETF", timeframe="7d", max_items=5):
             link = item.find('link').text if item.find('link') is not None else ""
             pubDate = item.find('pubDate').text[5:16] if item.find('pubDate') is not None else ""
             source = item.find('source').text if item.find('source') is not None else "Google News"
-            news_list.append({"게시일 / 출처": f"{pubDate} / {source}", "원본제목": title, "リンク": link})
+            news_list.append({"게시일 / 출처": f"{pubDate} / {source}", "원본제목": title, "링크": link})
         if not news_list: return pd.DataFrame([{"게시일 / 출처": "-", "원본제목": f"'{keyword}' 관련 뉴스가 없습니다.", "링크": ""}])
         return pd.DataFrame(news_list)
     except: return pd.DataFrame([{"게시일 / 출처": "오류", "원본제목": "실시간 뉴스를 불러올 수 없습니다.", "링크": ""}])
@@ -274,10 +274,8 @@ def parse_competitor_blog(blog_id):
     except: pass
     return events, generals
 
-# ★ 신규 추가: 운용사별 유튜브 채널 실시간 모니터링 분석 함수
 @st.cache_data(ttl=3600)
 def get_brand_youtube_videos(brand_name):
-    # 금융위원회/금융투자협회 가이드라인에 맞춘 현실적인 실시간 운용사 연동 데이터베이스 구축
     mock_db = {
         "KODEX (삼성)": [
             {"title": "[라이브] 로봇 강세장 돌입? 현대차로보틱스밸류체인 ETF 활용 투자법", "views": "14,502회", "date": "3일 전", "link": "https://www.youtube.com", "thumb": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400&q=80"},
@@ -296,14 +294,12 @@ def get_brand_youtube_videos(brand_name):
             {"title": "RISE 200위클리커버드콜 순자산 1조 돌파 기념 투자자 감사 라이브 세미나", "views": "11,204회", "date": "2일 전", "link": "https://www.youtube.com", "thumb": "https://images.unsplash.com/photo-1551836022-d5d88e9218df?w=400&q=80"}
         ]
     }
-    # 기본 폴백 데이터 (목록에 없는 중소형 운용사용)
     default_videos = [
         {"title": "변동성 장세 탈출구는? 신규 상장 테마 ETF 핵심 운용역 직강 세미나", "views": "3,405회", "date": "4일 전", "link": "https://www.youtube.com", "thumb": "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=400&q=80"},
         {"title": "월배당 커버드콜 상품 비교 분석! 나에게 맞는 최적의 인컴 포트폴리오는?", "views": "5,120회", "date": "6일 전", "link": "https://www.youtube.com", "thumb": "https://images.unsplash.com/photo-1559526324-4b87b5e36e44?w=400&q=80"}
     ]
     return mock_db.get(brand_name, default_videos)
 
-# ★ 신규 추가: 각 운용사별 지난주 취한 핵심 마케팅/세일즈 전략 한줄 브리핑 딕셔너리
 def get_brand_strategy_summary(brand_name):
     strategies = {
         "KODEX (삼성)": "💡 **지난주 세일즈 전략:** 로봇 밸류체인 테마 신규 상장 프로모션 및 미국 대표지수 적립식 매수 인증 이벤트를 대대적으로 전개하며 장기 안정성 중심의 리테일 자금 대량 유입을 유도했습니다.",
@@ -542,7 +538,7 @@ with col_main:
         else:
             st.info("👉 우측 패널에 ETF 순매수 엑셀 데이터를 업로드해주세요.")
 
-    # === Tab 2: 순매수 등락, 수익률 (★ 단위 억원 추가 완료) ===
+    # === Tab 2: 순매수 등락, 수익률 ===
     with tabs[2]:
         if uploaded_excel is not None and selected_week != "데이터 없음" and len(available_weeks) > 1:
             st.markdown("### 📈 기간별 ETF 순매수 현황")
@@ -585,7 +581,6 @@ with col_main:
                     df_total = df_tab2_combined.sort_values(by="전체순매수", ascending=False).head(top_n_tab2)
                     with st.container(border=True):
                         fig_total = px.bar(df_total, x="전체순매수", y="종목명", orientation='h', color_discrete_sequence=['#4da6ff'])
-                        # ★ X축에 단위(억원) 주입 완료
                         fig_total.update_layout(xaxis_title="전체 순매수 금액 (억원)", yaxis={'categoryorder':'total ascending'}, height=500, template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=10, r=10, t=10, b=10))
                         st.plotly_chart(fig_total, use_container_width=True)
 
@@ -594,7 +589,6 @@ with col_main:
                     df_inv = df_tab2_combined.sort_values(by=inv_type_tab2, ascending=False).head(top_n_tab2)
                     with st.container(border=True):
                         fig_inv = px.bar(df_inv, x=inv_type_tab2, y="종목명", orientation='h', color_discrete_sequence=['#ff4d4d'])
-                        # ★ X축에 단위(억원) 주입 완료
                         fig_inv.update_layout(xaxis_title=f"{inv_type_tab2} 순매수 금액 (억원)", yaxis={'categoryorder':'total ascending'}, height=500, template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=10, r=10, t=10, b=10))
                         st.plotly_chart(fig_inv, use_container_width=True)
 
@@ -766,56 +760,8 @@ with col_main:
         else:
             st.info("👉 우측 패널에 엑셀 데이터를 업로드해주세요.")
 
-    # === Tab 5: 🎉 경쟁사 이벤트/동향 (★ 3-Tier 유튜브 완벽 이식 및 1줄 요약 패치 완료) ===
+    # === Tab 5: 🎉 경쟁사 이벤트/동향 ===
     with tabs[5]:
-        st.markdown("### 📊 이벤트 성과 분석기 (수급 임팩트 트래킹)")
-        st.caption("선택한 마케팅 이벤트 진행 기간을 바탕으로, 자사와 타사 ETF의 실제 순매수 유입 효과(ROI)를 직관적으로 비교 분석합니다.")
-        if uploaded_excel is not None and len(available_weeks) > 1 and available_weeks[0] != "데이터 없음":
-            temp_list_df = load_and_clean_excel(uploaded_excel, available_weeks[0])
-            if not temp_list_df.empty and '종목명' in temp_list_df.columns:
-                all_etf_names = sorted(temp_list_df[temp_list_df['종목명'] != '전체']['종목명'].dropna().unique().tolist())
-                col_sel1, col_sel2 = st.columns(2)
-                with col_sel1:
-                    st.markdown("**1. 분석 대상 ETF 선택**")
-                    default_target_idx = all_etf_names.index("KODEX 200") if "KODEX 200" in all_etf_names else 0
-                    default_comp_idx = all_etf_names.index("TIGER 200") if "TIGER 200" in all_etf_names else (1 if len(all_etf_names) > 1 else 0)
-                    target_etf = st.selectbox("🎯 Target ETF (자사):", options=all_etf_names, index=default_target_idx)
-                    comp_etf = st.selectbox("⚔️ Competitor ETF (타사):", options=all_etf_names, index=default_comp_idx)
-                with col_sel2:
-                    st.markdown("**2. 차트 조회 기간 및 이벤트 음영 설정**")
-                    c_a1, c_a2 = st.columns(2)
-                    with c_a1: ana_start = st.selectbox("📈 전체 분석 시작 주차:", options=available_weeks[::-1], index=0)
-                    with c_a2: ana_end = st.selectbox("📈 전체 분석 종료 주차:", options=available_weeks, index=0)
-                    c_h1, c_h2 = st.columns(2)
-                    with c_h1: hl_start = st.selectbox("🖍️ 이벤트 시작 주차 (하이라이트):", options=available_weeks[::-1], index=0)
-                    with c_h2: hl_end = st.selectbox("🖍️ 이벤트 종료 주차 (하이라이트):", options=available_weeks, index=0)
-
-                s_idx = available_weeks.index(ana_start)
-                e_idx = available_weeks.index(ana_end)
-                target_sheets = available_weeks[s_idx:e_idx+1] if s_idx < e_idx else available_weeks[e_idx:s_idx+1]
-                target_sheets = target_sheets[::-1] 
-
-                trend_data = []
-                with st.spinner("수급 데이터를 렌더링하고 있습니다..."):
-                    for w in target_sheets:
-                        t_df = load_and_clean_excel(uploaded_excel, w)
-                        if not t_df.empty and '종목명' in t_df.columns:
-                            t_df = t_df[t_df['종목명'].isin([target_etf, comp_etf])].copy()
-                            t_df['전체순매수'] = t_df.get('개인', 0) + t_df.get('기관', 0) + t_df.get('외국인', 0)
-                            t_df['주차'] = w
-                            trend_data.append(t_df[['주차', '종목명', '전체순매수']])
-                    if trend_data:
-                        df_trend = pd.concat(trend_data)
-                        fig_evt = px.line(df_trend, x='주차', y='전체순매수', color='종목명', markers=True, template="plotly_dark", color_discrete_map={target_etf: '#ff4d4d', comp_etf: '#4da6ff'}, title=f"**[{target_etf}] vs [{comp_etf}] 마케팅 성과 트래킹**")
-                        try:
-                            fig_evt.add_vrect(x0=hl_start, x1=hl_end, fillcolor="rgba(255, 77, 77, 0.15)", layer="below", line_width=1, line_color="rgba(255, 77, 77, 0.5)", line_dash="dash", annotation_text="★ 이벤트 집중 마케팅 구간", annotation_position="top left", annotation_font_color="#ff4d4d")
-                        except: pass
-                        fig_evt.update_layout(height=450, margin=dict(l=20, r=20, t=50, b=20), xaxis_title=None, yaxis_title="전체 순매수 금액 합계", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                        st.plotly_chart(fig_evt, use_container_width=True)
-        else:
-            st.info("👉 우측 패널에 엑셀 데이터를 업로드하시면 성과 분석기 차트가 활성화됩니다.")
-
-        st.divider()
         st.markdown("### 🏢 운용사별 세일즈 액션 및 마케팅 동향 (통합 인텔리전스)")
         st.caption("공식 웹사이트, 네이버 블로그 RSS 및 공식 유튜브 미디어 데이터를 통합 파싱하여 경쟁사 전략 분석 결과 라인을 실시간으로 도출합니다.")
         st.divider()
@@ -842,18 +788,15 @@ with col_main:
                 else:
                     events, generals = parse_competitor_blog(blog_id)
                 
-                # 유튜브 비디오 데이터셋 수집
                 youtube_videos = get_brand_youtube_videos(brand)
                 
                 is_expanded = True if brand in ["KODEX (삼성)", "TIGER (미래에셋)"] else False
                 
                 with st.expander(f"🔵 **{brand}** 마케팅 동향", expanded=is_expanded):
                     
-                    # [Tier 0] ★ 신규 패치: 상단 한 줄 세일즈/마케팅 종합 전략 브리핑
                     strategy_line = get_brand_strategy_summary(brand)
                     st.markdown(f"<div style='background: rgba(77, 166, 255, 0.06); border-left: 4px solid #4da6ff; padding: 12px 16px; border-radius: 4px; margin-bottom: 20px; font-size: 14.5px; color: #e2e8f0; line-height:1.6;'>{strategy_line}</div>", unsafe_allow_html=True)
                     
-                    # [Tier 1] 이벤트 및 세미나
                     st.markdown("<h5 style='color:#ffb04d; font-weight:700;'>🔥 핵심 세일즈 액션 (이벤트 & 세미나)</h5>", unsafe_allow_html=True)
                     if events:
                         cols = st.columns(len(events) if len(events) < 4 else 4)
@@ -867,7 +810,6 @@ with col_main:
                         
                     st.write("") 
                     
-                    # [Tier 2] 일반 마케팅 콘텐츠 (블로그)
                     st.markdown("<h5 style='color:#93c5fd; font-weight:700;'>📝 일반 마케팅 콘텐츠 (최신 5선)</h5>", unsafe_allow_html=True)
                     if generals:
                         cols_g = st.columns(len(generals) if len(generals) < 5 else 5)
@@ -881,14 +823,12 @@ with col_main:
                         
                     st.write("")
                     
-                    # [Tier 3] ★ 신규 패치: 최신 유튜브 모니터링 구역 (제목, 실시간 조회수, 썸네일 무결점 구현)
                     st.markdown("<h5 style='color:#ff4d4d; font-weight:700;'>📺 최신 유튜브 미디어 모니터링 (최근 1주일)</h5>", unsafe_allow_html=True)
                     if youtube_videos:
                         cols_y = st.columns(len(youtube_videos) if len(youtube_videos) < 4 else 4)
                         for idx, video in enumerate(youtube_videos):
                             with cols_y[idx % 4]:
                                 with st.container(border=True):
-                                    # 고품질 금융 이미지 비디오 썸네일 구현
                                     st.markdown(f"<a href='{video['link']}' target='_blank'><img src='{video['thumb']}' style='width:100%; border-radius:6px; margin-bottom:8px; border: 1px solid rgba(255,255,255,0.1);'></a>", unsafe_allow_html=True)
                                     st.markdown(f"<a href='{video['link']}' target='_blank' style='color:#ffffff; text-decoration:none; font-size:13.5px; font-weight:600; display:block; line-height:1.4; height:38px; overflow:hidden;'>{video['title']}</a>", unsafe_allow_html=True)
                                     st.markdown(f"<p style='color:#ff4d4d; font-size:12px; font-weight:700; margin-top:6px; margin-bottom:0;'>👁️ 실시간 조회수: {video['views']} <span style='color:#64748b; font-weight:400;'>({video['date']})</span></p>", unsafe_allow_html=True)
