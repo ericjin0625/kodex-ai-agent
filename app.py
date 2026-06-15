@@ -10,10 +10,9 @@ from datetime import datetime, timedelta
 import json 
 import time
 
-# 1. 페이지 레이아웃 및 기본 테마 설정 (사이드바 기본 숨김 처리)
+# 1. 페이지 레이아웃 및 기본 테마 설정
 st.set_page_config(page_title="ETF Monitoring AI Agent", layout="wide", initial_sidebar_state="collapsed")
 
-# 전역 데이터 변수
 df_scatter = pd.DataFrame()
 
 # ==========================================
@@ -111,21 +110,17 @@ def get_macro_snapshot():
             "비트코인 (BTC)": {"val": "₩99,089,024", "delta": "+1,200,000", "pct": "+1.22%", "is_up": True}
         }
     }
-    
     try:
         end = datetime.today()
         start = end - timedelta(days=10)
-        
         df_usd = fdr.DataReader('USD/KRW', start, end)
         if len(df_usd) >= 2:
             c, p = df_usd['Close'].iloc[-1], df_usd['Close'].iloc[-2]
             snapshot["forex"]["미국 USD"] = {"val": f"{c:,.2f}", "delta": f"{c-p:+,.2f}", "pct": f"{(c-p)/p*100:+.2f}%", "is_up": c >= p}
-            
         df_ks = fdr.DataReader('KS11', start, end)
         if len(df_ks) >= 2:
             c, p = df_ks['Close'].iloc[-1], df_ks['Close'].iloc[-2]
             snapshot["indices"]["코스피"] = {"val": f"{c:,.2f}", "delta": f"{c-p:+,.2f}", "pct": f"{(c-p)/p*100:+.2f}%", "is_up": c >= p}
-            
         df_btc = fdr.DataReader('BTC/KRW', start, end)
         if len(df_btc) >= 2:
             c, p = df_btc['Close'].iloc[-1], df_btc['Close'].iloc[-2]
@@ -137,7 +132,6 @@ def render_compact_metric(title, data):
     color = "#ff4d4d" if data['is_up'] else "#4da6ff"
     arrow = "▲" if data['is_up'] else "▼"
     delta_str = str(data['delta']).replace('+', '').replace('-', '')
-    
     return f"""
     <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 12px 16px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
         <div style="color: #cbd5e1; font-size: 15px; font-weight: 600;">{title}</div>
@@ -199,24 +193,43 @@ def get_apple_app_reviews():
         return all_bad_reviews[:12]
     except Exception as e: return [{"error": f"API 연동 중 오류가 발생했습니다: {str(e)}"}]
 
-@st.cache_data(ttl=3600)
-def get_event_news(keyword, start_date, end_date, max_items=4):
-    start_str = start_date.strftime("%Y-%m-%d")
-    end_str = (end_date + timedelta(days=1)).strftime("%Y-%m-%d")
-    url = f"https://news.google.com/rss/search?q={keyword}+after:{start_str}+before:{end_str}&hl=ko&gl=KR&ceid=KR:ko"
+# ★ 신규 이벤트 스크랩 함수 (공식 블로그 RSS 기반)
+@st.cache_data(ttl=1800)
+def get_blog_events(blog_id, start_date, end_date):
+    url = f"https://rss.blog.naver.com/{blog_id}.xml"
+    events = []
+    # 마케팅 이벤트 식별 키워드
+    event_keywords = ['이벤트', '프로모션', '경품', '추첨', '지급', '커피', '스타벅스', '퀴즈', '페이']
     try:
         res = requests.get(url, timeout=5)
-        root = ET.fromstring(res.text)
-        news_list = []
+        root = ET.fromstring(res.content)
         for item in root.findall('./channel/item'):
-            title = item.find('title').text if item.find('title') is not None else "제목 없음"
-            link = item.find('link').text if item.find('link') is not None else ""
-            pubDate = item.find('pubDate').text[5:16] if item.find('pubDate') is not None else ""
-            source = item.find('source').text if item.find('source') is not None else "Google News"
-            news_list.append({"게시일 / 출처": f"{pubDate} / {source}", "원본제목": title, "링크": link})
-            if len(news_list) >= max_items: break
-        return pd.DataFrame(news_list)
-    except: return pd.DataFrame()
+            title = item.find('title').text
+            # 이벤트 키워드가 포함되지 않은 단순 홍보글은 스킵 (노이즈 제거)
+            if not any(kw in title for kw in event_keywords):
+                continue
+            
+            link = item.find('link').text
+            pubDate_str = item.find('pubDate').text 
+            
+            try:
+                # RSS Date 포맷 (예: Mon, 15 Jun 2026 10:00:00 +0900) 파싱
+                date_parts = pubDate_str.split(',')[1].split()[0:3]
+                date_clean = " ".join(date_parts)
+                pub_date = datetime.strptime(date_clean, "%d %b %Y").date()
+                
+                # 날짜 필터링
+                if start_date <= pub_date <= end_date:
+                    events.append({"title": title, "link": link, "date": pub_date.strftime("%Y-%m-%d")})
+            except:
+                # 파싱 오류 시 키워드만 맞으면 무조건 띄워줌
+                events.append({"title": title, "link": link, "date": "최신"})
+                
+            if len(events) >= 4: # 브랜드당 최대 4개까지만 노출하여 UI 통일성 확보
+                break
+    except:
+        pass
+    return events
 
 @st.cache_data(ttl=1800)
 def get_competitor_blog(blog_id):
@@ -296,9 +309,6 @@ def load_and_clean_excel(file, sheet_name):
 # =========================================================================
 col_main, col_spacing, col_right = st.columns([4.5, 0.1, 0.8])
 
-# ---------------------------------------------------------
-# [우측 패널] 타이틀 & 데이터 컨트롤 센터
-# ---------------------------------------------------------
 with col_right:
     st.markdown(
         """
@@ -334,7 +344,6 @@ with col_right:
         selected_week = week_placeholder.selectbox("📆 조회 기준 주차", options=available_weeks, index=default_idx)
         
         st.divider()
-        # ★ DataLab 검색량 파일을 무제한 다중 선택 가능하도록 accept_multiple_files=True 적용
         uploaded_dls = st.file_uploader("🔍 DataLab 다중 비교", type=["csv", "xlsx", "xls"], key="dl_main", accept_multiple_files=True)
 
     st.markdown("<br><br><br>", unsafe_allow_html=True)
@@ -350,7 +359,7 @@ with col_right:
             st.markdown("<p style='text-align:right; color:#94a3b8; font-size:12px;'>삼성자산운용 x 커리어하이</p>", unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# [중앙 화면] 가로형 탭 로직
+# [중앙 화면] 가로형 탭 구동
 # ---------------------------------------------------------
 with col_main:
     st.session_state.setdefault('dl_summary', "DataLab 데이터가 업로드되지 않았습니다.")
@@ -574,7 +583,7 @@ with col_main:
         else:
             st.info("👉 우측 패널에 엑셀 데이터를 업로드해주세요. (비교를 위해 2주 이상의 데이터가 필요합니다)")
 
-    # === Tab 3: 뉴스 & 검색 트렌드 (DataLab 다중 업로드 & 자동 2열 그리드 로직) ===
+    # === Tab 3: 뉴스 & 검색 트렌드 ===
     with tabs[3]:
         st.markdown("### 📰 실시간 마켓 센티먼트 및 뉴스 요약")
         with st.spinner("최신 마켓 트렌드를 AI가 3줄 요약하고 있습니다..."):
@@ -606,8 +615,6 @@ with col_main:
         
         if uploaded_dls:
             dl_summaries = []
-            
-            # 업로드된 여러 파일을 2열(2xN) 배열로 깔끔하게 렌더링
             for i in range(0, len(uploaded_dls), 2):
                 cols = st.columns(2)
                 for j in range(2):
@@ -615,7 +622,6 @@ with col_main:
                         dl_file = uploaded_dls[i + j]
                         with cols[j]:
                             try:
-                                # 파일명을 차트 소제목으로 활용 (.csv, .xlsx 확장자 절삭)
                                 file_name_without_ext = dl_file.name.rsplit('.', 1)[0]
                                 st.markdown(f"#### 📉 {file_name_without_ext}")
                                 
@@ -632,7 +638,6 @@ with col_main:
                                     for col in value_cols: clean_df[col] = df_dl[col]
                                     clean_df['날짜'] = pd.to_datetime(clean_df['날짜'])
                                     
-                                    # 프롬프트 생성용 통합 요약 데이터 구축
                                     recent_14d_mean = clean_df.tail(14).mean(numeric_only=True).round(1)
                                     dl_summaries.append(f"[{file_name_without_ext}]\n" + "\n".join([f"- {idx}: {val}" for idx, val in recent_14d_mean.items()]))
                                     
@@ -644,13 +649,12 @@ with col_main:
                                             height=350, margin=dict(l=10, r=10, t=10, b=10), 
                                             xaxis_title=None, yaxis_title="상대적 검색량", 
                                             paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                                            legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5) # 범례를 하단으로 내려 공간 확보
+                                            legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5) 
                                         )
                                         st.plotly_chart(fig_trend, use_container_width=True)
                             except Exception as e:
                                 st.error(f"{dl_file.name} 처리 중 오류 발생: {e}")
             
-            # 다중 파일 요약을 글로벌 변수로 통합 전달
             st.session_state['dl_summary'] = "\n\n".join(dl_summaries) if dl_summaries else "데이터랩 연동 오류"
         else:
             st.info("👉 우측 패널에 Naver DataLab 파일을 업로드해 주세요.")
@@ -687,10 +691,10 @@ with col_main:
         else:
             st.info("👉 우측 패널에 엑셀 데이터를 업로드해주세요.")
 
-    # === Tab 5: 진행 이벤트 성과 ===
+    # === Tab 5: 진행 이벤트 성과 (블로그 기반 이벤트 파싱 적용) ===
     with tabs[5]:
         st.markdown("### 📊 이벤트 성과 분석기 (수급 임팩트 트래킹)")
-        st.caption("아래 뉴스 스크랩에서 확인한 이벤트 진행 기간을 바탕으로, 자사와 타사 ETF의 실제 순매수 유입 효과(ROI)를 직관적으로 비교 분석합니다.")
+        st.caption("선택한 마케팅 이벤트 진행 기간을 바탕으로, 자사와 타사 ETF의 실제 순매수 유입 효과(ROI)를 직관적으로 비교 분석합니다.")
         if uploaded_excel is not None and len(available_weeks) > 1 and available_weeks[0] != "데이터 없음":
             temp_list_df = load_and_clean_excel(uploaded_excel, available_weeks[0])
             if not temp_list_df.empty and '종목명' in temp_list_df.columns:
@@ -737,40 +741,46 @@ with col_main:
             st.info("👉 우측 패널에 엑셀 데이터를 업로드하시면 성과 분석기 차트가 활성화됩니다.")
 
         st.divider()
-        st.markdown("### 🎉 운용사별 ETF 진행 이벤트 (뉴스 보도자료 스크랩)")
+        st.markdown("### 🎉 운용사별 ETF 진행 이벤트 (공식 블로그 연동)")
+        st.caption("각 운용사 공식 네이버 블로그의 RSS 피드를 분석하여, '이벤트', '경품', '프로모션' 등 목적성이 뚜렷한 리테일 마케팅 포스팅만 필터링합니다.")
         col_d1, col_d2, _ = st.columns([2, 2, 6])
-        with col_d1: evt_start = st.date_input("🗓️ 시작일 선택", datetime.today() - timedelta(days=30))
+        with col_d1: evt_start = st.date_input("🗓️ 시작일 선택", datetime.today() - timedelta(days=60))
         with col_d2: evt_end = st.date_input("🗓️ 종료일 선택", datetime.today())
         st.divider()
         
         if evt_start > evt_end: st.error("🚨 시작일이 종료일보다 늦을 수 없습니다.")
         else:
-            top_brands = ["KODEX", "TIGER", "RISE", "ACE", "SOL", "KIWOOM", "PLUS", "HANARO", "1Q", "TIMEFOLIO", "KoAct", "WON"]
-            with st.spinner("이벤트 보도자료를 실시간 스크랩 중입니다..."):
+            # KoAct를 제외한 11개 운용사 공식 블로그 ID 매핑
+            brand_blogs = {
+                "KODEX (삼성)": "samsung_fund",
+                "TIGER (미래에셋)": "m_invest",
+                "ACE (한국투자)": "aceetf",
+                "RISE (KB)": "riseetf",
+                "SOL (신한)": "soletf",
+                "PLUS (한화)": "hanwhaasset",
+                "HANARO (NH아문디)": "nh_amundi",
+                "1Q (하나)": "1qetf",
+                "TIMEFOLIO (타임폴리오)": "timefolioetf",
+                "KIWOOM (키움)": "kiwoomammkt",
+                "WON (우리)": "wooriam_kr"
+            }
+            
+            with st.spinner("운용사 공식 블로그에서 진행 중인 이벤트를 필터링 중입니다..."):
                 has_any_event = False
-                for brand in top_brands:
-                    df_evt = get_event_news(f'"{brand}" ETF (이벤트 OR 상장 OR 프로모션)', evt_start, evt_end, max_items=4)
-                    if not df_evt.empty:
+                for brand, blog_id in brand_blogs.items():
+                    evt_list = get_blog_events(blog_id, evt_start, evt_end)
+                    if evt_list:
                         has_any_event = True
                         st.markdown(f"#### 🔵 {brand}")
-                        cols = st.columns(len(df_evt) if len(df_evt) < 4 else 4)
-                        for idx, row in df_evt.iterrows():
+                        cols = st.columns(len(evt_list) if len(evt_list) < 4 else 4)
+                        for idx, row in enumerate(evt_list):
                             with cols[idx % 4]:
                                 with st.container(border=True):
-                                    st.markdown(f"**<a href='{row['링크']}' target='_blank' style='color:#4da6ff; text-decoration:none;'>{row['원본제목']}</a>**", unsafe_allow_html=True)
-                                    st.caption(f"📅 {row['게시일 / 출처']}")
-                df_other_evt = get_event_news(f'ETF (이벤트 OR 상장 OR 프로모션) ' + " ".join([f'-"{b}"' for b in top_brands]), evt_start, evt_end, max_items=8)
-                if not df_other_evt.empty:
-                    has_any_event = True
-                    st.markdown(f"#### 🧩 기타 운용사")
-                    cols = st.columns(4)
-                    for idx, row in df_other_evt.iterrows():
-                        with cols[idx % 4]:
-                            with st.container(border=True):
-                                st.markdown(f"**<a href='{row['링크']}' target='_blank' style='color:#ffb04d; text-decoration:none;'>{row['원본제목']}</a>**", unsafe_allow_html=True)
-                                st.caption(f"📅 {row['게시일 / 출처']}")
+                                    st.markdown(f"**<a href='{row['link']}' target='_blank' style='color:#4da6ff; text-decoration:none;'>{row['title']}</a>**", unsafe_allow_html=True)
+                                    st.caption(f"📅 {row['date']}")
+                
                 if not has_any_event:
-                    st.info("해당 기간 동안 감지된 이벤트 보도자료가 없습니다.")
+                    st.info("해당 기간 동안 공식 블로그에 업로드된 이벤트 포스팅이 없습니다.")
 
     # === Tab 6: 고객 UX 분석 ===
     with tabs[6]:
