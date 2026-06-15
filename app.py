@@ -55,6 +55,12 @@ glassmorphism_css = """
     box-shadow: 0 0 12px rgba(77, 166, 255, 0.25) !important;
     font-weight: 600 !important;
 }
+/* Expander(아코디언) UI 다듬기 */
+.streamlit-expanderHeader {
+    font-size: 16px !important;
+    font-weight: 600 !important;
+    color: #cbd5e1 !important;
+}
 #MainMenu {visibility: hidden;}
 header {visibility: hidden;}
 footer {visibility: hidden;}
@@ -193,58 +199,55 @@ def get_apple_app_reviews():
         return all_bad_reviews[:12]
     except Exception as e: return [{"error": f"API 연동 중 오류가 발생했습니다: {str(e)}"}]
 
-# ★ 신규 이벤트 스크랩 함수 (공식 블로그 RSS 기반)
+# ★ 신규 통합: 블로그 이벤트 & 일반 동향 파싱 함수 (블랙리스트/화이트리스트 + 중복제거)
 @st.cache_data(ttl=1800)
-def get_blog_events(blog_id, start_date, end_date):
+def parse_competitor_blog(blog_id):
     url = f"https://rss.blog.naver.com/{blog_id}.xml"
     events = []
-    # 마케팅 이벤트 식별 키워드
-    event_keywords = ['이벤트', '프로모션', '경품', '추첨', '지급', '커피', '스타벅스', '퀴즈', '페이']
+    generals = []
+    
+    # 노이즈 제거용 블랙리스트 (무조건 제외)
+    blacklist = ['당첨', '분배금', '배당', '지급 안내', '투자 전략', '주목할', '이슈', '안내', '발표']
+    # 목적별 화이트리스트 (태그 부여용)
+    whitelist_promo = ['인증', '퀴즈', '경품', '추첨', '이벤트', '프로모션', '커피', '스타벅스', '페이', '쿠폰']
+    whitelist_seminar = ['세미나', '웨비나', '간담회', 'live', '라이브']
+    
     try:
         res = requests.get(url, timeout=5)
         root = ET.fromstring(res.content)
-        for item in root.findall('./channel/item'):
+        
+        # 최신 글 20개를 긁어와서 분류
+        for item in root.findall('./channel/item')[:20]: 
             title = item.find('title').text
-            # 이벤트 키워드가 포함되지 않은 단순 홍보글은 스킵 (노이즈 제거)
-            if not any(kw in title for kw in event_keywords):
-                continue
-            
             link = item.find('link').text
             pubDate_str = item.find('pubDate').text 
             
             try:
-                # RSS Date 포맷 (예: Mon, 15 Jun 2026 10:00:00 +0900) 파싱
                 date_parts = pubDate_str.split(',')[1].split()[0:3]
                 date_clean = " ".join(date_parts)
-                pub_date = datetime.strptime(date_clean, "%d %b %Y").date()
-                
-                # 날짜 필터링
-                if start_date <= pub_date <= end_date:
-                    events.append({"title": title, "link": link, "date": pub_date.strftime("%Y-%m-%d")})
+                pub_date = datetime.strptime(date_clean, "%d %b %Y").strftime("%Y-%m-%d")
             except:
-                # 파싱 오류 시 키워드만 맞으면 무조건 띄워줌
-                events.append({"title": title, "link": link, "date": "최신"})
-                
-            if len(events) >= 4: # 브랜드당 최대 4개까지만 노출하여 UI 통일성 확보
-                break
-    except:
-        pass
-    return events
+                pub_date = "최신"
 
-@st.cache_data(ttl=1800)
-def get_competitor_blog(blog_id):
-    url = f"https://rss.blog.naver.com/{blog_id}.xml"
-    try:
-        res = requests.get(url, timeout=5)
-        root = ET.fromstring(res.content)
-        posts = []
-        for item in root.findall('./channel/item')[:3]: 
-            title = item.find('title').text
-            link = item.find('link').text
-            posts.append((title, link))
-        if not posts: return [("최신 게시글이 없습니다.", "https://blog.naver.com/" + blog_id)]
-        return posts
-    except: return [("실시간 연동 지연 (클릭 시 이동)", "https://blog.naver.com/" + blog_id)]
+            is_blacklisted = any(b in title for b in blacklist)
+            is_event = False
+            
+            # 이벤트 분류 로직
+            if not is_blacklisted:
+                title_lower = title.lower()
+                if any(w in title_lower for w in whitelist_promo):
+                    events.append({"title": f"[🎁 경품/매수] {title}", "link": link, "date": pub_date})
+                    is_event = True
+                elif any(w in title_lower for w in whitelist_seminar):
+                    events.append({"title": f"[📢 세미나] {title}", "link": link, "date": pub_date})
+                    is_event = True
+            
+            # 일반 마케팅 콘텐츠 분류 (이벤트로 들어간 건 제외, 최대 5개까지만)
+            if not is_event and len(generals) < 5:
+                generals.append({"title": title, "link": link, "date": pub_date})
+                
+    except: pass
+    return events, generals
 
 @st.cache_data(ttl=86400)
 def get_etf_mapping():
@@ -359,14 +362,14 @@ with col_right:
             st.markdown("<p style='text-align:right; color:#94a3b8; font-size:12px;'>삼성자산운용 x 커리어하이</p>", unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# [중앙 화면] 가로형 탭 구동
+# [중앙 화면] 가로형 탭 구동 (탭 10개로 다이어트 완료)
 # ---------------------------------------------------------
 with col_main:
     st.session_state.setdefault('dl_summary', "DataLab 데이터가 업로드되지 않았습니다.")
     
     tab_names = [
         "🏠 Home", "📊 Weekly Info", "📈 순매수 & 수익률", "📰 뉴스 & 트렌드", 
-        "💸 거래량 추이", "🎉 이벤트 성과", "🗣️ 고객 UX", "🏢 경쟁사 동향", 
+        "💸 거래량 추이", "🎉 경쟁사 이벤트/동향", "🗣️ 고객 UX", 
         "🥧 AUM 현황", "🇺🇸 글로벌 동향", "🧠 AI 프롬프트"
     ]
     tabs = st.tabs(tab_names)
@@ -691,10 +694,10 @@ with col_main:
         else:
             st.info("👉 우측 패널에 엑셀 데이터를 업로드해주세요.")
 
-    # === Tab 5: 진행 이벤트 성과 (블로그 기반 이벤트 파싱 적용) ===
+    # === Tab 5: 🎉 경쟁사 이벤트/동향 (블로그 통합 및 노이즈 제거 완료) ===
     with tabs[5]:
         st.markdown("### 📊 이벤트 성과 분석기 (수급 임팩트 트래킹)")
-        st.caption("선택한 마케팅 이벤트 진행 기간을 바탕으로, 자사와 타사 ETF의 실제 순매수 유입 효과(ROI)를 직관적으로 비교 분석합니다.")
+        st.caption("아래 뉴스 스크랩에서 확인한 이벤트 진행 기간을 바탕으로, 자사와 타사 ETF의 실제 순매수 유입 효과(ROI)를 직관적으로 비교 분석합니다.")
         if uploaded_excel is not None and len(available_weeks) > 1 and available_weeks[0] != "데이터 없음":
             temp_list_df = load_and_clean_excel(uploaded_excel, available_weeks[0])
             if not temp_list_df.empty and '종목명' in temp_list_df.columns:
@@ -741,46 +744,58 @@ with col_main:
             st.info("👉 우측 패널에 엑셀 데이터를 업로드하시면 성과 분석기 차트가 활성화됩니다.")
 
         st.divider()
-        st.markdown("### 🎉 운용사별 ETF 진행 이벤트 (공식 블로그 연동)")
-        st.caption("각 운용사 공식 네이버 블로그의 RSS 피드를 분석하여, '이벤트', '경품', '프로모션' 등 목적성이 뚜렷한 리테일 마케팅 포스팅만 필터링합니다.")
-        col_d1, col_d2, _ = st.columns([2, 2, 6])
-        with col_d1: evt_start = st.date_input("🗓️ 시작일 선택", datetime.today() - timedelta(days=60))
-        with col_d2: evt_end = st.date_input("🗓️ 종료일 선택", datetime.today())
-        st.divider()
+        st.markdown("### 🏢 운용사별 세일즈 액션 및 마케팅 동향 (통합 인텔리전스)")
+        st.caption("공식 네이버 블로그의 RSS 피드를 분석하여, 실제 마케팅 이벤트와 일반 정보성 콘텐츠를 완벽히 분리 및 중복 제거하여 제공합니다.")
         
-        if evt_start > evt_end: st.error("🚨 시작일이 종료일보다 늦을 수 없습니다.")
-        else:
-            # KoAct를 제외한 11개 운용사 공식 블로그 ID 매핑
-            brand_blogs = {
-                "KODEX (삼성)": "samsung_fund",
-                "TIGER (미래에셋)": "m_invest",
-                "ACE (한국투자)": "aceetf",
-                "RISE (KB)": "riseetf",
-                "SOL (신한)": "soletf",
-                "PLUS (한화)": "hanwhaasset",
-                "HANARO (NH아문디)": "nh_amundi",
-                "1Q (하나)": "1qetf",
-                "TIMEFOLIO (타임폴리오)": "timefolioetf",
-                "KIWOOM (키움)": "kiwoomammkt",
-                "WON (우리)": "wooriam_kr"
-            }
-            
-            with st.spinner("운용사 공식 블로그에서 진행 중인 이벤트를 필터링 중입니다..."):
-                has_any_event = False
-                for brand, blog_id in brand_blogs.items():
-                    evt_list = get_blog_events(blog_id, evt_start, evt_end)
-                    if evt_list:
-                        has_any_event = True
-                        st.markdown(f"#### 🔵 {brand}")
-                        cols = st.columns(len(evt_list) if len(evt_list) < 4 else 4)
-                        for idx, row in enumerate(evt_list):
+        # KODEX 최우선 복구 및 전체 10개 브랜드 셋팅
+        brand_blogs = {
+            "KODEX (삼성)": "samsung_fund",
+            "TIGER (미래에셋)": "m_invest",
+            "ACE (한국투자)": "aceetf",
+            "RISE (KB)": "riseetf",
+            "SOL (신한)": "soletf",
+            "PLUS (한화)": "hanwhaasset",
+            "HANARO (NH아문디)": "nh_amundi",
+            "1Q (하나)": "1qetf",
+            "TIMEFOLIO (타임폴리오)": "timefolioetf",
+            "KIWOOM (키움)": "kiwoomammkt",
+            "WON (우리)": "wooriam_kr"
+        }
+        
+        with st.spinner("경쟁사 통합 마케팅 동향을 스캔 및 정제 중입니다..."):
+            for brand, blog_id in brand_blogs.items():
+                events, generals = parse_competitor_blog(blog_id)
+                
+                # 아코디언 UI 적용 (KODEX, TIGER만 기본 펼침)
+                is_expanded = True if brand in ["KODEX (삼성)", "TIGER (미래에셋)"] else False
+                
+                with st.expander(f"🔵 **{brand}** 마케팅 동향", expanded=is_expanded):
+                    
+                    # 1단: 이벤트 및 세미나
+                    st.markdown("<h5 style='color:#ffb04d; margin-top:10px;'>🔥 핵심 세일즈 액션 (이벤트 & 세미나)</h5>", unsafe_allow_html=True)
+                    if events:
+                        cols = st.columns(len(events) if len(events) < 4 else 4)
+                        for idx, row in enumerate(events):
                             with cols[idx % 4]:
                                 with st.container(border=True):
-                                    st.markdown(f"**<a href='{row['link']}' target='_blank' style='color:#4da6ff; text-decoration:none;'>{row['title']}</a>**", unsafe_allow_html=True)
+                                    st.markdown(f"**<a href='{row['link']}' target='_blank' style='color:#ff4d4d; text-decoration:none;'>{row['title']}</a>**", unsafe_allow_html=True)
                                     st.caption(f"📅 {row['date']}")
-                
-                if not has_any_event:
-                    st.info("해당 기간 동안 공식 블로그에 업로드된 이벤트 포스팅이 없습니다.")
+                    else:
+                        st.info("현재 진행 중인 리테일 이벤트나 세미나가 없습니다.")
+                        
+                    st.write("") # 간격
+                    
+                    # 2단: 일반 마케팅 콘텐츠 (중복 제거됨)
+                    st.markdown("<h5 style='color:#93c5fd;'>📝 일반 마케팅 콘텐츠 (최신 5선)</h5>", unsafe_allow_html=True)
+                    if generals:
+                        cols_g = st.columns(len(generals) if len(generals) < 5 else 5)
+                        for idx, row in enumerate(generals):
+                            with cols_g[idx % 5]:
+                                with st.container(border=True):
+                                    st.markdown(f"<a href='{row['link']}' target='_blank' style='color:#4da6ff; text-decoration:none; font-size:14px;'>{row['title']}</a>", unsafe_allow_html=True)
+                                    st.caption(f"📅 {row['date']}")
+                    else:
+                        st.write("최신 게시글이 없습니다.")
 
     # === Tab 6: 고객 UX 분석 ===
     with tabs[6]:
@@ -814,43 +829,8 @@ with col_main:
                 else:
                     st.info("검색 범위(최대 1년) 내 포착된 리스크성 기사가 없습니다.")
 
-    # === Tab 7: 경쟁사 마케팅 동향 ===
+    # === Tab 7: 운용 현황 및 점유율 ===
     with tabs[7]:
-        st.markdown("### 🏢 타사 공식 마케팅 채널 동향 (실시간 RSS)")
-        st.caption("경쟁 운용사들의 공식 네이버 블로그 최신 피드를 정기 구독하여 상품 세일즈 메시지를 역추적합니다.")
-        st.divider()
-        blog_map = {
-            "🐯 TIGER ETF (미래에셋)": ("m_invest", "https://blog.naver.com/m_invest"),
-            "♠️ ACE ETF (한국투자)": ("aceetf", "https://blog.naver.com/aceetf"),
-            "📈 RISE ETF (KB자산운용)": ("riseetf", "https://blog.naver.com/riseetf"),
-            "☀️ SOL ETF (신한자산운용)": ("soletf", "https://blog.naver.com/soletf"),
-            "➕ PLUS ETF (한화자산운용)": ("hanwhaasset", "https://blog.naver.com/hanwhaasset"),
-            "🌾 HANARO ETF (NH아문디)": ("nh_amundi", "https://blog.naver.com/nh_amundi"),
-            "1️⃣ 1Q ETF (하나자산운용)": ("1qetf", "https://blog.naver.com/1qetf"),
-            "⏳ TIMEFOLIO ETF (타임폴리오)": ("timefolioetf", "https://blog.naver.com/timefolioetf"),
-            "🔵 WON ETF (우리자산운용)": ("wooriam_kr", "https://wooriam.com/"),
-            "🅚 KIWOOM ETF (키움투자자산운용)": ("kiwoomammkt", "https://blog.naver.com/kiwoomammkt")
-        }
-        blog_items = list(blog_map.items())
-        with st.spinner("운용사 블로그 피드를 동시 수집 중입니다..."):
-            for i in range(0, len(blog_items), 2):
-                c1, c2 = st.columns(2)
-                name1, (b_id1, url1) = blog_items[i]
-                with c1:
-                    st.subheader(f"[{name1}]({url1})")
-                    with st.container(border=True):
-                        for p_title, p_link in get_competitor_blog(b_id1):
-                            st.markdown(f"- <a href='{p_link}' target='_blank' style='color:#4da6ff; text-decoration:none;'>{p_title} 🔗</a>", unsafe_allow_html=True)
-                if i + 1 < len(blog_items):
-                    name2, (b_id2, url2) = blog_items[i+1]
-                    with c2:
-                        st.subheader(f"[{name2}]({url2})")
-                        with st.container(border=True):
-                            for p_title, p_link in get_competitor_blog(b_id2):
-                                st.markdown(f"- <a href='{p_link}' target='_blank' style='color:#4da6ff; text-decoration:none;'>{p_title} 🔗</a>", unsafe_allow_html=True)
-
-    # === Tab 8: 운용 현황 및 점유율 ===
-    with tabs[8]:
         st.markdown("### 🏢 국내 ETF 운용사 AUM 시장 점유율 및 테마별 현황 (실시간 기준)")
         col_pie, col_table = st.columns([1, 2])
         pivot_df = pd.DataFrame()
@@ -912,8 +892,8 @@ with col_main:
         else:
             st.info("👉 우측 패널에 엑셀 데이터를 업로드하시면 트렌드 그래프가 활성화됩니다.")
 
-    # === Tab 9: 글로벌 공백 & 정책 동향 ===
-    with tabs[9]:
+    # === Tab 8: 글로벌 공백 & 정책 동향 ===
+    with tabs[8]:
         st.markdown("### 🇺🇸 글로벌 혁신 구조 공백 분석 (US Mega Trends vs KODEX)")
         raw_keywords = [
             "타겟 인컴 ETF 버퍼형", 
@@ -946,8 +926,8 @@ with col_main:
             else:
                 st.info("관련된 최신 정책 뉴스 피드가 존재하지 않습니다.")
 
-    # === Tab 10: AI 프롬프트 생성기 ===
-    with tabs[10]:
+    # === Tab 9: AI 프롬프트 생성기 ===
+    with tabs[9]:
         st.markdown("### 🧠 전술 & 전략 AI 프롬프트 자동 생성기")
         st.caption("단순한 데이터 요약을 넘어, 대시보드의 모든 인텔리전스(수급, 규제, 고객 VOC, 경쟁사)를 결합하여 실무팀에 하달할 구체적인 '행동 지침(Action Item)'을 도출합니다.")
         st.divider()
