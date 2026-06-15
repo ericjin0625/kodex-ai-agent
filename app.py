@@ -89,7 +89,7 @@ def assign_auto_theme(etf_name):
     except:
         return '📦 기타 섹터/테마'
 
-# ★ 1번 수정: 휴장일 nan 에러 방지 및 다중 티커 Fallback 로직 적용 완료
+# ★ 1번 수정: 날려버린 지표 100% 복구 및 다중 티커 방어 로직
 @st.cache_data(ttl=1800)
 def get_macro_snapshot():
     snapshot = {
@@ -98,17 +98,18 @@ def get_macro_snapshot():
             "S&P 500": {"val": "정보 불가"}, "나스닥": {"val": "정보 불가"}, "다우존스": {"val": "정보 불가"}
         },
         "forex": {
-            "미국 USD": {"val": "정보 불가"}, "일본 JPY 100": {"val": "정보 불가"}, "유럽연합 EUR": {"val": "정보 불가"}
+            "미국 USD": {"val": "정보 불가"}, "일본 JPY 100": {"val": "정보 불가"}, "유럽연합 EUR": {"val": "정보 불가"},
+            "중국 CNY": {"val": "정보 불가"}, "영국 GBP": {"val": "정보 불가"}, "호주 AUD": {"val": "정보 불가"}
         },
         "rates": {
-            "국고채(3년)": {"val": "정보 불가"}
+            "콜금리": {"val": "정보 불가"}, "CD(91일)": {"val": "정보 불가"}, "국고채(3년)": {"val": "정보 불가"}
         },
         "others": {
             "VIX 지수": {"val": "정보 불가"}, "금 가격": {"val": "정보 불가"}, "비트코인 (BTC)": {"val": "정보 불가"}
         }
     }
     
-    # 1순위, 2순위 등 여러 티커를 배치하여 실패율 0% 도전
+    # 각 티커별 크롤링 키워드
     tickers = {
         "indices": {
             "코스피": ["KS11"], 
@@ -120,9 +121,14 @@ def get_macro_snapshot():
         "forex": {
             "미국 USD": ["USD/KRW"], 
             "일본 JPY 100": ["JPY/KRW"], 
-            "유럽연합 EUR": ["EUR/KRW"]
+            "유럽연합 EUR": ["EUR/KRW"],
+            "중국 CNY": ["CNY/KRW"],
+            "영국 GBP": ["GBP/KRW"],
+            "호주 AUD": ["AUD/KRW"]
         },
         "rates": {
+            "콜금리": ["KORCALL=ECI"], 
+            "CD(91일)": ["KRCD3M=ECI"], 
             "국고채(3년)": ["KR3YT=RR", "114460"]
         },
         "others": {
@@ -133,22 +139,21 @@ def get_macro_snapshot():
     }
     
     end = datetime.today()
-    start = end - timedelta(days=14) # 주말/휴일 대비 여유있게 14일 호출
+    start = end - timedelta(days=14) 
     
     for category, items in tickers.items():
         for name, ticker_list in items.items():
             for ticker in ticker_list:
                 try:
-                    # dropna()를 필수 적용하여 nan 에러 원천 차단
+                    # dropna()를 통해 휴장일 빈 값(NaN)으로 인한 화면 깨짐 방지
                     df = fdr.DataReader(ticker, start, end).dropna()
                     if len(df) >= 2:
                         c, p = df['Close'].iloc[-1], df['Close'].iloc[-2]
                         
-                        # 일본 JPY는 한국 기준(100엔당 원화)으로 보정
+                        # 일본 JPY는 100엔당 원화로 보정
                         if name == "일본 JPY 100" and c < 50:
                             c, p = c * 100, p * 100
                             
-                        # 단위에 맞춘 스트링 포맷팅
                         if name == "비트코인 (BTC)":
                             val_str, delta_str = f"₩{c:,.0f}", f"{c-p:+,.0f}"
                         elif name == "금 가격":
@@ -160,7 +165,7 @@ def get_macro_snapshot():
                             
                         pct_str = f"{(c-p)/p*100:+.2f}%"
                         snapshot[category][name] = {"val": val_str, "delta": delta_str, "pct": pct_str, "is_up": c >= p}
-                        break # 성공하면 대체 티커는 호출하지 않고 다음으로 넘어감
+                        break 
                 except: pass
     
     return snapshot
@@ -415,10 +420,10 @@ with col_right:
         st.markdown("<h4 style='text-align:center; font-size: 16px;'>🎛️ 데이터 컨트롤</h4>", unsafe_allow_html=True)
         st.divider()
         
-        # ★ 2번 수정: 조회 기준 주차 드롭다운을 상단으로 이동
-        week_placeholder = st.empty() 
+        # ★ 2번 수정: 조회 기준 주차 드롭다운을 상단으로 이동 (st.empty 활용)
+        week_placeholder = st.empty()
         
-        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
         available_weeks = ["데이터 없음"]
         uploaded_excel = st.file_uploader("📈 ETF 순매수 엑셀", type=["xlsx", "xls"], key="excel_main")
         
@@ -430,8 +435,6 @@ with col_right:
             except: pass
             
         default_idx = 1 if len(available_weeks) > 1 else 0
-        
-        # 엑셀 처리 후 placeholder에 드롭다운 채워넣기 (UI 상단 노출)
         selected_week = week_placeholder.selectbox("📆 조회 기준 주차", options=available_weeks, index=default_idx)
         
         st.divider()
@@ -885,7 +888,6 @@ with col_main:
                         fig_market_share.update_layout(height=420, margin=dict(t=20, l=20, r=20, b=20), template="plotly_dark", showlegend=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                         st.plotly_chart(fig_market_share, use_container_width=True)
                     with col_table:
-                        # ★ 3번 수정: 4대장 -> TOP 4 워딩 변경 완료
                         st.markdown("#### 📊 TOP 4 운용사 테마별 AUM 현황")
                         target_brands = ['KODEX', 'TIGER', 'ACE', 'RISE']
                         df_top_brands = df_all_etf[df_all_etf['브랜드'].isin(target_brands)].copy()
@@ -894,7 +896,6 @@ with col_main:
                         pivot_df = pivot_df[[c for col in target_brands if col in pivot_df.columns for c in [col]]].astype(int)
                         if '📦 기타 섹터/테마' in pivot_df.index: pivot_df = pivot_df.reindex([i for i in pivot_df.index if i != '📦 기타 섹터/테마'] + ['📦 기타 섹터/테마'])
                         
-                        # ★ 1번 수정: 빈 행 삭제 및 표 높이 제한 해제 로직
                         pivot_df = pivot_df.loc[(pivot_df != 0).any(axis=1)]
                         st.dataframe(pivot_df.style.format("{:,}"), use_container_width=True)
             except Exception as e: st.error(f"오류: {e}")
