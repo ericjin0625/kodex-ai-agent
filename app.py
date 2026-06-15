@@ -198,7 +198,6 @@ def get_real_returns(symbols_dict, etf_names):
         else: returns_dict[name] = 0.0
     return returns_dict
 
-# 시장 심리 3줄 요약 (불릿포인트 형태)로 업그레이드
 def generate_market_sentiment(news_df):
     if news_df.empty or news_df["원본제목"].iloc[0].startswith("'"): 
         return "<ul><li>뉴스 데이터가 충분하지 않아 시장 심리를 분석할 수 없습니다.</li></ul>"
@@ -389,11 +388,13 @@ with col_main:
         else:
             st.info("👉 우측 패널에 ETF 순매수 엑셀 데이터를 업로드해주세요.")
 
-    # === Tab 2: 순매수 등락, 수익률 (레이아웃 가로 배치 및 드롭다운 이동 수정) ===
+    # === Tab 2: 순매수 등락, 수익률 (레이아웃 가로 배치 및 드롭다운 이동 수정 완료) ===
     with tabs[2]:
         if uploaded_excel is not None and selected_week != "데이터 없음" and len(available_weeks) > 1:
             st.markdown("### 📈 기간별 ETF 순매수 현황")
-            col_start, col_text, col_slider, col_inv = st.columns([1.5, 3, 3, 1.5])
+            
+            # 슬라이더 가로 길이 축소 & 드롭다운과 겹치지 않게 간격(0.5) 확보
+            col_start, col_text, col_slider, col_space, col_inv = st.columns([1.5, 3, 2.5, 0.5, 1.5])
             with col_start:
                 start_week = st.selectbox("시작 주차:", options=available_weeks[::-1], index=0, key="start_week")
             with col_text:
@@ -402,7 +403,6 @@ with col_main:
                 top_n_tab2 = st.slider("TOP N개 ETF 순매수 순위:", 10, 100, 50, 10, key="top_n_tab2", label_visibility="collapsed")
                 st.markdown(f"<p style='text-align:right; color:red; font-weight:bold; margin-top:-10px;'>{top_n_tab2}</p>", unsafe_allow_html=True)
             with col_inv:
-                # 투자자 선택 바를 슬라이더 오른쪽 상단으로 이동
                 st.markdown("<div style='margin-bottom:-15px; font-size:13px; color:#94a3b8;'>분석 주체:</div>", unsafe_allow_html=True)
                 inv_type_tab2 = st.selectbox("투자자 선택", ["개인", "기관", "외국인"], label_visibility="collapsed", key="inv_type_tab2")
             
@@ -484,14 +484,16 @@ with col_main:
                                     z = np.polyfit(x_data, y_data, 1)
                                     p = np.poly1d(z)
                                     
-                                    # 상관계수 해석 로직
                                     if r_value >= 0.7: r_text = "강한 양(+)의 상관관계"
                                     elif r_value >= 0.3: r_text = "뚜렷한 양(+)의 상관관계"
                                     elif r_value > -0.3: r_text = "유의미한 상관관계 없음"
                                     elif r_value > -0.7: r_text = "뚜렷한 음(-)의 상관관계"
                                     else: r_text = "강한 음(-)의 상관관계"
                                     
-                                    fig_scatter.add_scatter(x=x_data, y=p(x_data), mode='lines', name=f'상관관계(Trendline)<br>Pearson: {r_value:.2f}', line=dict(color='#ff4d4d', dash='dot'))
+                                    # 차트 위 범례에서 수치 삭제 (깔끔하게 '추세선'만 표기)
+                                    fig_scatter.add_scatter(x=x_data, y=p(x_data), mode='lines', name='추세선 (Trendline)', line=dict(color='#ff4d4d', dash='dot'))
+                                    
+                                    # 하단 텍스트(알림창)에 상관계수 수치 및 해석 통합 출력
                                     st.info(f"💡 **상관관계 분석:** 현재 선택된 종목들의 주간 수익률과 {subject_tab2_scatter} 순매수 증감률 간의 피어슨 상관계수는 **{r_value:.2f}**로, **{r_text}**를 보이고 있습니다.")
 
                                 fig_scatter.update_traces(textposition='top center', marker=dict(size=10, color='#4da6ff', opacity=0.7), textfont=dict(size=11, color='lightgray'))
@@ -508,19 +510,16 @@ with col_main:
     with tabs[3]:
         st.markdown("### 📰 실시간 마켓 센티먼트 및 뉴스 요약")
         with st.spinner("최신 마켓 트렌드를 AI가 3줄 요약하고 있습니다..."):
-            # 기사 수 6개로 확장
             df_real_news = get_realtime_news("ETF", timeframe="7d", max_items=6)
             market_sentiment = generate_market_sentiment(df_real_news)
             st.session_state['market_sentiment'] = market_sentiment
             
             with st.container(border=True):
-                # 3줄 요약 포맷 (불릿포인트) 출력
                 st.markdown(f"<div style='font-size:15px; color:#e2e8f0; line-height:1.8; padding:5px;'>{market_sentiment}</div>", unsafe_allow_html=True)
             
             st.divider()
             
             if "링크" in df_real_news.columns and df_real_news["링크"].iloc[0] != "":
-                # 기사를 2x3 배열(2열)로 깔끔하게 배치
                 for i in range(0, len(df_real_news), 2):
                     cols = st.columns(2)
                     for j in range(2):
