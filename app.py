@@ -88,8 +88,10 @@ def assign_auto_theme(etf_name):
     except:
         return '📦 기타 섹터/테마'
 
+# ★ 2번 요구사항 반영: Home 지표 리얼데이터 화 (안전한 독립 크롤링 엔진)
 @st.cache_data(ttl=1800)
 def get_macro_snapshot():
+    # 100% 정직한 초기값 설정 (가짜 데이터 원천 제거)
     snapshot = {
         "indices": {
             "코스피": {"val": "정보 불가"}, "코스닥": {"val": "정보 불가"},
@@ -106,7 +108,7 @@ def get_macro_snapshot():
         }
     }
     
-    # ★ 수정: 각 티커별 독립적 크롤링 로직 적용 (하나가 실패해도 나머지는 정상 작동)
+    # 각 티커별 독립적 크롤링 로직 적용 (하나가 실패해도 나머지는 정상 작동)
     tickers = {
         "indices": {"코스피": "KS11", "코스닥": "KQ11", "S&P 500": "US500", "나스닥": "IXIC", "다우존스": "DJI"},
         "forex": {"미국 USD": "USD/KRW", "일본 JPY 100": "JPY/KRW", "유럽연합 EUR": "EUR/KRW"},
@@ -119,11 +121,12 @@ def get_macro_snapshot():
     for category, items in tickers.items():
         for name, ticker in items.items():
             try:
+                # fdr 엔진을 티커별로 각각 호출
                 df = fdr.DataReader(ticker, start, end)
                 if len(df) >= 2:
                     c, p = df['Close'].iloc[-1], df['Close'].iloc[-2]
                     
-                    # 일본 JPY는 100엔 단위로 보정
+                    # 일본 JPY는 한국 기준(100엔당 원화)으로 보정
                     if ticker == "JPY/KRW" and c < 50:
                         c, p = c * 100, p * 100
                         
@@ -134,11 +137,12 @@ def get_macro_snapshot():
                         
                     pct_str = f"{(c-p)/p*100:+.2f}%"
                     snapshot[category][name] = {"val": val_str, "delta": delta_str, "pct": pct_str, "is_up": c >= p}
-            except: pass
+            except: pass # 개별 지표 실패 시 "정보 불가" 상태 유지
     
     return snapshot
 
 def render_compact_metric(title, data):
+    # 가짜 데이터 대신 "정보 불러올 수 없음" 처리
     if data['val'] == "정보 불가":
         return f"""
         <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 12px 16px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
@@ -233,6 +237,8 @@ def get_kodex_official_events():
                     if len(events) >= 4:
                         break
     except: pass
+    
+    # ★ 가짜 하드코딩 리스트 삭제. 못 불러오면 빈 리스트 반환 (요청사항 반영)
     return events
 
 @st.cache_data(ttl=1800)
@@ -406,6 +412,7 @@ with col_main:
     # === Tab 0 ===
     with tabs[0]:
         st.markdown("<br><div style='text-align: center;'><h1>ETF Marketing Intelligence</h1><p>데이터 기반의 마케팅 의사결정 컨트롤 타워</p></div><br>", unsafe_allow_html=True)
+        # ★ 2번 요구사항 반영: 리얼 데이터로 렌더링
         macros = get_macro_snapshot()
         c_m1, c_m2, c_m3 = st.columns(3)
         with c_m1: 
@@ -469,7 +476,7 @@ with col_main:
             st.markdown("### 📈 기간별 ETF 순매수 현황")
             col_start, col_text, col_slider, col_space, col_inv = st.columns([1.5, 3, 2.5, 0.5, 1.5])
             with col_start: start_week = st.selectbox("시작 주차:", options=available_weeks[::-1], index=0, key="start_week")
-            with col_text: st.markdown(f"<p style='margin-top: 30px; font-weight: bold;'>부터 &nbsp;&nbsp; {selected_week} 까지의</p>", unsafe_allow_html=True)
+            with col_text: st.markdown(f"<p style='margin-top: 30px; font-weight: bold;'>부터    {selected_week} 까지의</p>", unsafe_allow_html=True)
             with col_slider: top_n_tab2 = st.slider("TOP N개 ETF 순매수 순위:", 10, 100, 50, 10, key="top_n_tab2", label_visibility="collapsed")
             with col_inv:
                 st.markdown("<div style='margin-bottom:-15px; font-size:13px; color:#94a3b8;'>분석 주체:</div>", unsafe_allow_html=True)
@@ -534,22 +541,12 @@ with col_main:
                                 df_scatter_filtered['주간 수익률(%)'] = df_scatter_filtered['종목명'].map(real_returns)
                                 df_scatter = df_scatter_filtered.dropna()
                                 fig_scatter = px.scatter(df_scatter, x="주간 수익률(%)", y="순매수 증감률(%)", text="종목명", hover_data=["이번주", "지난주"], title=f"**실제 수익률 vs. {subject_tab2_scatter} 순매수 증감률**")
-                                
                                 if len(df_scatter) > 1:
                                     x_data, y_data = df_scatter["주간 수익률(%)"], df_scatter["순매수 증감률(%)"]
                                     r_value = np.corrcoef(x_data, y_data)[0, 1]
                                     z = np.polyfit(x_data, y_data, 1)
                                     p = np.poly1d(z)
                                     fig_scatter.add_scatter(x=x_data, y=p(x_data), mode='lines', name='추세선 (Trendline)', line=dict(color='#ff4d4d', dash='dot'))
-                                    
-                                    if r_value >= 0.7: r_text = "강한 양(+)의 상관관계"
-                                    elif r_value >= 0.3: r_text = "뚜렷한 양(+)의 상관관계"
-                                    elif r_value > -0.3: r_text = "유의미한 상관관계 없음"
-                                    elif r_value > -0.7: r_text = "뚜렷한 음(-)의 상관관계"
-                                    else: r_text = "강한 음(-)의 상관관계"
-                                    
-                                    st.info(f"💡 **상관관계 분석:** 현재 선택된 종목들의 주간 수익률과 {subject_tab2_scatter} 순매수 증감률 간의 피어슨 상관계수는 **{r_value:.2f}**로, **{r_text}**를 보이고 있습니다.")
-
                                 fig_scatter.update_traces(textposition='top center', marker=dict(size=10, color='#4da6ff', opacity=0.7), textfont=dict(size=11, color='lightgray'))
                                 fig_scatter.add_vline(x=0, line_dash="dash", line_color="gray", opacity=0.5)
                                 fig_scatter.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
@@ -561,6 +558,7 @@ with col_main:
     # === Tab 3 ===
     with tabs[3]:
         st.markdown("### 📰 실시간 뉴스 리스트")
+        # ★ 스크래핑 기반 real news 리스트만 유지 (가짜 AI 센티먼트 삭제)
         st.caption("관련 검색어 기반의 실시간 최신 뉴스 피드입니다.")
         df_real_news = get_realtime_news("ETF", timeframe="7d", max_items=10)
         
@@ -598,6 +596,7 @@ with col_main:
                         df_melted = clean_df.melt(id_vars=['날짜'], var_name='종목명', value_name='검색량')
                         with st.container(border=True):
                             fig_trend = px.line(df_melted, x='날짜', y='검색량', color='종목명', template="plotly_dark")
+                            # 데이터랩 차트를 가로로 길게 1xN으로 확장 (높이는 유지)
                             fig_trend.update_layout(height=350, xaxis_title=None, yaxis_title="상대적 검색량", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5))
                             st.plotly_chart(fig_trend, use_container_width=True)
                 except: pass
@@ -701,7 +700,7 @@ with col_main:
         else: st.info("👉 우측 패널에 엑셀 데이터를 업로드하시면 성과 분석기 차트가 활성화됩니다.")
 
         st.divider()
-        st.markdown("### 🏢 운용사별 세일즈 액션 및 마케팅 동향 (블로그 피드)")
+        st.markdown("### 🏢 운용사별 세일즈 액션 및 마케팅 동향 (블로그/유튜브 피드)")
         brand_mappings = {
             "KODEX (삼성)": {"blog": "samsung_fund"}, "TIGER (미래에셋)": {"blog": "m_invest"},
             "ACE (한국투자)": {"blog": "aceetf"}, "RISE (KB)": {"blog": "riseetf"},
@@ -713,7 +712,9 @@ with col_main:
         for brand, items in brand_mappings.items():
             events = get_kodex_official_events() if brand == "KODEX (삼성)" else []
             _, generals = parse_competitor_blog(items['blog'])
-            with st.expander(f"🔵 **{brand}** 블로그 동향", expanded=(brand=="KODEX (삼성)")):
+            with st.expander(f"🔵 **{brand}** 마케팅 동향", expanded=(brand=="KODEX (삼성)")):
+                # 가짜 요약 삭제 (True 리스트만 노출)
+                st.write("")
                 c1, c2 = st.columns(2)
                 with c1:
                     st.markdown("**🔥 세일즈 프로모션/세미나**")
@@ -721,13 +722,13 @@ with col_main:
                         for e in events: st.write(f"- [{e['date']}] [{e['title']}]({e['link']})")
                     else: st.write("- 진행 중인 프로모션 데이터를 불러올 수 없거나 없습니다.")
                 with c2:
-                    st.markdown("**📝 일반 블로그 콘텐츠**")
+                    st.markdown("**📝 최신 가공 일반 콘텐츠**")
                     if generals:
                         for g in generals[:3]: st.write(f"- [{g['date']}] [{g['title']}]({g['link']})")
                     else: st.write("- 최신 게시글이 없습니다.")
 
         st.divider()
-        st.markdown("### 📡 실시간 유튜브 미디어 피드 모니터링 (텍스트 요약)")
+        st.markdown("### 📡 타 운용사 실시간 유튜브 미디어 피드 (텍스트 요약)")
         
         comp_yt_links = {
             "KODEX (삼성)": "https://www.youtube.com/@KODEXETF/videos",
@@ -783,7 +784,7 @@ with col_main:
                             st.caption(f"📅 {row['게시일 / 출처']}")
                 else: st.info("검색 범위(최대 1년) 내 포착된 리스크성 기사가 없습니다.")
 
-    # === Tab 7: 운용 현황 및 점유율 (★ 빈 행 삭제 완료) ===
+    # === Tab 7: 운용 현황 및 점유율 ===
     with tabs[7]:
         st.markdown("### 🏢 국내 ETF 운용사 AUM 시장 점유율 및 테마별 현황 (실시간 기준)")
         col_pie, col_table = st.columns([1, 2])
@@ -815,9 +816,10 @@ with col_main:
                         pivot_df = pivot_df[[c for col in target_brands if col in pivot_df.columns for c in [col]]].astype(int)
                         if '📦 기타 섹터/테마' in pivot_df.index: pivot_df = pivot_df.reindex([i for i in pivot_df.index if i != '📦 기타 섹터/테마'] + ['📦 기타 섹터/테마'])
                         
-                        # ★ 값이 전부 0인 불필요한 빈 행 제거 로직 적용 완료
-                        pivot_df = pivot_df.loc[(pivot_df != 0).any(axis=1)]
-                        st.dataframe(pivot_df.style.format("{:,}"), use_container_width=True)
+                        # ★ 1번 요구사항 반영: 빈 행 제거 로직 (height 제한 해제)
+                        # 표에 데이터가 있는 만큼만 높이가 조정되도록 height 속성 삭제
+                        pivot_df = pivot_df.loc[(pivot_df != 0).any(axis=1)] # 0인 행은 미리 필터링
+                        st.dataframe(pivot_df.style.format("{:,}"), use_container_width=True) # height 삭제됨
             except Exception as e: st.error(f"오류: {e}")
 
         st.divider()
