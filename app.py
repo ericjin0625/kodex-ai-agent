@@ -799,7 +799,7 @@ with col_main:
                 with st.spinner("수급 데이터를 렌더링하고 있습니다..."):
                     for w in target_sheets:
                         t_df = load_and_clean_excel(uploaded_excel, w)
-                        if not t_df.empty && '종목명' in t_df.columns:
+                        if not t_df.empty and '종목명' in t_df.columns:
                             t_df = t_df[t_df['종목명'].isin([target_etf, comp_etf])].copy()
                             t_df['전체순매수'] = t_df.get('개인', 0) + t_df.get('기관', 0) + t_df.get('외국인', 0)
                             t_df['주차'] = w
