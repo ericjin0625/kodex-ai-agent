@@ -846,10 +846,104 @@ with col_main:
                             st.markdown(f"* **제목**: [{v['title']}]({v['link']})\n* **트래픽**: `👁️ {v['views']}` ({v['date']})")
                     else: st.caption("최근 업데이트된 영상이 없거나 데이터를 불러올 수 없습니다.")
 
-    # === Tab 6 ===
+    # === Tab 6: ★ 종토방 Sub-Agent 연동 화면 추가 완료 ===
     with tabs[6]:
-        st.markdown("### 🗣️ 고객 Voice (VOC) & 시스템 리스크 모니터링")
-        st.caption("외부 라이브러리 없이 애플 앱스토어의 최근 불만 리뷰(1~3점)와 기사화된 중대 오작동 리스크를 1:1 비교합니다.")
+        st.markdown("### 🗣️ 고객 Voice (VOC) & 투자자 심리 모니터링")
+        st.caption("Sub-Agent가 백그라운드에서 수집·정제한 커뮤니티(종토방) 데이터와 앱스토어/뉴스 리스크를 통합 분석합니다.")
+        
+        # 신규 추가: 종토방 Sub-Agent 연동 전용 업로더 및 시각화 로직
+        with st.container(border=True):
+            st.markdown("#### 🤖 [Sub-Agent 연동] 네이버 종토방 분석 결과 업로드")
+            voc_files = st.file_uploader("코랩(Colab) 등 Sub-Agent가 추출한 5~6개의 종토방 CSV 파일들을 한 번에 드래그하여 업로드하세요.", type=['csv'], accept_multiple_files=True, key="voc_csvs")
+
+            if voc_files:
+                voc_data = {}
+                for f in voc_files:
+                    if "감성 분석" in f.name:
+                        voc_data['sentiment'] = pd.read_csv(f, skiprows=7)
+                    elif "키워드" in f.name:
+                        voc_data['keyword'] = pd.read_csv(f, skiprows=3)
+                    elif "시간대" in f.name:
+                        voc_data['time'] = pd.read_csv(f, skiprows=3)
+                    elif "종토방 인사이트" in f.name or "ETF 채널 인사이트" in f.name:
+                        f.seek(0)
+                        if 'insight' not in voc_data:
+                            voc_data['insight'] = ""
+                        voc_data['insight'] += f.read().decode('utf-8', errors='ignore') + "\n\n"
+                    elif "게시글 전체" in f.name:
+                        f.seek(0)
+                        voc_data['posts'] = pd.read_csv(f)
+
+                st.markdown("<br>", unsafe_allow_html=True)
+                
+                # 구역 1 & 2
+                c_voc1, c_voc2 = st.columns(2)
+                with c_voc1:
+                    st.markdown("##### 🌡️ 실시간 투자자 심리 온도계")
+                    if 'sentiment' in voc_data and not voc_data['sentiment'].empty:
+                        df_s = voc_data['sentiment'].dropna(subset=['감성'])
+                        fig_s = px.pie(df_s, names='감성', values='비율(%)', hole=0.5, color='감성', color_discrete_map={'긍정':'#4da6ff', '중립':'#cbd5e1', '부정':'#ff4d4d'})
+                        fig_s.update_layout(height=300, template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                        st.plotly_chart(fig_s, use_container_width=True)
+                    else: st.caption("감성 분석 데이터가 없습니다.")
+
+                with c_voc2:
+                    st.markdown("##### 🧠 리테일 투자자 핫 키워드 Top 10")
+                    if 'keyword' in voc_data and not voc_data['keyword'].empty:
+                        df_k = voc_data['keyword'].dropna(subset=['키워드']).head(10)
+                        fig_k = px.bar(df_k, x='언급횟수', y='키워드', orientation='h', template="plotly_dark", color_discrete_sequence=['#ffb04d'])
+                        fig_k.update_layout(yaxis={'categoryorder':'total ascending'}, height=300, template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                        st.plotly_chart(fig_k, use_container_width=True)
+                    else: st.caption("키워드 분석 데이터가 없습니다.")
+
+                st.divider()
+
+                # 구역 3
+                st.markdown("##### ⏰ 커뮤니티 골든 타임 추적기 (시간대별 활동)")
+                if 'time' in voc_data and not voc_data['time'].empty:
+                    df_t = voc_data['time'].dropna(subset=['시간대'])
+                    fig_t = go.Figure()
+                    fig_t.add_trace(go.Bar(x=df_t['시간대'], y=df_t['게시글 수'], name='게시글 수', marker_color='#4da6ff', yaxis='y1'))
+                    fig_t.add_trace(go.Scatter(x=df_t['시간대'], y=df_t['평균 감성점수'], name='평균 감성점수', mode='lines+markers', marker_color='#ffb04d', yaxis='y2'))
+                    fig_t.update_layout(
+                        height=350, template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                        yaxis=dict(title='게시글 수', side='left'),
+                        yaxis2=dict(title='평균 감성점수', overlaying='y', side='right', range=[1, 5]),
+                        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
+                    )
+                    st.plotly_chart(fig_t, use_container_width=True)
+                else: st.caption("시간대 추이 데이터가 없습니다.")
+
+                st.divider()
+
+                # 구역 4
+                st.markdown("##### 🗣️ 딥다이브 인사이트 & 날것의 목소리 (Raw VOC)")
+                c_in1, c_in2 = st.columns([1, 1])
+                with c_in1:
+                    with st.container(border=True):
+                        st.markdown("**💡 AI Sub-Agent 분석 요약**")
+                        if 'insight' in voc_data and voc_data['insight'].strip():
+                            # 텍스트가 너무 길면 스크롤 박스로 표시
+                            st.markdown(f"<div style='height:400px; overflow-y:auto; padding:10px; background:rgba(255,255,255,0.02); border-radius:5px;'>{voc_data['insight'].replace(chr(10), '<br>')}</div>", unsafe_allow_html=True)
+                        else: st.caption("인사이트 리포트 데이터가 없습니다.")
+                with c_in2:
+                    with st.container(border=True):
+                        st.markdown("**🔥 당일 조회수 폭발 Top 3 게시물**")
+                        if 'posts' in voc_data and not voc_data['posts'].empty:
+                            df_p = voc_data['posts'].copy()
+                            if '조회수' in df_p.columns:
+                                df_p['조회수'] = pd.to_numeric(df_p['조회수'], errors='coerce').fillna(0)
+                                top_posts = df_p.sort_values(by='조회수', ascending=False).head(3)
+                                st.markdown("<div style='height:400px; overflow-y:auto; padding:10px;'>", unsafe_allow_html=True)
+                                for _, row in top_posts.iterrows():
+                                    st.markdown(f"**[{row.get('감성', '분류없음')}] {row.get('제목', '제목없음')}** (조회수: {int(row['조회수'])})")
+                                    st.caption(f"작성자: {row.get('작성자', '알수없음')} | 시간: {row.get('날짜', '')}")
+                                    content = str(row.get('본문', ''))
+                                    st.write(f"> {content[:150]}..." if len(content) > 150 else f"> {content}")
+                                    st.divider()
+                                st.markdown("</div>", unsafe_allow_html=True)
+                        else: st.caption("게시물 원문 데이터가 없습니다.")
+
         st.divider()
         col_app, col_news = st.columns(2)
         with col_app:
