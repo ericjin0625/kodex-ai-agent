@@ -89,6 +89,19 @@ def assign_auto_theme(etf_name):
     except:
         return '📦 기타 섹터/테마'
 
+# ★ 종토방 엑셀 연동 시, 헤더(컬럼)가 중간에 위치한 경우를 자동으로 잡아내는 스마트 함수 (오류 완벽 차단)
+def extract_table(df, expected_cols):
+    cols_str = " ".join([str(c) for c in df.columns])
+    if all(ec in cols_str for ec in expected_cols):
+        return df
+    for i, row in df.iterrows():
+        row_str = " ".join([str(val) for val in row.values if pd.notna(val)])
+        if all(ec in row_str for ec in expected_cols):
+            new_df = df.iloc[i+1:].copy()
+            new_df.columns = [str(c) for c in row.values]
+            return new_df.dropna(how='all').reset_index(drop=True)
+    return df
+
 @st.cache_data(ttl=1800)
 def get_macro_snapshot():
     snapshot = {
@@ -443,9 +456,9 @@ with col_right:
         st.divider()
         uploaded_dls = st.file_uploader("🔍 DataLab 다중 비교", type=["csv", "xlsx", "xls"], key="dl_main", accept_multiple_files=True)
         
-        # ★ 추가 요청 사항: 우측 패널에 종목토론방 엑셀 단일 업로더 배치
+        # ★ 추가 요청 사항: 우측 패널에 종목토론방 엑셀 업로드 란 추가
         st.divider()
-        uploaded_voc = st.file_uploader("💬 종목토론방 분석 엑셀", type=["xlsx", "xls"], key="voc_excel_main")
+        uploaded_voc = st.file_uploader("💬 종목토론방 엑셀 연동", type=["xlsx", "xls"], key="voc_excel_main")
 
     st.markdown("<br><br><br>", unsafe_allow_html=True)
     st.markdown("<p style='text-align:right; color: #64748b; font-size: 10px; letter-spacing: 2px; font-weight: 600; margin-bottom: 10px;'>POWERED BY</p>", unsafe_allow_html=True)
@@ -850,7 +863,7 @@ with col_main:
                             st.markdown(f"* **제목**: [{v['title']}]({v['link']})\n* **트래픽**: `👁️ {v['views']}` ({v['date']})")
                     else: st.caption("최근 업데이트된 영상이 없거나 데이터를 불러올 수 없습니다.")
 
-    # === Tab 6: ★ 종토방 Sub-Agent 연동 화면 다중 시트 파싱 개조 완료 ===
+    # === Tab 6: ★ 종토방 Sub-Agent 연동 화면 (다이나믹 헤더 스캐너 도입 완료) ===
     with tabs[6]:
         st.markdown("### 🗣️ 고객 Voice (VOC) & 투자자 심리 모니터링")
         st.caption("Sub-Agent가 백그라운드에서 수집·정제한 커뮤니티(종토방) 엑셀 데이터와 앱스토어/뉴스 리스크를 통합 분석합니다.")
@@ -858,44 +871,63 @@ with col_main:
         with st.container(border=True):
             st.markdown("#### 🤖 [Sub-Agent 연동] 네이버 종토방 분석 결과 시각화")
             
-            # ★ 우측 패널에서 업로드한 엑셀 파일(단일 파일, 다중 시트)을 연동
             if uploaded_voc is not None:
                 voc_data = {}
                 try:
                     xls_voc = pd.ExcelFile(uploaded_voc)
                     for sheet in xls_voc.sheet_names:
-                        df_sheet = pd.read_excel(uploaded_voc, sheet_name=sheet)
-                        sheet_lower = sheet.lower()
+                        df_raw = pd.read_excel(xls_voc, sheet_name=sheet)
+                        sheet_lower = str(sheet).lower()
                         
                         # 1. 감성 분석 시트 맵핑
-                        if '감성' in sheet_lower or '감성' in df_sheet.columns:
-                            if '비율(%)' not in df_sheet.columns and len(df_sheet.columns) >= 2:
-                                df_sheet = df_sheet.rename(columns={df_sheet.columns[1]: '비율(%)'})
-                            voc_data['sentiment'] = df_sheet
+                        if '감성' in sheet_lower:
+                            df_parsed = extract_table(df_raw, ['감성', '비율'])
+                            cols = [str(c) for c in df_parsed.columns]
+                            for c in cols:
+                                if '감성' in c and c != '평균 감성점수': df_parsed.rename(columns={c: '감성'}, inplace=True)
+                                if '비율' in c: df_parsed.rename(columns={c: '비율(%)'}, inplace=True)
+                            voc_data['sentiment'] = df_parsed
                             
                         # 2. 키워드 분석 시트 맵핑
-                        elif '키워드' in sheet_lower or '키워드' in df_sheet.columns:
-                            if '언급횟수' not in df_sheet.columns and len(df_sheet.columns) >= 2:
-                                df_sheet = df_sheet.rename(columns={df_sheet.columns[1]: '언급횟수'})
-                            voc_data['keyword'] = df_sheet
+                        elif '키워드' in sheet_lower:
+                            df_parsed = extract_table(df_raw, ['키워드', '언급'])
+                            cols = [str(c) for c in df_parsed.columns]
+                            for c in cols:
+                                if '키워드' in c: df_parsed.rename(columns={c: '키워드'}, inplace=True)
+                                if '언급' in c: df_parsed.rename(columns={c: '언급횟수'}, inplace=True)
+                            voc_data['keyword'] = df_parsed
                             
                         # 3. 시간대 추이 시트 맵핑
-                        elif '시간대' in sheet_lower or '시간' in sheet_lower or '시간대' in df_sheet.columns:
-                            time_col = '시간대' if '시간대' in df_sheet.columns else ('시간' if '시간' in df_sheet.columns else df_sheet.columns[0])
-                            df_sheet = df_sheet.rename(columns={time_col: '시간대'})
-                            if '게시글 수' not in df_sheet.columns and len(df_sheet.columns) >= 2:
-                                df_sheet = df_sheet.rename(columns={df_sheet.columns[1]: '게시글 수'})
-                            if '평균 감성점수' not in df_sheet.columns and len(df_sheet.columns) >= 3:
-                                df_sheet = df_sheet.rename(columns={df_sheet.columns[2]: '평균 감성점수'})
-                            voc_data['time'] = df_sheet
+                        elif '시간' in sheet_lower:
+                            df_parsed = extract_table(df_raw, ['시간', '게시글'])
+                            cols = [str(c) for c in df_parsed.columns]
+                            for c in cols:
+                                if '시간' in c: df_parsed.rename(columns={c: '시간대'}, inplace=True)
+                                if '게시글' in c: df_parsed.rename(columns={c: '게시글 수'}, inplace=True)
+                                if '감성' in c: df_parsed.rename(columns={c: '평균 감성점수'}, inplace=True)
+                            voc_data['time'] = df_parsed
                             
                         # 4. 인사이트/요약 시트 맵핑
                         elif '인사이트' in sheet_lower or '요약' in sheet_lower:
-                            voc_data['insight'] = "\n\n".join(df_sheet.astype(str).apply(lambda x: ' '.join(x), axis=1))
+                            texts = []
+                            for _, row in df_raw.iterrows():
+                                row_text = " ".join([str(v) for v in row.values if pd.notna(v) and str(v).strip() != ''])
+                                if row_text.strip():
+                                    texts.append(row_text)
+                            voc_data['insight'] = "\n\n".join(texts)
                             
                         # 5. 원문/게시글 전체 시트 맵핑
-                        elif '게시글' in sheet_lower or '전체' in sheet_lower or '원문' in sheet_lower or ('제목' in df_sheet.columns):
-                            voc_data['posts'] = df_sheet
+                        elif '게시글' in sheet_lower or '전체' in sheet_lower or '원문' in sheet_lower:
+                            df_parsed = extract_table(df_raw, ['제목', '본문'])
+                            cols = [str(c) for c in df_parsed.columns]
+                            for c in cols:
+                                if '제목' in c: df_parsed.rename(columns={c: '제목'}, inplace=True)
+                                if '본문' in c: df_parsed.rename(columns={c: '본문'}, inplace=True)
+                                if '조회' in c: df_parsed.rename(columns={c: '조회수'}, inplace=True)
+                                if '감성' in c and c != '평균 감성점수': df_parsed.rename(columns={c: '감성'}, inplace=True)
+                                if '작성자' in c: df_parsed.rename(columns={c: '작성자'}, inplace=True)
+                                if '날짜' in c: df_parsed.rename(columns={c: '날짜'}, inplace=True)
+                            voc_data['posts'] = df_parsed
                 except Exception as e:
                     st.error(f"엑셀 파일을 파싱하는 중 오류가 발생했습니다: {e}")
 
@@ -951,29 +983,33 @@ with col_main:
                     with st.container(border=True):
                         st.markdown("**💡 AI Sub-Agent 분석 요약**")
                         if 'insight' in voc_data and voc_data['insight'].strip():
-                            st.markdown(f"<div style='height:400px; overflow-y:auto; padding:10px; background:rgba(255,255,255,0.02); border-radius:5px;'>{voc_data['insight'].replace(chr(10), '<br>')}</div>", unsafe_allow_html=True)
+                            # 인사이트 텍스트 가독성 고도화
+                            insight_html = voc_data['insight'].replace(chr(10), '<br>').replace('【', '<br><b style="color:#4da6ff; font-size:16px;">【').replace('】', '】</b><br>')
+                            st.markdown(f"<div style='height:400px; overflow-y:auto; padding:15px; background:rgba(255,255,255,0.02); border-radius:10px; border:1px solid rgba(255,255,255,0.05);'>{insight_html}</div>", unsafe_allow_html=True)
                         else: st.caption("인사이트 리포트 시트/데이터가 없습니다.")
                 with c_in2:
                     with st.container(border=True):
-                        st.markdown("**🔥 조회수 폭발 Top 3 게시물**")
+                        st.markdown("**🔥 당일 조회수 폭발 Top 3 게시물**")
                         if 'posts' in voc_data and not voc_data['posts'].empty:
                             try:
                                 df_p = voc_data['posts'].copy()
                                 if '조회수' in df_p.columns:
                                     df_p['조회수'] = pd.to_numeric(df_p['조회수'], errors='coerce').fillna(0)
                                     top_posts = df_p.sort_values(by='조회수', ascending=False).head(3)
-                                    st.markdown("<div style='height:400px; overflow-y:auto; padding:10px;'>", unsafe_allow_html=True)
+                                    
+                                    st.markdown("<div style='height:400px; overflow-y:auto; padding:5px;'>", unsafe_allow_html=True)
                                     for _, row in top_posts.iterrows():
-                                        st.markdown(f"**[{row.get('감성', '분류없음')}] {row.get('제목', '제목없음')}** (조회수: {int(row['조회수'])})")
-                                        st.caption(f"작성자: {row.get('작성자', '알수없음')} | 시간: {row.get('날짜', '')}")
-                                        content = str(row.get('본문', ''))
-                                        st.write(f"> {content[:150]}..." if len(content) > 150 else f"> {content}")
-                                        st.divider()
+                                        sentiment_color = "#ff4d4d" if "부정" in str(row.get('감성','')) else ("#4da6ff" if "긍정" in str(row.get('감성','')) else "#cbd5e1")
+                                        st.markdown(f"**<span style='color:{sentiment_color}'>[{row.get('감성', '분류없음')}]</span> {row.get('제목', '제목없음')}** <span style='color:#ffb04d; font-size:12px;'>(👁️ {int(row['조회수'])})</span>", unsafe_allow_html=True)
+                                        st.caption(f"✍️ {row.get('작성자', '익명')} | 🕒 {row.get('날짜', '')}")
+                                        content = str(row.get('본문', '')).replace('nan', '')
+                                        st.info(f"{content[:150]}..." if len(content) > 150 else content)
+                                        st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
                                     st.markdown("</div>", unsafe_allow_html=True)
                             except: st.caption("원문 게시글을 파싱할 수 없는 데이터 규격입니다.")
                         else: st.caption("게시물 전체 시트/데이터가 없습니다.")
             else:
-                st.info("👉 우측 패널에 코랩에서 추출한 '종목토론방 분석 엑셀' 단일 파일을 업로드해주세요.")
+                st.info("👉 우측 패널에 코랩에서 추출한 '종목토론방 엑셀 파일'을 업로드해주세요.")
 
         st.divider()
         col_app, col_news = st.columns(2)
