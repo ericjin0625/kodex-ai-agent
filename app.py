@@ -288,6 +288,7 @@ def parse_competitor_blog(blog_id):
             except:
                 pub_date = "최신"
 
+            is_event = False
             title_lower = title.lower()
             
             if any(w in title_lower for w in whitelist_promo):
@@ -305,7 +306,6 @@ def parse_competitor_blog(blog_id):
     
     return events[:4], generals[:4]
 
-# ★ 유튜브 크롤링: 차단 방지를 위해 채널 주소가 아닌 '유튜브 검색 결과'를 파싱하여 사후 조회수 연동
 @st.cache_data(ttl=3600)
 def scrape_youtube_search_real(keyword):
     headers = {
@@ -331,7 +331,6 @@ def scrape_youtube_search_real(keyword):
                     vid_id = v.get('videoId', '')
                     pub = v.get('publishedTimeText', {}).get('simpleText', '최근')
                     
-                    # 사후 분석을 위해 실제 조회수 숫자(int) 추출
                     views_raw = v.get('viewCountText', {}).get('simpleText', '0')
                     views_num = re.sub(r'[^0-9]', '', views_raw)
                     views = int(views_num) if views_num.isdigit() else 0
@@ -682,9 +681,12 @@ with col_main:
                             df_volume_summary_text = "\n".join(volume_lines)
         else: st.info("👉 우측 패널에 엑셀 데이터를 업로드해주세요.")
 
-    # === Tab 5: ★ 전면 재설계 (마케팅 차트 상단 ➡ 블로그 ➡ 유튜브 하단 사후분석) ===
+    # === Tab 5: ★ 레이아웃 순서 전면 재배치 (요구사항 반영) ===
     with tabs[5]:
-        # 1. 마케팅 임팩트 분석기 (최상단 배치 & 수동 영역 설정 기능 복구)
+        
+        # ----------------------------------------------------
+        # 1. 마케팅 임팩트 분석기 (최상단)
+        # ----------------------------------------------------
         st.markdown("### 📊 마케팅 촉매(이벤트/영상) 임팩트 분석기")
         st.caption("수동으로 마케팅 캠페인 기간(시작~종료)을 설정하여, 해당 기간 동안의 수급 변화(펌핑 효과)를 사후적으로 분석합니다.")
         
@@ -705,7 +707,6 @@ with col_main:
                     with c_a1: ana_start = st.selectbox("📈 전체 분석 시작 주차:", options=available_weeks[::-1], index=0)
                     with c_a2: ana_end = st.selectbox("📈 전체 분석 종료 주차:", options=available_weeks, index=0)
                     
-                    # ★ 요구사항 반영: 단일 마커가 아닌 시작-종료 영역(Range) 설정 기능 부활
                     c_h1, c_h2 = st.columns(2)
                     with c_h1: evt_start = st.selectbox("📍 캠페인/이벤트 시작 주차:", options=available_weeks[::-1], index=0)
                     with c_h2: evt_end = st.selectbox("📍 캠페인/이벤트 종료 주차:", options=available_weeks[::-1], index=0)
@@ -729,7 +730,6 @@ with col_main:
                         df_trend = pd.concat(trend_data)
                         fig_evt = px.line(df_trend, x='주차', y='전체순매수', color='종목명', markers=True, template="plotly_dark", color_discrete_map={target_etf: '#ff4d4d', comp_etf: '#4da6ff'})
                         
-                        # ★ 요구사항 반영: 지정한 이벤트 기간에 주황색 영역(vrect) 칠하기
                         try:
                             fig_evt.add_vrect(
                                 x0=evt_start, x1=evt_end,
@@ -747,34 +747,9 @@ with col_main:
 
         st.divider()
         
-        # 2. 운용사별 블로그 동향 (중단 배치)
-        st.markdown("### 🏢 운용사별 세일즈 액션 및 마케팅 동향 (블로그 피드)")
-        brand_mappings = {
-            "KODEX (삼성)": {"blog": "samsung_fund"}, "TIGER (미래에셋)": {"blog": "m_invest"},
-            "ACE (한국투자)": {"blog": "aceetf"}, "RISE (KB)": {"blog": "riseetf"},
-            "SOL (신한)": {"blog": "soletf"}, "PLUS (한화)": {"blog": "hanwhaasset"},
-            "HANARO (NH아문디)": {"blog": "nh_amundi"}, "1Q (하나)": {"blog": "1qetf"},
-            "TIMEFOLIO (타임폴리오)": {"blog": "timefolioetf"}, "KIWOOM (키움)": {"blog": "kiwoomammkt"},
-            "WON (우리)": {"blog": "wooriam_kr"}
-        }
-        for brand, items in brand_mappings.items():
-            events, generals = parse_competitor_blog(items['blog'])
-            with st.expander(f"🔵 **{brand}** 블로그 동향", expanded=(brand=="KODEX (삼성)")):
-                c1, c2 = st.columns(2)
-                with c1:
-                    st.markdown("**🔥 세일즈 프로모션/세미나**")
-                    if events:
-                        for e in events: st.write(f"- [{e['date']}] [{e['title']}]({e['link']})")
-                    else: st.write("- 진행 중인 프로모션 데이터를 불러올 수 없거나 없습니다.")
-                with c2:
-                    st.markdown("**📝 일반 블로그 콘텐츠**")
-                    if generals:
-                        for g in generals[:3]: st.write(f"- [{g['date']}] [{g['title']}]({g['link']})")
-                    else: st.write("- 최신 게시글이 없습니다.")
-
-        st.divider()
-        
-        # 3. 유튜브 사후 성과 분석기 (최하단 배치 & 우회 스크랩 엔진 도입)
+        # ----------------------------------------------------
+        # 2. 유튜브 사후 성과 분석기 (중간으로 이동)
+        # ----------------------------------------------------
         st.markdown("### 📺 유튜브 사후 성과 분석 (Post-Hoc Analysis)")
         st.caption("유튜브 공식 웹페이지 차단을 피해, '유튜브 검색 결과'를 통해 주요 운용사 관련 최신 영상들의 실제 조회수 성과를 사후적으로 추출합니다.")
         
@@ -814,6 +789,35 @@ with col_main:
                     st.dataframe(df_yt_sorted[["운용사", "영상 제목", "조회수", "업로드"]], use_container_width=True, height=350, hide_index=True)
             else:
                 st.caption("현재 유튜브 데이터를 불러올 수 없습니다. (보안 차단 또는 일시적 네트워크 지연)")
+
+        st.divider()
+
+        # ----------------------------------------------------
+        # 3. 운용사별 블로그 동향 (최하단으로 이동)
+        # ----------------------------------------------------
+        st.markdown("### 🏢 운용사별 세일즈 액션 및 마케팅 동향 (블로그 피드)")
+        brand_mappings = {
+            "KODEX (삼성)": {"blog": "samsung_fund"}, "TIGER (미래에셋)": {"blog": "m_invest"},
+            "ACE (한국투자)": {"blog": "aceetf"}, "RISE (KB)": {"blog": "riseetf"},
+            "SOL (신한)": {"blog": "soletf"}, "PLUS (한화)": {"blog": "hanwhaasset"},
+            "HANARO (NH아문디)": {"blog": "nh_amundi"}, "1Q (하나)": {"blog": "1qetf"},
+            "TIMEFOLIO (타임폴리오)": {"blog": "timefolioetf"}, "KIWOOM (키움)": {"blog": "kiwoomammkt"},
+            "WON (우리)": {"blog": "wooriam_kr"}
+        }
+        for brand, items in brand_mappings.items():
+            events, generals = parse_competitor_blog(items['blog'])
+            with st.expander(f"🔵 **{brand}** 블로그 동향", expanded=(brand=="KODEX (삼성)")):
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.markdown("**🔥 세일즈 프로모션/세미나**")
+                    if events:
+                        for e in events: st.write(f"- [{e['date']}] [{e['title']}]({e['link']})")
+                    else: st.write("- 진행 중인 프로모션 데이터를 불러올 수 없거나 없습니다.")
+                with c2:
+                    st.markdown("**📝 일반 블로그 콘텐츠**")
+                    if generals:
+                        for g in generals[:3]: st.write(f"- [{g['date']}] [{g['title']}]({g['link']})")
+                    else: st.write("- 최신 게시글이 없습니다.")
 
     # === Tab 6 ===
     with tabs[6]:
@@ -1059,50 +1063,4 @@ with col_main:
                 temp_news = get_realtime_news(kw, timeframe="7d", max_items=10)
                 c = len(temp_news) if not temp_news.empty and temp_news.iloc[0]["게시일 / 출처"] != "-" else 0
                 trend_strengths.append("🔥🔥🔥 최고조" if c >= 5 else ("🔥🔥 강세" if c >= 2 else "🔥 꾸준함"))
-        st.dataframe(pd.DataFrame({"혁신 상품 구조 (미국 메가 트렌드)": raw_keywords, "최근 뉴스 기반 유입 강도": trend_strengths, "KODEX 라인업 현황": ["공백 (0개)", "일부 유사 (1개)", "규제 한계 (0개)", "규제 한계 (0개)", "공백 (0개)"], "전략적 제언 (Action Plan)": ["즉시 벤치마킹 기획 가동", "분배율 메시지 고도화", "정책 완화 시그널 추적", "법안 통과 즉시 선점", "하락장 방어 포트폴리오 설계"]}), use_container_width=True, hide_index=True)
-        
-        st.divider()
-        selected_trend_label = st.selectbox("🔍 뉴스 검색망 가동할 혁신 구조 선택:", options=raw_keywords, index=2)
-        st.session_state['selected_trend_label'] = selected_trend_label
-        st.markdown(f"#### 📡 `[실시간 정책 시그널]` {selected_trend_label} 관련 완화 동향")
-        with st.spinner("규제 완화 뉴스 스크랩 중..."):
-            df_gap_news = get_realtime_news(selected_trend_label + " 금융위 규제", timeframe="7d")
-            if "링크" in df_gap_news.columns and df_gap_news["링크"].iloc[0] != "":
-                cols_grid = st.columns(2)
-                for idx, row in df_gap_news.iterrows():
-                    with cols_grid[idx % 2]:
-                        with st.container(border=True):
-                            st.caption(f"📅 {row['게시일 / 출처']}")
-                            st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:14px; font-weight:bold; color:#ffb04d; text-decoration:none;'>[규제] {row['원본제목']} 🔗</a>", unsafe_allow_html=True)
-            else: st.info("관련된 최신 정책 뉴스 피드가 존재하지 않습니다.")
-
-    # === Tab 9 ===
-    with tabs[9]:
-        st.markdown("### 🧠 모듈형 마케팅 리포트 자동 생성기 (Cross-Analysis)")
-        st.caption("대시보드 내 파편화된 모든 핵심 지표(뉴스, 거래대금, AUM, 순매수)를 하나의 컨텍스트로 정렬하여 유기적인 입체 보고서를 도출합니다.")
-        st.divider()
-
-        data_context = df_scatter.sort_values(by='주간 수익률(%)', ascending=False).head(20).to_string(index=False) if not df_scatter.empty else "데이터 부족 (우측 패널에 순매수 엑셀을 업로드하세요)"
-        dl_context = st.session_state.get('dl_summary', "데이터랩 미연동")
-
-        news_lines = []
-        if 'df_real_news' in locals() and not df_real_news.empty and df_real_news.iloc[0]["원본제목"] != "오류":
-            for _, row in df_real_news.head(5).iterrows():
-                news_lines.append(f"- [{row['게시일 / 출처']}] {row['원본제목']}")
-        news_context_text = "\n".join(news_lines) if news_lines else "최신 실시간 뉴스 데이터 없음"
-
-        st.markdown("#### 📥 [Step 1] 전체 수치 데이터 주입 및 컨텍스트 동기화")
-        prompt_1 = f"너는 KODEX 마케팅 총괄 최고책임자(CMO)를 보좌하는 수석 AI 인텔리전스 에이전트야. 제공하는 대시보드 연동 교차 데이터를 공백 없이 숙지해줘. 지금 분석 결과를 내지 말고 '교차 데이터 동기화 완료. 다음 분석 지시를 대기합니다.'라고만 답변해.\n\n[1. 실시간 뉴스 리스트]\n{news_context_text}\n\n[2. 자산 흐름 및 실제 거래량]\n{data_context}\n\n[3. 주요 종목별 실제 주간 거래량 추이]\n{df_volume_summary_text}\n\n[4. 네이버 DataLab 포털 검색량]\n{dl_context}\n\n[5. TOP 4 운용사 테마별 AUM 현황]\n{aum_context_text}"
-        st.code(prompt_1, language="text")
-
-        st.markdown("#### 📝 [Step 2] 섹션 1. 뉴스 & 수급 & 검색량 교차 매커니즘 분석")
-        prompt_2 = "숙지한 데이터를 바탕으로 [섹션 1: 시장 환경 및 수급 요약] 파트를 개조식으로 작성해줘. 반드시 다음 조건에 맞춰 융합 해석해야 해:\n1. 상단 제공된 '실시간 뉴스 리스트'의 핵심 이슈가 실제 ETF 시장의 '주간 거래량 추이' 및 '순매수/수익률'에 어떤 임팩트를 주었는지 시차(Time Lag) 관점에서 연결해줘.\n2. 네이버 포털 검색량(DataLab) 추이가 실제 자금 유입(순매수 금액)으로 전환되었는지, 혹은 단순 휘발성 어그로였는지 거래량 데이터를 텍스트화하여 상호 교차 검증한 인사이트 3가지를 도출해줘."
-        st.code(prompt_2, language="text")
-
-        st.markdown("#### 🥧 [Step 3] 섹션 2. AUM 점유율 분석 기반 라인업 보강 전략")
-        prompt_3 = "[섹션 2: 테마별 라인업 보강 전략] 파트를 작성해줘. 제공된 'TOP 4 운용사 테마별 AUM 현황' 구조와 '테마별 운용사 전체 순매수 트렌드'를 정밀 비교분석해야 해. KODEX가 경쟁사(TIGER 등) 대비 AUM 마켓셰어는 밀리지만 순매수 유입 강도가 거세서 밀어붙여야 할 테마, 반대로 시장 점유율은 높은데 자금 유입이 둔화되어 '마케팅 보강 및 방어 캠페인'이 급선무인 ETF 테마 라인업을 2가지 명확히 식별하고 그 당위성을 분석해줘."
-        st.code(prompt_3, language="text")
-
-        st.markdown("#### 🚀 [Step 4] 섹션 3. 통합 액션 플랜 및 영업점 가이드 도출")
-        prompt_4 = "마지막으로 [섹션 3: KODEX 세일즈 액션 플랜] 파트를 작성해줘. 앞선 뉴스 분석, 수급-거래량 교차 검증, 테마 라인업 보강 전략을 총망라하여, 다음 주 KODEX 마케팅팀이 즉각 실행해야 할 구체적인 리테일 프로모션 아이디어 1가지와 시중 은행 및 증권사 창구 하달용 '리테일 세일즈 톡(Sales Talk)' 초안 2가지를 강력한 팩트 중심으로 제안해줘."
-        st.code(prompt_4, language="text")
+        st.dataframe(pd.DataFrame({"혁신 상품 구조 (미국 메가 트렌드)": raw_keywords, "최근 뉴스 기반 유입 강도": trend_strengths, "KODEX 라인업 현황": ["공백 (0개)", "일부 유사 (1개)", "규제 한계 (0개)", "규제 한계 (0개)", "공백 (0개)"], "전략적 제언 (Action Plan)": ["즉시 벤치마킹 기획 가동", "분배율 메시지 고도화", "정책 완화 시그널 추적", "법안 통과 즉
