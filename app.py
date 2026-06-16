@@ -12,6 +12,7 @@ import json
 import time
 import re
 from collections import Counter
+import io  # 추가: 판다스 html 파싱을 위해 필요
 
 # 1. 페이지 레이아웃 및 기본 테마 설정
 st.set_page_config(page_title="ETF Monitoring AI Agent", layout="wide", initial_sidebar_state="collapsed")
@@ -165,6 +166,7 @@ def get_macro_snapshot():
                         break 
                 except: pass
 
+    # 수정된 부분: 네이버 크롤링 오류(io.StringIO 및 인코딩) 해결
     rates_map = {
         "콜금리": "IRR_CALL",
         "CD(91일)": "IRR_CD91",
@@ -174,10 +176,11 @@ def get_macro_snapshot():
         try:
             url = f"https://finance.naver.com/marketindex/interestDailyQuote.naver?marketindexCd={code}&page=1"
             res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
-            df_ir = pd.read_html(res.text)[0]
+            res.encoding = 'euc-kr' # 인코딩 명시
+            df_ir = pd.read_html(io.StringIO(res.text))[0] # StringIO로 감싸기
             if not df_ir.empty and len(df_ir) >= 2:
-                c = float(str(df_ir.iloc[0, 1]).replace('%', ''))
-                p = float(str(df_ir.iloc[1, 1]).replace('%', ''))
+                c = float(str(df_ir.iloc[0, 1]).replace('%', '').strip())
+                p = float(str(df_ir.iloc[1, 1]).replace('%', '').strip())
                 
                 val_str = f"{c:,.3f}%"
                 delta = c - p
@@ -681,12 +684,9 @@ with col_main:
                             df_volume_summary_text = "\n".join(volume_lines)
         else: st.info("👉 우측 패널에 엑셀 데이터를 업로드해주세요.")
 
-    # === Tab 5: ★ 레이아웃 순서 전면 재배치 (요구사항 반영) ===
+    # === Tab 5 ===
     with tabs[5]:
         
-        # ----------------------------------------------------
-        # 1. 마케팅 임팩트 분석기 (최상단)
-        # ----------------------------------------------------
         st.markdown("### 📊 마케팅 촉매(이벤트/영상) 임팩트 분석기")
         st.caption("수동으로 마케팅 캠페인 기간(시작~종료)을 설정하여, 해당 기간 동안의 수급 변화(펌핑 효과)를 사후적으로 분석합니다.")
         
@@ -699,7 +699,7 @@ with col_main:
                     st.markdown("**1. 분석 대상 ETF 선택**")
                     default_target_idx = all_etf_names.index("KODEX 200") if "KODEX 200" in all_etf_names else 0
                     default_comp_idx = all_etf_names.index("TIGER 200") if "TIGER 200" in all_etf_names else (1 if len(all_etf_names) > 1 else 0)
-                    target_etf = st.selectbox("🎯 Target ETF (자사):", options=all_etf_names, index=default_target_idx)
+                    target_etf = st.selectbox("🎯 Target 연동 (자사):", options=all_etf_names, index=default_target_idx)
                     comp_etf = st.selectbox("⚔️ Competitor ETF (타사):", options=all_etf_names, index=default_comp_idx)
                 with col_sel2:
                     st.markdown("**2. 차트 조회 기간 및 수동 이벤트 영역 설정**")
@@ -747,9 +747,6 @@ with col_main:
 
         st.divider()
         
-        # ----------------------------------------------------
-        # 2. 유튜브 사후 성과 분석기 (중간으로 이동)
-        # ----------------------------------------------------
         st.markdown("### 📺 유튜브 사후 성과 분석 (Post-Hoc Analysis)")
         st.caption("유튜브 공식 웹페이지 차단을 피해, '유튜브 검색 결과'를 통해 주요 운용사 관련 최신 영상들의 실제 조회수 성과를 사후적으로 추출합니다.")
         
@@ -792,9 +789,6 @@ with col_main:
 
         st.divider()
 
-        # ----------------------------------------------------
-        # 3. 운용사별 블로그 동향 (최하단으로 이동)
-        # ----------------------------------------------------
         st.markdown("### 🏢 운용사별 세일즈 액션 및 마케팅 동향 (블로그 피드)")
         brand_mappings = {
             "KODEX (삼성)": {"blog": "samsung_fund"}, "TIGER (미래에셋)": {"blog": "m_invest"},
@@ -819,7 +813,7 @@ with col_main:
                         for g in generals[:3]: st.write(f"- [{g['date']}] [{g['title']}]({g['link']})")
                     else: st.write("- 최신 게시글이 없습니다.")
 
-    # === Tab 6 ===
+    # === Tab 6 (수정 사항 반영된 탭) ===
     with tabs[6]:
         st.markdown("### 🗣️ 고객 Voice (VOC) & 투자자 심리 모니터링")
         st.caption("Sub-Agent가 백그라운드에서 수집·정제한 커뮤니티(종토방) 엑셀 데이터와 앱스토어/뉴스 리스크를 통합 분석합니다.")
@@ -930,15 +924,7 @@ with col_main:
 
                 st.markdown("##### 🗣️ 딥다이브 인사이트 & 날것의 목소리 (Raw VOC)")
                 
-                with st.container(border=True):
-                    st.markdown("**💡 AI Sub-Agent 분석 요약**")
-                    if 'insight' in voc_data and voc_data['insight'].strip():
-                        insight_html = voc_data['insight'].replace(chr(10), '<br>').replace('【', '<br><b style="color:#4da6ff; font-size:16px;">【').replace('】', '】</b><br>')
-                        st.markdown(f"<div style='padding:15px; background:rgba(255,255,255,0.02); border-radius:10px; border:1px solid rgba(255,255,255,0.05);'>{insight_html}</div>", unsafe_allow_html=True)
-                    else: st.caption("인사이트 리포트 시트/데이터가 없습니다.")
-                
-                st.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
-
+                # 수정된 부분: "당일 조회수 폭발 Top 3 게시물"을 위로 올림
                 with st.container(border=True):
                     st.markdown("**🔥 당일 조회수 폭발 Top 3 게시물**")
                     if 'posts' in voc_data and not voc_data['posts'].empty:
@@ -959,6 +945,16 @@ with col_main:
                                 st.markdown("</div>", unsafe_allow_html=True)
                         except: st.caption("원문 게시글을 파싱할 수 없는 데이터 규격입니다.")
                     else: st.caption("게시물 전체 시트/데이터가 없습니다.")
+                
+                st.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
+
+                # 수정된 부분: "AI Sub-Agent 분석 요약"을 아래로 내리고 expander 형태로 변경
+                with st.expander("💡 AI Sub-Agent 분석 요약", expanded=False):
+                    if 'insight' in voc_data and voc_data['insight'].strip():
+                        insight_html = voc_data['insight'].replace(chr(10), '<br>').replace('【', '<br><b style="color:#4da6ff; font-size:16px;">【').replace('】', '】</b><br>')
+                        st.markdown(f"<div style='padding:15px; background:rgba(255,255,255,0.02); border-radius:10px; border:1px solid rgba(255,255,255,0.05);'>{insight_html}</div>", unsafe_allow_html=True)
+                    else: st.caption("인사이트 리포트 시트/데이터가 없습니다.")
+
             else:
                 st.info("👉 우측 패널에 코랩에서 추출한 '종목토론방 엑셀 파일'을 업로드해주세요.")
 
