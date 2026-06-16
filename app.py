@@ -621,7 +621,7 @@ with col_main:
         df_real_news = get_realtime_news("ETF", timeframe="7d", max_items=10)
         
         st.divider()
-        if "リンク" in df_real_news.columns and df_real_news["링크"].iloc[0] != "":
+        if "링크" in df_real_news.columns and df_real_news["링크"].iloc[0] != "":
             for i in range(0, len(df_real_news), 2):
                 cols = st.columns(2)
                 for j in range(2):
@@ -686,7 +686,6 @@ with col_main:
                                         df_weekly = df_hist['Volume'].resample('W').sum().reset_index()
                                         df_weekly.columns = ['주 시작일', '거래량']
                                         
-                                        # 프롬프트 바인딩용 텍스트 추출
                                         last_vol = df_weekly['거래량'].iloc[-1] if not df_weekly.empty else 0
                                         volume_lines.append(f"- {etf_name}: 최근 주간 거래량 {last_vol:,.0f}주")
                                         
@@ -698,17 +697,20 @@ with col_main:
                             df_volume_summary_text = "\n".join(volume_lines)
         else: st.info("👉 우측 패널에 엑셀 데이터를 업로드해주세요.")
 
-    # === Tab 5 ===
+    # === Tab 5: 📺 미디어 인텔리전스 (경쟁사 이벤트/동향) ===
     with tabs[5]:
         st.markdown("### 📺 미디어 인텔리전스 허브")
+        
         comp_yt_links = {
             "KODEX (삼성)": "https://www.youtube.com/@KODEXETF/videos",
             "TIGER (미래에셋)": "https://www.youtube.com/@tiger_etf/videos",
             "ACE (한국투자)": "https://www.youtube.com/@ace_etf/videos",
             "RISE (KB)": "https://www.youtube.com/@RISE_ETF/videos"
         }
+        
         with st.spinner("경쟁사 미디어 데이터 실시간 파싱 및 분석 중..."):
             word_counts, stats = get_media_intelligence(comp_yt_links)
+            
             c_int1, c_int2 = st.columns(2)
             with c_int1:
                 st.markdown("#### 🔑 TOP 4 운용사 유튜브 핫 키워드 랭킹")
@@ -724,28 +726,154 @@ with col_main:
                 else: st.caption("데이터 수집 중")
         
         st.divider()
+
         st.markdown("### 📊 마케팅 촉매(이벤트/영상) 임팩트 분석기")
+        st.caption("선택한 영상 배포 주간(하이라이트)을 마커로 표시하여, 거시적 수급 트렌드에서 실제 펌핑 효과를 직관적으로 분석합니다.")
+        
         if uploaded_excel is not None and len(available_weeks) > 1 and available_weeks[0] != "데이터 없음":
             temp_list_df = load_and_clean_excel(uploaded_excel, available_weeks[0])
             if not temp_list_df.empty and '종목명' in temp_list_df.columns:
                 all_etf_names = sorted(temp_list_df[temp_list_df['종목명'] != '전체']['종목명'].dropna().unique().tolist())
                 col_sel1, col_sel2 = st.columns(2)
                 with col_sel1:
-                    target_etf = st.selectbox("🎯 Target ETF (자사):", options=all_etf_names, index=0)
-                    comp_etf = st.selectbox("⚔️ Competitor ETF (타사):", options=all_etf_names, index=min(1, len(all_etf_names)-1))
+                    st.markdown("**1. 분석 대상 ETF 선택**")
+                    default_target_idx = all_etf_names.index("KODEX 200") if "KODEX 200" in all_etf_names else 0
+                    default_comp_idx = all_etf_names.index("TIGER 200") if "TIGER 200" in all_etf_names else (1 if len(all_etf_names) > 1 else 0)
+                    target_etf = st.selectbox("🎯 Target ETF (자사):", options=all_etf_names, index=default_target_idx)
+                    comp_etf = st.selectbox("⚔️ Competitor ETF (타사):", options=all_etf_names, index=default_comp_idx)
                 with col_sel2:
-                    ana_start = st.selectbox("📈 전체 분석 시작 주차:", options=available_weeks[::-1], index=0)
-                    ana_end = st.selectbox("📈 전체 분석 종료 주차:", options=available_weeks, index=0)
-                    hl_start = st.selectbox("🎥 유튜브/쇼츠 릴리즈 주차 (마커 표시):", options=available_weeks[::-1], index=0)
-                # 차트 그리기 생략(원형 보존됨)
+                    st.markdown("**2. 차트 조회 기간 및 이벤트 발생 시점 설정**")
+                    c_a1, c_a2 = st.columns(2)
+                    with c_a1: ana_start = st.selectbox("📈 전체 분석 시작 주차:", options=available_weeks[::-1], index=0)
+                    with c_a2: ana_end = st.selectbox("📈 전체 분석 종료 주차:", options=available_weeks, index=0)
+                    c_h1, c_h2 = st.columns(2)
+                    with c_h1: hl_start = st.selectbox("🎥 유튜브/쇼츠 릴리즈 주차 (마커 표시):", options=available_weeks[::-1], index=0)
+
+                s_idx = available_weeks.index(ana_start)
+                e_idx = available_weeks.index(ana_end)
+                target_sheets = available_weeks[s_idx:e_idx+1] if s_idx < e_idx else available_weeks[e_idx:s_idx+1]
+                target_sheets = target_sheets[::-1] 
+
+                trend_data = []
+                with st.spinner("수급 임팩트 데이터를 렌더링하고 있습니다..."):
+                    for w in target_sheets:
+                        t_df = load_and_clean_excel(uploaded_excel, w)
+                        if not t_df.empty and '종목명' in t_df.columns:
+                            t_df = t_df[t_df['종목명'].isin([target_etf, comp_etf])].copy()
+                            t_df['전체순매수'] = t_df.get('개인', 0) + t_df.get('기관', 0) + t_df.get('외국인', 0)
+                            t_df['주차'] = w
+                            trend_data.append(t_df[['주차', '종목명', '전체순매수']])
+                    
+                    if trend_data:
+                        df_trend = pd.concat(trend_data)
+                        fig_evt = px.line(df_trend, x='주차', y='전체순매수', color='종목명', markers=True, template="plotly_dark", color_discrete_map={target_etf: '#ff4d4d', comp_etf: '#4da6ff'})
+                        
+                        try:
+                            fig_evt.add_annotation(
+                                x=hl_start, 
+                                y=0,
+                                yref="y",
+                                xref="x",
+                                text="🎥 영상/쇼츠 릴리즈",
+                                showarrow=True,
+                                arrowhead=2,
+                                arrowsize=1,
+                                arrowwidth=2,
+                                arrowcolor="#ffb04d",
+                                ax=0,
+                                ay=40,
+                                font=dict(color="#ffb04d", size=12, weight="bold")
+                            )
+                            fig_evt.add_vline(x=hl_start, line_width=1, line_dash="dash", line_color="#ffb04d")
+                        except: pass
+                        
+                        fig_evt.update_layout(height=450, margin=dict(l=20, r=20, t=20, b=20), xaxis_title=None, yaxis_title="전체 순매수 금액 합계", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
+                        st.plotly_chart(fig_evt, use_container_width=True)
+
+        else: st.info("👉 우측 패널에 엑셀 데이터를 업로드하시면 성과 분석기 차트가 활성화됩니다.")
+
         st.divider()
-        st.markdown("### 🏢 운용사별 세일즈 액션 및 마케팅 동향")
-        # 블로그 피드 생략(원형 보존됨)
+        st.markdown("### 🏢 운용사별 세일즈 액션 및 마케팅 동향 (블로그 피드)")
+        brand_mappings = {
+            "KODEX (삼성)": {"blog": "samsung_fund"}, "TIGER (미래에셋)": {"blog": "m_invest"},
+            "ACE (한국투자)": {"blog": "aceetf"}, "RISE (KB)": {"blog": "riseetf"},
+            "SOL (신한)": {"blog": "soletf"}, "PLUS (한화)": {"blog": "hanwhaasset"},
+            "HANARO (NH아문디)": {"blog": "nh_amundi"}, "1Q (하나)": {"blog": "1qetf"},
+            "TIMEFOLIO (타임폴리오)": {"blog": "timefolioetf"}, "KIWOOM (키움)": {"blog": "kiwoomammkt"},
+            "WON (우리)": {"blog": "wooriam_kr"}
+        }
+        for brand, items in brand_mappings.items():
+            events = get_kodex_official_events() if brand == "KODEX (삼성)" else []
+            _, generals = parse_competitor_blog(items['blog'])
+            with st.expander(f"🔵 **{brand}** 블로그 동향", expanded=(brand=="KODEX (삼성)")):
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.markdown("**🔥 세일즈 프로모션/세미나**")
+                    if events:
+                        for e in events: st.write(f"- [{e['date']}] [{e['title']}]({e['link']})")
+                    else: st.write("- 진행 중인 프로모션 데이터를 불러올 수 없거나 없습니다.")
+                with c2:
+                    st.markdown("**📝 일반 블로그 콘텐츠**")
+                    if generals:
+                        for g in generals[:3]: st.write(f"- [{g['date']}] [{g['title']}]({g['link']})")
+                    else: st.write("- 최신 게시글이 없습니다.")
+
+        st.divider()
+        st.markdown("### 📡 타 운용사 실시간 유튜브 미디어 피드 모니터링 (텍스트 요약)")
+        
+        all_comp_yt_links = {
+            "KODEX (삼성)": "https://www.youtube.com/@KODEXETF/videos",
+            "TIGER (미래에셋)": "https://www.youtube.com/@tiger_etf/videos",
+            "ACE (한국투자)": "https://www.youtube.com/@ace_etf/videos",
+            "RISE (KB)": "https://www.youtube.com/@RISE_ETF/videos",
+            "SOL (신한)": "https://www.youtube.com/@SOL_ETF/videos",
+            "PLUS (한화)": "https://www.youtube.com/@hanwhafund/videos",
+            "HANARO (NH아문디)": "https://www.youtube.com/@HANAROETF/videos",
+            "TIMEFOLIO (타임폴리오)": "https://www.youtube.com/@%ED%83%80%EC%9E%84%ED%8F%B4%EB%A6%AC%EC%98%A4%EC%9E%90%EC%82%B0%EC%9A%B4%EC%9A%A9/videos",
+            "KIWOOM (키움)": "https://www.youtube.com/@kiwoomam/videos",
+            "WON (우리)": "https://www.youtube.com/@wooriam/videos",
+            "1Q (하나 - 라이브)": "https://www.youtube.com/@hana_asset/streams"
+        }
+        
+        c_box = st.columns(3)
+        for idx, (comp_brand, comp_url) in enumerate(all_comp_yt_links.items()):
+            with c_box[idx % 3]:
+                with st.container(border=True):
+                    st.markdown(f"🔺 **{comp_brand}**")
+                    vids = scrape_youtube_videos_real(comp_url)
+                    if vids:
+                        for v in vids[:2]:
+                            st.markdown(f"* **제목**: [{v['title']}]({v['link']})\n* **트래픽**: `👁️ {v['views']}` ({v['date']})")
+                    else: st.caption("최근 업데이트된 영상이 없거나 데이터를 불러올 수 없습니다.")
 
     # === Tab 6 ===
     with tabs[6]:
         st.markdown("### 🗣️ 고객 Voice (VOC) & 시스템 리스크 모니터링")
-        # 생략(원형 보존됨)
+        st.caption("외부 라이브러리 없이 애플 앱스토어의 최근 불만 리뷰(1~3점)와 기사화된 중대 오작동 리스크를 1:1 비교합니다.")
+        st.divider()
+        col_app, col_news = st.columns(2)
+        with col_app:
+            st.subheader("📱 주요 증권앱 최신 불만 리뷰 (App Store)")
+            with st.spinner("주요 증권사 앱스토어 피드를 깊게 순회 중입니다..."):
+                bad_reviews = get_apple_app_reviews()
+                if bad_reviews and "error" in bad_reviews[0]: st.error(bad_reviews[0]["error"])
+                elif bad_reviews:
+                    for r in bad_reviews:
+                        with st.container(border=True):
+                            st.markdown(f"**[{r['app']}]** ⭐{r['score']}점 - **{r['title']}**")
+                            st.caption(f"📅 {r['date']}")
+                            st.write(f"\"{r['content']}\"")
+                else: st.info("수집 장벽 완화 조건 하에서도 매칭된 악플 피드가 현재 부재합니다.")
+        with col_news:
+            st.subheader("📰 언론 보도 증권앱/MTS 중대 오류 이슈")
+            with st.spinner("MTS 장애/지연 관련 중대 1년 치 아카이브를 탐색 중입니다..."):
+                df_app_voc = get_realtime_news('"MTS 오류" OR "증권앱 먹통" OR "접속지연"', timeframe="1y", max_items=5)
+                if "링크" in df_app_voc.columns and df_app_voc["링크"].iloc[0] != "":
+                    for idx, row in df_app_voc.iterrows():
+                        with st.container(border=True):
+                            st.markdown(f"🚨 <a href='{row['링크']}' target='_blank' style='color:#ff4d4d; text-decoration:none;'>{row['원본제목']} 🔗</a>", unsafe_allow_html=True)
+                            st.caption(f"📅 {row['게시일 / 출처']}")
+                else: st.info("검색 범위(최대 1년) 내 포착된 리스크성 기사가 없습니다.")
 
     # === Tab 7: 운용 현황 및 점유율 ===
     with tabs[7]:
@@ -760,8 +888,17 @@ with col_main:
                     df_all_etf['브랜드'] = df_all_etf['Name'].apply(lambda x: str(x).split(' ')[0]).replace('KBSTAR', 'RISE')
                     df_all_etf['AUM(억원)'] = df_all_etf['MarCap'].fillna(0)
                     with col_pie:
+                        st.markdown("#### 🥧 전체 시장 점유율 (AUM 기준)")
                         top_n_brands = st.slider("표시할 상위 운용사 수 설정", min_value=3, max_value=15, value=6, step=1)
-                        # 파이차트 렌더링 생략 (원형 유지)
+                        df_brand_aum = df_all_etf.groupby('브랜드')['AUM(억원)'].sum().reset_index().sort_values(by='AUM(억원)', ascending=False)
+                        if len(df_brand_aum) > top_n_brands:
+                            df_top = df_brand_aum.head(top_n_brands)
+                            df_pie_final = pd.concat([df_top, pd.DataFrame([{'브랜드': "🧩 기타 운용사", 'AUM(억원)': df_brand_aum.iloc[top_n_brands:]['AUM(억원)'].sum()}])], ignore_index=True)
+                        else: df_pie_final = df_brand_aum
+                        fig_market_share = px.pie(df_pie_final, names='브랜드', values='AUM(억원)', hole=0.4, color_discrete_sequence=px.colors.sequential.Blues_r)
+                        fig_market_share.update_traces(textposition='inside', textinfo='percent+label')
+                        fig_market_share.update_layout(height=420, margin=dict(t=20, l=20, r=20, b=20), template="plotly_dark", showlegend=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                        st.plotly_chart(fig_market_share, use_container_width=True)
                     with col_table:
                         st.markdown("#### 📊 TOP 4 운용사 테마별 AUM 현황")
                         target_brands = ['KODEX', 'TIGER', 'ACE', 'RISE']
@@ -769,17 +906,68 @@ with col_main:
                         df_top_brands['분류_테마'] = df_top_brands['Name'].apply(assign_auto_theme)
                         pivot_df = pd.pivot_table(df_top_brands, values='AUM(억원)', index='분류_테마', columns='브랜드', aggfunc='sum', fill_value=0)
                         pivot_df = pivot_df[[c for col in target_brands if col in pivot_df.columns for c in [col]]].astype(int)
+                        if '📦 기타 섹터/테마' in pivot_df.index: pivot_df = pivot_df.reindex([i for i in pivot_df.index if i != '📦 기타 섹터/테마'] + ['📦 기타 섹터/테마'])
+                        
                         pivot_df = pivot_df.loc[(pivot_df != 0).any(axis=1)]
                         st.dataframe(pivot_df.style.format("{:,}"), use_container_width=True)
                         
                         # 프롬프트 바인딩용 텍스트 자산화
                         aum_context_text = pivot_df.to_string()
-            except Exception as e: pass
+            except Exception as e: st.error(f"오류: {e}")
+
+        st.divider()
+        st.markdown("### 📈 테마별 운용사 전체 순매수 트렌드 (과거 추이)")
+        if uploaded_excel is not None and available_weeks[0] != "데이터 없음":
+            col_theme, col_weeks = st.columns(2)
+            with col_theme: selected_theme = st.selectbox("분석할 테마 선택:", list(pivot_df.index) if not pivot_df.empty else ['🤖 AI & 반도체'])
+            with col_weeks: n_weeks = st.slider("조회할 과거 주차 (N주):", min_value=1, max_value=len(available_weeks), value=min(4, len(available_weeks)))
+            trend_data = []
+            for w in available_weeks[:n_weeks][::-1]:
+                try:
+                    temp_df = load_and_clean_excel(uploaded_excel, w)
+                    if not temp_df.empty and '종목명' in temp_df.columns:
+                        temp_df = temp_df[temp_df['종목명'] != '전체'].copy()
+                        temp_df['브랜드'] = temp_df['종목명'].apply(lambda x: str(x).split(' ')[0]).replace('KBSTAR', 'RISE')
+                        temp_df['분류_테마'] = temp_df['종목명'].apply(assign_auto_theme)
+                        theme_df = temp_df[(temp_df['분류_테마'] == selected_theme) & (temp_df['브랜드'].isin(['KODEX', 'TIGER', 'ACE', 'RISE']))].copy()
+                        theme_df['순매수합계'] = theme_df.get('개인', 0) + theme_df.get('기관', 0) + theme_df.get('외국인', 0)
+                        brand_sum = theme_df.groupby('브랜드')['순매수합계'].sum().reset_index()
+                        brand_sum['주차'] = w
+                        trend_data.append(brand_sum)
+                except: pass
+            if trend_data:
+                df_trend = pd.concat(trend_data)
+                fig_trend = px.line(df_trend, x='주차', y='순매수합계', color='브랜드', markers=True, template="plotly_dark", color_discrete_sequence=px.colors.qualitative.Set2)
+                fig_trend.update_layout(height=400, yaxis_title="전체 순매수 합계", xaxis_title=None, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                st.plotly_chart(fig_trend, use_container_width=True)
+        else: st.info("👉 우측 패널에 엑셀 데이터를 업로드하시면 트렌드 그래프가 활성화됩니다.")
 
     # === Tab 8 ===
     with tabs[8]:
-        st.markdown("### 🇺🇸 글로벌 혁신 구조 공백 분석")
-        # 생략 (원형 보존됨, 단 지시사항에 따라 프롬프트 컨텍스트 바인딩에서는 완전히 제외됨)
+        st.markdown("### 🇺🇸 글로벌 혁신 구조 공백 분석 (US Mega Trends vs KODEX)")
+        raw_keywords = ["타겟 인컴 ETF 버퍼형", "0DTE 초단기 옵션 커버드콜 ETF", "가상자산 비트코인 현물 ETF", "BDC 기업성장집합투자기구 대체투자", "하방 방어형 100% 버퍼 ETF"]
+        trend_strengths = []
+        with st.spinner("미국 혁신 테마 트렌드를 스캔 중입니다..."):
+            for kw in raw_keywords:
+                temp_news = get_realtime_news(kw, timeframe="7d", max_items=10)
+                c = len(temp_news) if not temp_news.empty and temp_news.iloc[0]["게시일 / 출처"] != "-" else 0
+                trend_strengths.append("🔥🔥🔥 최고조" if c >= 5 else ("🔥🔥 강세" if c >= 2 else "🔥 꾸준함"))
+        st.dataframe(pd.DataFrame({"혁신 상품 구조 (미국 메가 트렌드)": raw_keywords, "최근 뉴스 기반 유입 강도": trend_strengths, "KODEX 라인업 현황": ["공백 (0개)", "일부 유사 (1개)", "규제 한계 (0개)", "규제 한계 (0개)", "공백 (0개)"], "전략적 제언 (Action Plan)": ["즉시 벤치마킹 기획 가동", "분배율 메시지 고도화", "정책 완화 시그널 추적", "법안 통과 즉시 선점", "하락장 방어 포트폴리오 설계"]}), use_container_width=True, hide_index=True)
+        
+        st.divider()
+        selected_trend_label = st.selectbox("🔍 뉴스 검색망 가동할 혁신 구조 선택:", options=raw_keywords, index=2)
+        st.session_state['selected_trend_label'] = selected_trend_label
+        st.markdown(f"#### 📡 `[실시간 정책 시그널]` {selected_trend_label} 관련 완화 동향")
+        with st.spinner("규제 완화 뉴스 스크랩 중..."):
+            df_gap_news = get_realtime_news(selected_trend_label + " 금융위 규제", timeframe="7d")
+            if "링크" in df_gap_news.columns and df_gap_news["링크"].iloc[0] != "":
+                cols_grid = st.columns(2)
+                for idx, row in df_gap_news.iterrows():
+                    with cols_grid[idx % 2]:
+                        with st.container(border=True):
+                            st.caption(f"📅 {row['게시일 / 출처']}")
+                            st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:14px; font-weight:bold; color:#ffb04d; text-decoration:none;'>[규제] {row['원본제목']} 🔗</a>", unsafe_allow_html=True)
+            else: st.info("관련된 최신 정책 뉴스 피드가 존재하지 않습니다.")
 
     # === Tab 9: 대개조된 마케팅 리포트 자동 생성기 (Cross-Analysis 구조) ===
     with tabs[9]:
