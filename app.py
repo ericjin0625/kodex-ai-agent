@@ -264,28 +264,7 @@ def get_apple_app_reviews():
         return all_bad_reviews[:12]
     except Exception as e: return [{"error": f"API 연동 중 오류가 발생했습니다: {str(e)}"}]
 
-@st.cache_data(ttl=1800)
-def get_kodex_official_events():
-    events = []
-    url = "https://news.google.com/rss/search?q=%22KODEX+ETF%22+%EC%9D%B4%EB%B2%A4%ED%8A%B8+OR+%ED%94%84%EB%A1%9C%EB%AA%A8%EC%85%98+when:30d&hl=ko&gl=KR&ceid=KR:ko"
-    try:
-        res = requests.get(url, timeout=8)
-        if res.status_code == 200:
-            root = ET.fromstring(res.content)
-            for item in root.findall('./channel/item')[:4]: 
-                title = item.find('title').text
-                link = item.find('link').text
-                pubDate_str = item.find('pubDate').text 
-                try:
-                    date_parts = pubDate_str.split(',')[1].split()[0:3]
-                    date_clean = " ".join(date_parts)
-                    pub_date = datetime.strptime(date_clean, "%d %b %Y").strftime("%Y-%m-%d")
-                except:
-                    pub_date = "최신"
-                events.append({"title": f"[📰 언론/포털 보도] {title}", "link": link, "date": pub_date})
-    except: pass
-    return events
-
+# ★ 제한 해제: 빈칸 방지를 위해 무조건 최신글을 물어오도록 로직 개조 (KODEX도 이 함수 하나로 통일)
 @st.cache_data(ttl=1800)
 def parse_competitor_blog(blog_id):
     url = f"https://rss.blog.naver.com/{blog_id}.xml"
@@ -297,7 +276,9 @@ def parse_competitor_blog(blog_id):
     try:
         res = requests.get(url, timeout=5)
         root = ET.fromstring(res.content)
-        for item in root.findall('./channel/item')[:20]: 
+        items = root.findall('./channel/item')[:10]
+        
+        for item in items: 
             title = item.find('title').text
             link = item.find('link').text
             pubDate_str = item.find('pubDate').text 
@@ -308,22 +289,25 @@ def parse_competitor_blog(blog_id):
             except:
                 pub_date = "최신"
 
-            is_event = False
             title_lower = title.lower()
             
+            # 이벤트 키워드가 있으면 이벤트란으로 편입
             if any(w in title_lower for w in whitelist_promo):
-                if len(events) < 4:
-                    events.append({"title": f"[🎁 경품/매수] {title}", "link": link, "date": pub_date})
-                is_event = True
+                events.append({"title": f"[🎁 이벤트] {title}", "link": link, "date": pub_date})
             elif any(w in title_lower for w in whitelist_seminar):
-                if len(events) < 4:
-                    events.append({"title": f"[📢 세미나] {title}", "link": link, "date": pub_date})
-                is_event = True
-            
-            if not is_event and len(generals) < 5:
+                events.append({"title": f"[📢 세미나] {title}", "link": link, "date": pub_date})
+            else:
+                # 일반 글은 generals로 편입
                 generals.append({"title": title, "link": link, "date": pub_date})
+                
+        # ★ 빈칸 방지 로직: 이벤트를 하나도 안 한 운용사라면, 일반 최신글 1개를 강제로 이벤트란에 띄워서 화면을 채움
+        if not events and generals:
+            events.append({"title": f"[📝 최신동향] {generals[0]['title']}", "link": generals[0]['link'], "date": generals[0]['date']})
+            generals = generals[1:]
+            
     except: pass
-    return events, generals
+    
+    return events[:4], generals[:4]
 
 @st.cache_data(ttl=3600)
 def scrape_youtube_videos_real(url):
@@ -817,9 +801,10 @@ with col_main:
             "TIMEFOLIO (타임폴리오)": {"blog": "timefolioetf"}, "KIWOOM (키움)": {"blog": "kiwoomammkt"},
             "WON (우리)": {"blog": "wooriam_kr"}
         }
+        
+        # ★ 블로그 스크래핑 제한 해제 및 KODEX 통합 적용
         for brand, items in brand_mappings.items():
-            events = get_kodex_official_events() if brand == "KODEX (삼성)" else []
-            _, generals = parse_competitor_blog(items['blog'])
+            events, generals = parse_competitor_blog(items['blog'])
             with st.expander(f"🔵 **{brand}** 블로그 동향", expanded=(brand=="KODEX (삼성)")):
                 c1, c2 = st.columns(2)
                 with c1:
@@ -861,7 +846,7 @@ with col_main:
                             st.markdown(f"* **제목**: [{v['title']}]({v['link']})\n* **트래픽**: `👁️ {v['views']}` ({v['date']})")
                     else: st.caption("최근 업데이트된 영상이 없거나 데이터를 불러올 수 없습니다.")
 
-    # === Tab 6: ★ 종토방 UI 레이아웃 고도화 (상하 스택 배치) ===
+    # === Tab 6 ===
     with tabs[6]:
         st.markdown("### 🗣️ 고객 Voice (VOC) & 투자자 심리 모니터링")
         st.caption("Sub-Agent가 백그라운드에서 수집·정제한 커뮤니티(종토방) 엑셀 데이터와 앱스토어/뉴스 리스크를 통합 분석합니다.")
@@ -972,7 +957,6 @@ with col_main:
 
                 st.markdown("##### 🗣️ 딥다이브 인사이트 & 날것의 목소리 (Raw VOC)")
                 
-                # ★ 레이아웃 상하 스택 분리 (UI 개선)
                 with st.container(border=True):
                     st.markdown("**💡 AI Sub-Agent 분석 요약**")
                     if 'insight' in voc_data and voc_data['insight'].strip():
