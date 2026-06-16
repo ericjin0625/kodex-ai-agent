@@ -264,7 +264,6 @@ def get_apple_app_reviews():
         return all_bad_reviews[:12]
     except Exception as e: return [{"error": f"API 연동 중 오류가 발생했습니다: {str(e)}"}]
 
-# ★ 제한 해제: 빈칸 방지를 위해 무조건 최신글을 물어오도록 로직 개조 (KODEX도 이 함수 하나로 통일)
 @st.cache_data(ttl=1800)
 def parse_competitor_blog(blog_id):
     url = f"https://rss.blog.naver.com/{blog_id}.xml"
@@ -291,16 +290,13 @@ def parse_competitor_blog(blog_id):
 
             title_lower = title.lower()
             
-            # 이벤트 키워드가 있으면 이벤트란으로 편입
             if any(w in title_lower for w in whitelist_promo):
                 events.append({"title": f"[🎁 이벤트] {title}", "link": link, "date": pub_date})
             elif any(w in title_lower for w in whitelist_seminar):
                 events.append({"title": f"[📢 세미나] {title}", "link": link, "date": pub_date})
             else:
-                # 일반 글은 generals로 편입
                 generals.append({"title": title, "link": link, "date": pub_date})
                 
-        # ★ 빈칸 방지 로직: 이벤트를 하나도 안 한 운용사라면, 일반 최신글 1개를 강제로 이벤트란에 띄워서 화면을 채움
         if not events and generals:
             events.append({"title": f"[📝 최신동향] {generals[0]['title']}", "link": generals[0]['link'], "date": generals[0]['date']})
             generals = generals[1:]
@@ -309,16 +305,17 @@ def parse_competitor_blog(blog_id):
     
     return events[:4], generals[:4]
 
+# ★ 유튜브 크롤링: 차단 방지를 위해 채널 주소가 아닌 '유튜브 검색 결과'를 파싱하여 사후 조회수 연동
 @st.cache_data(ttl=3600)
-def scrape_youtube_videos_real(url):
+def scrape_youtube_search_real(keyword):
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept-Language": "ko-KR,ko;q=0.9"
     }
-    cookies = {'CONSENT': 'YES+cb.20210328-17-p0.en+FX+478'}
+    url = f"https://www.youtube.com/results?search_query={requests.utils.quote(keyword)}"
     feed = []
     try:
-        res = requests.get(url, headers=headers, cookies=cookies, timeout=6)
+        res = requests.get(url, headers=headers, timeout=6)
         if res.status_code != 200: return []
         match = re.search(r'ytInitialData\s*=\s*({.*?});</script>', res.text)
         if not match: return []
@@ -333,7 +330,12 @@ def scrape_youtube_videos_real(url):
                     title = v.get('title', {}).get('runs', [{}])[0].get('text', '')
                     vid_id = v.get('videoId', '')
                     pub = v.get('publishedTimeText', {}).get('simpleText', '최근')
-                    views = v.get('viewCountText', {}).get('simpleText', '') or v.get('shortViewCountText', {}).get('simpleText', '0회')
+                    
+                    # 사후 분석을 위해 실제 조회수 숫자(int) 추출
+                    views_raw = v.get('viewCountText', {}).get('simpleText', '0')
+                    views_num = re.sub(r'[^0-9]', '', views_raw)
+                    views = int(views_num) if views_num.isdigit() else 0
+                    
                     if vid_id and title:
                         feed.append({
                             "title": title,
@@ -345,23 +347,7 @@ def scrape_youtube_videos_real(url):
                     for val in node.values(): recurse(val)
         recurse(data)
     except: pass
-    return feed[:2] 
-
-@st.cache_data(ttl=3600)
-def get_media_intelligence(yt_links):
-    keywords_of_interest = ['반도체', '배당', '커버드콜', '인도', '우주항공', '빅테크', 'S&P500', '나스닥', '금리', '채권', 'AI']
-    all_titles = []
-    stats = {}
-    for brand, url in yt_links.items():
-        vids = scrape_youtube_videos_real(url)
-        shorts = scrape_youtube_videos_real(url.replace('/videos', '/shorts'))
-        all_titles.extend([v['title'] for v in vids] + [s['title'] for s in shorts])
-        stats[brand] = {'long': len(vids), 'short': len(shorts)}
-    word_counts = Counter()
-    for title in all_titles:
-        for kw in keywords_of_interest:
-            if kw in title: word_counts[kw] += 1
-    return word_counts, stats
+    return feed[:5]
 
 @st.cache_data(ttl=86400)
 def get_etf_mapping():
@@ -696,38 +682,11 @@ with col_main:
                             df_volume_summary_text = "\n".join(volume_lines)
         else: st.info("👉 우측 패널에 엑셀 데이터를 업로드해주세요.")
 
-    # === Tab 5: 📺 미디어 인텔리전스 (경쟁사 이벤트/동향) ===
+    # === Tab 5: ★ 전면 재설계 (마케팅 차트 상단 ➡ 블로그 ➡ 유튜브 하단 사후분석) ===
     with tabs[5]:
-        st.markdown("### 📺 미디어 인텔리전스 허브")
-        
-        comp_yt_links = {
-            "KODEX (삼성)": "https://www.youtube.com/@KODEXETF/videos",
-            "TIGER (미래에셋)": "https://www.youtube.com/@tiger_etf/videos",
-            "ACE (한국투자)": "https://www.youtube.com/@ace_etf/videos",
-            "RISE (KB)": "https://www.youtube.com/@RISE_ETF/videos"
-        }
-        
-        with st.spinner("경쟁사 미디어 데이터 실시간 파싱 및 분석 중..."):
-            word_counts, stats = get_media_intelligence(comp_yt_links)
-            
-            c_int1, c_int2 = st.columns(2)
-            with c_int1:
-                st.markdown("#### 🔑 TOP 4 운용사 유튜브 핫 키워드 랭킹")
-                if word_counts:
-                    df_kw = pd.DataFrame.from_dict(word_counts, orient='index', columns=['빈도수']).sort_values(by='빈도수', ascending=False)
-                    st.bar_chart(df_kw)
-                else: st.caption("데이터 수집 중이거나 일치하는 주요 키워드가 없습니다.")
-            with c_int2:
-                st.markdown("#### 📱 미디어 포맷 전략 믹스 (롱폼 vs 쇼츠)")
-                if stats:
-                    df_stats = pd.DataFrame(stats).T
-                    st.bar_chart(df_stats)
-                else: st.caption("데이터 수집 중")
-        
-        st.divider()
-
+        # 1. 마케팅 임팩트 분석기 (최상단 배치 & 수동 영역 설정 기능 복구)
         st.markdown("### 📊 마케팅 촉매(이벤트/영상) 임팩트 분석기")
-        st.caption("선택한 영상 배포 주간(하이라이트)을 마커로 표시하여, 거시적 수급 트렌드에서 실제 펌핑 효과를 직관적으로 분석합니다.")
+        st.caption("수동으로 마케팅 캠페인 기간(시작~종료)을 설정하여, 해당 기간 동안의 수급 변화(펌핑 효과)를 사후적으로 분석합니다.")
         
         if uploaded_excel is not None and len(available_weeks) > 1 and available_weeks[0] != "데이터 없음":
             temp_list_df = load_and_clean_excel(uploaded_excel, available_weeks[0])
@@ -741,12 +700,15 @@ with col_main:
                     target_etf = st.selectbox("🎯 Target ETF (자사):", options=all_etf_names, index=default_target_idx)
                     comp_etf = st.selectbox("⚔️ Competitor ETF (타사):", options=all_etf_names, index=default_comp_idx)
                 with col_sel2:
-                    st.markdown("**2. 차트 조회 기간 및 이벤트 발생 시점 설정**")
+                    st.markdown("**2. 차트 조회 기간 및 수동 이벤트 영역 설정**")
                     c_a1, c_a2 = st.columns(2)
                     with c_a1: ana_start = st.selectbox("📈 전체 분석 시작 주차:", options=available_weeks[::-1], index=0)
                     with c_a2: ana_end = st.selectbox("📈 전체 분석 종료 주차:", options=available_weeks, index=0)
+                    
+                    # ★ 요구사항 반영: 단일 마커가 아닌 시작-종료 영역(Range) 설정 기능 부활
                     c_h1, c_h2 = st.columns(2)
-                    with c_h1: hl_start = st.selectbox("🎥 유튜브/쇼츠 릴리즈 주차 (마커 표시):", options=available_weeks[::-1], index=0)
+                    with c_h1: evt_start = st.selectbox("📍 캠페인/이벤트 시작 주차:", options=available_weeks[::-1], index=0)
+                    with c_h2: evt_end = st.selectbox("📍 캠페인/이벤트 종료 주차:", options=available_weeks[::-1], index=0)
 
                 s_idx = available_weeks.index(ana_start)
                 e_idx = available_weeks.index(ana_end)
@@ -767,23 +729,15 @@ with col_main:
                         df_trend = pd.concat(trend_data)
                         fig_evt = px.line(df_trend, x='주차', y='전체순매수', color='종목명', markers=True, template="plotly_dark", color_discrete_map={target_etf: '#ff4d4d', comp_etf: '#4da6ff'})
                         
+                        # ★ 요구사항 반영: 지정한 이벤트 기간에 주황색 영역(vrect) 칠하기
                         try:
-                            fig_evt.add_annotation(
-                                x=hl_start, 
-                                y=0,
-                                yref="y",
-                                xref="x",
-                                text="🎥 영상/쇼츠 릴리즈",
-                                showarrow=True,
-                                arrowhead=2,
-                                arrowsize=1,
-                                arrowwidth=2,
-                                arrowcolor="#ffb04d",
-                                ax=0,
-                                ay=40,
-                                font=dict(color="#ffb04d", size=12, weight="bold")
+                            fig_evt.add_vrect(
+                                x0=evt_start, x1=evt_end,
+                                fillcolor="#ffb04d", opacity=0.15,
+                                layer="below", line_width=1, line_dash="dash", line_color="#ffb04d",
+                                annotation_text="캠페인 진행 구간", annotation_position="top left",
+                                annotation_font=dict(color="#ffb04d", size=12)
                             )
-                            fig_evt.add_vline(x=hl_start, line_width=1, line_dash="dash", line_color="#ffb04d")
                         except: pass
                         
                         fig_evt.update_layout(height=450, margin=dict(l=20, r=20, t=20, b=20), xaxis_title=None, yaxis_title="전체 순매수 금액 합계", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
@@ -792,6 +746,8 @@ with col_main:
         else: st.info("👉 우측 패널에 엑셀 데이터를 업로드하시면 성과 분석기 차트가 활성화됩니다.")
 
         st.divider()
+        
+        # 2. 운용사별 블로그 동향 (중단 배치)
         st.markdown("### 🏢 운용사별 세일즈 액션 및 마케팅 동향 (블로그 피드)")
         brand_mappings = {
             "KODEX (삼성)": {"blog": "samsung_fund"}, "TIGER (미래에셋)": {"blog": "m_invest"},
@@ -801,8 +757,6 @@ with col_main:
             "TIMEFOLIO (타임폴리오)": {"blog": "timefolioetf"}, "KIWOOM (키움)": {"blog": "kiwoomammkt"},
             "WON (우리)": {"blog": "wooriam_kr"}
         }
-        
-        # ★ 블로그 스크래핑 제한 해제 및 KODEX 통합 적용
         for brand, items in brand_mappings.items():
             events, generals = parse_competitor_blog(items['blog'])
             with st.expander(f"🔵 **{brand}** 블로그 동향", expanded=(brand=="KODEX (삼성)")):
@@ -819,32 +773,47 @@ with col_main:
                     else: st.write("- 최신 게시글이 없습니다.")
 
         st.divider()
-        st.markdown("### 📡 타 운용사 실시간 유튜브 미디어 피드 모니터링 (텍스트 요약)")
         
-        all_comp_yt_links = {
-            "KODEX (삼성)": "https://www.youtube.com/@KODEXETF/videos",
-            "TIGER (미래에셋)": "https://www.youtube.com/@tiger_etf/videos",
-            "ACE (한국투자)": "https://www.youtube.com/@ace_etf/videos",
-            "RISE (KB)": "https://www.youtube.com/@RISE_ETF/videos",
-            "SOL (신한)": "https://www.youtube.com/@SOL_ETF/videos",
-            "PLUS (한화)": "https://www.youtube.com/@hanwhafund/videos",
-            "HANARO (NH아문디)": "https://www.youtube.com/@HANAROETF/videos",
-            "TIMEFOLIO (타임폴리오)": "https://www.youtube.com/@%ED%83%80%EC%9E%84%ED%8F%B4%EB%A6%AC%EC%98%A4%EC%9E%90%EC%82%B0%EC%9A%B4%EC%9A%A9/videos",
-            "KIWOOM (키움)": "https://www.youtube.com/@kiwoomam/videos",
-            "WON (우리)": "https://www.youtube.com/@wooriam/videos",
-            "1Q (하나 - 라이브)": "https://www.youtube.com/@hana_asset/streams"
+        # 3. 유튜브 사후 성과 분석기 (최하단 배치 & 우회 스크랩 엔진 도입)
+        st.markdown("### 📺 유튜브 사후 성과 분석 (Post-Hoc Analysis)")
+        st.caption("유튜브 공식 웹페이지 차단을 피해, '유튜브 검색 결과'를 통해 주요 운용사 관련 최신 영상들의 실제 조회수 성과를 사후적으로 추출합니다.")
+        
+        yt_keywords = {
+            "KODEX (삼성)": "KODEX ETF",
+            "TIGER (미래에셋)": "TIGER ETF",
+            "ACE (한국투자)": "ACE ETF",
+            "RISE (KB)": "RISE ETF"
         }
         
-        c_box = st.columns(3)
-        for idx, (comp_brand, comp_url) in enumerate(all_comp_yt_links.items()):
-            with c_box[idx % 3]:
-                with st.container(border=True):
-                    st.markdown(f"🔺 **{comp_brand}**")
-                    vids = scrape_youtube_videos_real(comp_url)
-                    if vids:
-                        for v in vids[:2]:
-                            st.markdown(f"* **제목**: [{v['title']}]({v['link']})\n* **트래픽**: `👁️ {v['views']}` ({v['date']})")
-                    else: st.caption("최근 업데이트된 영상이 없거나 데이터를 불러올 수 없습니다.")
+        with st.spinner("경쟁사 유튜브 영상 성과 데이터를 실시간으로 파싱 중입니다..."):
+            yt_data = []
+            for brand, kw in yt_keywords.items():
+                vids = scrape_youtube_search_real(kw)
+                for v in vids:
+                    yt_data.append({
+                        "운용사": brand, 
+                        "영상 제목": v['title'], 
+                        "조회수": v['views'], 
+                        "업로드": v['date'], 
+                        "링크": v['link']
+                    })
+                    
+            if yt_data:
+                df_yt = pd.DataFrame(yt_data)
+                df_yt_sorted = df_yt.sort_values(by="조회수", ascending=False)
+                
+                c_yt1, c_yt2 = st.columns([1, 1])
+                with c_yt1:
+                    st.markdown("#### 🏆 주요 검색어별 평균 조회수 (영향력)")
+                    df_agg = df_yt.groupby("운용사")["조회수"].mean().reset_index()
+                    fig_yt = px.bar(df_agg, x="운용사", y="조회수", text_auto='.0f', color="운용사", template="plotly_dark", color_discrete_sequence=px.colors.qualitative.Pastel)
+                    fig_yt.update_layout(height=350, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False)
+                    st.plotly_chart(fig_yt, use_container_width=True)
+                with c_yt2:
+                    st.markdown("#### 📝 최신 영상 조회수 성과 리스트")
+                    st.dataframe(df_yt_sorted[["운용사", "영상 제목", "조회수", "업로드"]], use_container_width=True, height=350, hide_index=True)
+            else:
+                st.caption("현재 유튜브 데이터를 불러올 수 없습니다. (보안 차단 또는 일시적 네트워크 지연)")
 
     # === Tab 6 ===
     with tabs[6]:
@@ -1107,7 +1076,7 @@ with col_main:
                             st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:14px; font-weight:bold; color:#ffb04d; text-decoration:none;'>[규제] {row['원본제목']} 🔗</a>", unsafe_allow_html=True)
             else: st.info("관련된 최신 정책 뉴스 피드가 존재하지 않습니다.")
 
-    # === Tab 9: 대개조된 마케팅 리포트 자동 생성기 (Cross-Analysis 구조) ===
+    # === Tab 9 ===
     with tabs[9]:
         st.markdown("### 🧠 모듈형 마케팅 리포트 자동 생성기 (Cross-Analysis)")
         st.caption("대시보드 내 파편화된 모든 핵심 지표(뉴스, 거래대금, AUM, 순매수)를 하나의 컨텍스트로 정렬하여 유기적인 입체 보고서를 도출합니다.")
@@ -1122,14 +1091,8 @@ with col_main:
                 news_lines.append(f"- [{row['게시일 / 출처']}] {row['원본제목']}")
         news_context_text = "\n".join(news_lines) if news_lines else "최신 실시간 뉴스 데이터 없음"
 
-        try:
-            word_counts, stats = get_media_intelligence(comp_yt_links)
-            media_context = f"[유튜브 키워드 Top 5]: {dict(word_counts.most_common(5))}\n[포맷 믹스 구조]: {stats}"
-        except:
-            media_context = "미디어 데이터 대기 중"
-
         st.markdown("#### 📥 [Step 1] 전체 수치 데이터 주입 및 컨텍스트 동기화")
-        prompt_1 = f"너는 KODEX 마케팅 총괄 최고책임자(CMO)를 보좌하는 수석 AI 인텔리전스 에이전트야. 제공하는 대시보드 연동 교차 데이터를 공백 없이 숙지해줘. 지금 분석 결과를 내지 말고 '교차 데이터 동기화 완료. 다음 분석 지시를 대기합니다.'라고만 답변해.\n\n[1. 실시간 뉴스 리스트]\n{news_context_text}\n\n[2. 자산 흐름 및 실제 거래량]\n{data_context}\n\n[3. 주요 종목별 실제 주간 거래량 추이]\n{df_volume_summary_text}\n\n[4. 네이버 DataLab 포털 검색량]\n{dl_context}\n\n[5. TOP 4 운용사 테마별 AUM 현황]\n{aum_context_text}\n\n[6. 경쟁사 미디어 마케팅 동향]\n{media_context}"
+        prompt_1 = f"너는 KODEX 마케팅 총괄 최고책임자(CMO)를 보좌하는 수석 AI 인텔리전스 에이전트야. 제공하는 대시보드 연동 교차 데이터를 공백 없이 숙지해줘. 지금 분석 결과를 내지 말고 '교차 데이터 동기화 완료. 다음 분석 지시를 대기합니다.'라고만 답변해.\n\n[1. 실시간 뉴스 리스트]\n{news_context_text}\n\n[2. 자산 흐름 및 실제 거래량]\n{data_context}\n\n[3. 주요 종목별 실제 주간 거래량 추이]\n{df_volume_summary_text}\n\n[4. 네이버 DataLab 포털 검색량]\n{dl_context}\n\n[5. TOP 4 운용사 테마별 AUM 현황]\n{aum_context_text}"
         st.code(prompt_1, language="text")
 
         st.markdown("#### 📝 [Step 2] 섹션 1. 뉴스 & 수급 & 검색량 교차 매커니즘 분석")
