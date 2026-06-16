@@ -97,8 +97,7 @@ def get_macro_snapshot():
             "S&P 500": {"val": "정보 불가"}, "나스닥": {"val": "정보 불가"}, "다우존스": {"val": "정보 불가"}
         },
         "forex": {
-            "미국 USD": {"val": "정보 불가"}, "일본 JPY 100": {"val": "정보 불가"}, "유럽연합 EUR": {"val": "정보 불가"},
-            "중국 CNY": {"val": "정보 불가"}, "영국 GBP": {"val": "정보 불가"}, "호주 AUD": {"val": "정보 불가"}
+            "미국 USD": {"val": "정보 불가"}, "일본 JPY 100": {"val": "정보 불가"}, "유럽연합 EUR": {"val": "정보 불가"}
         },
         "rates": {
             "콜금리": {"val": "정보 불가"}, "CD(91일)": {"val": "정보 불가"}, "국고채(3년)": {"val": "정보 불가"}
@@ -108,6 +107,7 @@ def get_macro_snapshot():
         }
     }
     
+    # 지수, 환율, 기타 지표 (fdr 라이브러리 사용)
     tickers = {
         "indices": {
             "코스피": ["KS11"], 
@@ -119,15 +119,7 @@ def get_macro_snapshot():
         "forex": {
             "미국 USD": ["USD/KRW"], 
             "일본 JPY 100": ["JPY/KRW"], 
-            "유럽연합 EUR": ["EUR/KRW"],
-            "중국 CNY": ["CNY/KRW"],
-            "영국 GBP": ["GBP/KRW"],
-            "호주 AUD": ["AUD/KRW"]
-        },
-        "rates": {
-            "콜금리": ["KORCALL=ECI"], 
-            "CD(91일)": ["KRCD3M=ECI"], 
-            "국고채(3년)": ["KR3YT=RR", "114460"]
+            "유럽연합 EUR": ["EUR/KRW"]
         },
         "others": {
             "VIX 지수": ["VIX", "^VIX"], 
@@ -154,8 +146,6 @@ def get_macro_snapshot():
                             val_str, delta_str = f"₩{c:,.0f}", f"{c-p:+,.0f}"
                         elif name == "금 가격":
                             val_str, delta_str = f"${c:,.2f}", f"{c-p:+,.2f}"
-                        elif category == "rates":
-                            val_str, delta_str = f"{c:,.3f}%", f"{c-p:+.3f}"
                         else:
                             val_str, delta_str = f"{c:,.2f}", f"{c-p:+,.2f}"
                             
@@ -163,6 +153,30 @@ def get_macro_snapshot():
                         snapshot[category][name] = {"val": val_str, "delta": delta_str, "pct": pct_str, "is_up": c >= p}
                         break 
                 except: pass
+
+    # ★ 금리 지표 전용 스크래핑 (네이버 금융 우회 타격)
+    rates_map = {
+        "콜금리": "IRR_CALL",
+        "CD(91일)": "IRR_CD91",
+        "국고채(3년)": "IRR_GOVT03Y"
+    }
+    for name, code in rates_map.items():
+        try:
+            url = f"https://finance.naver.com/marketindex/interestDailyQuote.naver?marketindexCd={code}&page=1"
+            res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+            df_ir = pd.read_html(res.text)[0]
+            if not df_ir.empty and len(df_ir) >= 2:
+                # 최신일(0)과 전일(1) 금리 추출
+                c = float(str(df_ir.iloc[0, 1]).replace('%', ''))
+                p = float(str(df_ir.iloc[1, 1]).replace('%', ''))
+                
+                val_str = f"{c:,.3f}%"
+                delta = c - p
+                delta_str = f"{delta:+.3f}"
+                pct_str = f"{(delta)/p*100:+.2f}%" if p != 0 else "+0.00%"
+                
+                snapshot["rates"][name] = {"val": val_str, "delta": delta_str, "pct": pct_str, "is_up": delta >= 0}
+        except: pass
     
     return snapshot
 
@@ -241,11 +255,9 @@ def get_apple_app_reviews():
         return all_bad_reviews[:12]
     except Exception as e: return [{"error": f"API 연동 중 오류가 발생했습니다: {str(e)}"}]
 
-# ★ Tab 5 방안 B 적용: 공식 웹사이트 봇 차단을 우회하기 위한 뉴스/포털 RSS 활용
 @st.cache_data(ttl=1800)
 def get_kodex_official_events():
     events = []
-    # KODEX (삼성자산운용) 관련 이벤트/프로모션 보도자료를 포털 RSS를 통해 우회 수집
     url = "https://news.google.com/rss/search?q=%22KODEX+ETF%22+%EC%9D%B4%EB%B2%A4%ED%8A%B8+OR+%ED%94%84%EB%A1%9C%EB%AA%A8%EC%85%98+when:30d&hl=ko&gl=KR&ceid=KR:ko"
     try:
         res = requests.get(url, timeout=8)
@@ -255,31 +267,24 @@ def get_kodex_official_events():
                 title = item.find('title').text
                 link = item.find('link').text
                 pubDate_str = item.find('pubDate').text 
-                
-                # 날짜 포맷 정리
                 try:
                     date_parts = pubDate_str.split(',')[1].split()[0:3]
                     date_clean = " ".join(date_parts)
                     pub_date = datetime.strptime(date_clean, "%d %b %Y").strftime("%Y-%m-%d")
                 except:
                     pub_date = "최신"
-                
-                # 이벤트 리스트에 추가
-                events.append({
-                    "title": f"[📰 언론/포털 보도] {title}", 
-                    "link": link, 
-                    "date": pub_date
-                })
+                events.append({"title": f"[📰 언론/포털 보도] {title}", "link": link, "date": pub_date})
     except: pass
-    
     return events
 
+# ★ 블로그 콘텐츠 블랙리스트 검열 로직 수정 완료
 @st.cache_data(ttl=1800)
 def parse_competitor_blog(blog_id):
     url = f"https://rss.blog.naver.com/{blog_id}.xml"
     events = []
     generals = []
-    blacklist = ['당첨', '분배금', '배당', '지급 안내', '투자 전략', '주목할', '이슈', '안내', '발표']
+    
+    # 이벤트 판별용 키워드
     whitelist_promo = ['인증', '퀴즈', '경품', '추첨', '이벤트', '프로모션', '커피', '스타벅스', '페이', '쿠폰']
     whitelist_seminar = ['세미나', '웨비나', '간담회', 'live', '라이브']
     
@@ -297,20 +302,19 @@ def parse_competitor_blog(blog_id):
             except:
                 pub_date = "최신"
 
-            is_blacklisted = any(b in title for b in blacklist)
             is_event = False
+            title_lower = title.lower()
             
-            if not is_blacklisted:
-                title_lower = title.lower()
-                if any(w in title_lower for w in whitelist_promo):
-                    if len(events) < 4:
-                        events.append({"title": f"[🎁 경품/매수] {title}", "link": link, "date": pub_date})
-                    is_event = True
-                elif any(w in title_lower for w in whitelist_seminar):
-                    if len(events) < 4:
-                        events.append({"title": f"[📢 세미나] {title}", "link": link, "date": pub_date})
-                    is_event = True
+            if any(w in title_lower for w in whitelist_promo):
+                if len(events) < 4:
+                    events.append({"title": f"[🎁 경품/매수] {title}", "link": link, "date": pub_date})
+                is_event = True
+            elif any(w in title_lower for w in whitelist_seminar):
+                if len(events) < 4:
+                    events.append({"title": f"[📢 세미나] {title}", "link": link, "date": pub_date})
+                is_event = True
             
+            # 일반 포스팅은 깐깐한 블랙리스트 검열 없이 무조건 수집하여 표시
             if not is_event and len(generals) < 5:
                 generals.append({"title": title, "link": link, "date": pub_date})
     except: pass
@@ -466,22 +470,23 @@ with col_main:
     with tabs[0]:
         st.markdown("<br><div style='text-align: center;'><h1>ETF Marketing Intelligence</h1><p>데이터 기반의 마케팅 의사결정 컨트롤 타워</p></div><br>", unsafe_allow_html=True)
         macros = get_macro_snapshot()
+        
+        # ★ 가로 3단 구역 완벽 재배치 완료
         c_m1, c_m2, c_m3 = st.columns(3)
         with c_m1: 
             st.markdown("#### 📈 핵심 대표 지수")
             for k,v in macros["indices"].items(): st.markdown(render_compact_metric(k,v), unsafe_allow_html=True)
+            
         with c_m2: 
             st.markdown("#### 💱 주요 환율")
             for k,v in macros["forex"].items(): st.markdown(render_compact_metric(k,v), unsafe_allow_html=True)
-        with c_m3: 
-            st.markdown("#### 🏦 금리 지표")
+            
+            st.markdown("<br>#### 🏦 금리 지표", unsafe_allow_html=True)
             for k,v in macros["rates"].items(): st.markdown(render_compact_metric(k,v), unsafe_allow_html=True)
-        
-        st.markdown("<br>#### 📌 기타 주요 지표", unsafe_allow_html=True)
-        c_o1, c_o2, c_o3 = st.columns(3)
-        with c_o1: st.markdown(render_compact_metric("VIX 지수", macros["others"]["VIX 지수"]), unsafe_allow_html=True)
-        with c_o2: st.markdown(render_compact_metric("금 가격", macros["others"]["금 가격"]), unsafe_allow_html=True)
-        with c_o3: st.markdown(render_compact_metric("비트코인 (BTC)", macros["others"]["비트코인 (BTC)"]), unsafe_allow_html=True)
+            
+        with c_m3: 
+            st.markdown("#### 📌 기타 주요 지표")
+            for k,v in macros["others"].items(): st.markdown(render_compact_metric(k,v), unsafe_allow_html=True)
 
     # === Tab 1 ===
     with tabs[1]:
