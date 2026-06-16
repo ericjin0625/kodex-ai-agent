@@ -107,7 +107,6 @@ def get_macro_snapshot():
         }
     }
     
-    # 지수, 환율, 기타 지표 (fdr 라이브러리 사용)
     tickers = {
         "indices": {
             "코스피": ["KS11"], 
@@ -154,7 +153,6 @@ def get_macro_snapshot():
                         break 
                 except: pass
 
-    # ★ 금리 지표 전용 스크래핑 (네이버 금융 우회 타격)
     rates_map = {
         "콜금리": "IRR_CALL",
         "CD(91일)": "IRR_CD91",
@@ -166,7 +164,6 @@ def get_macro_snapshot():
             res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
             df_ir = pd.read_html(res.text)[0]
             if not df_ir.empty and len(df_ir) >= 2:
-                # 최신일(0)과 전일(1) 금리 추출
                 c = float(str(df_ir.iloc[0, 1]).replace('%', ''))
                 p = float(str(df_ir.iloc[1, 1]).replace('%', ''))
                 
@@ -258,33 +255,53 @@ def get_apple_app_reviews():
 @st.cache_data(ttl=1800)
 def get_kodex_official_events():
     events = []
-    url = "https://news.google.com/rss/search?q=%22KODEX+ETF%22+%EC%9D%B4%EB%B2%A4%ED%8A%B8+OR+%ED%94%84%EB%A1%9C%EB%AA%A8%EC%85%98+when:30d&hl=ko&gl=KR&ceid=KR:ko"
+    base_url = "https://www.samsungfund.com"
     try:
-        res = requests.get(url, timeout=8)
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "none",
+            "Sec-Fetch-User": "?1"
+        }
+        url = "https://www.samsungfund.com/etf/insight/event/list.do"
+        
+        res = requests.get(url, headers=headers, timeout=8)
         if res.status_code == 200:
-            root = ET.fromstring(res.content)
-            for item in root.findall('./channel/item')[:4]: 
-                title = item.find('title').text
-                link = item.find('link').text
-                pubDate_str = item.find('pubDate').text 
-                try:
-                    date_parts = pubDate_str.split(',')[1].split()[0:3]
-                    date_clean = " ".join(date_parts)
-                    pub_date = datetime.strptime(date_clean, "%d %b %Y").strftime("%Y-%m-%d")
-                except:
-                    pub_date = "최신"
-                events.append({"title": f"[📰 언론/포털 보도] {title}", "link": link, "date": pub_date})
-    except: pass
+            soup = BeautifulSoup(res.text, 'html.parser')
+            items = soup.select('div.event_list ul li a, ul.list_type a, div.list_wrap a')
+            if not items:
+                items = soup.find_all('a', href=re.compile(r'/event/|event.do|eventView'))
+                
+            for a in items:
+                title_tag = a.find(['strong', 'p', 'span'], class_=re.compile('tit|name|txt'))
+                title = title_tag.get_text(strip=True) if title_tag else a.get_text(strip=True)
+                date_tag = a.find(['span', 'p'], class_=re.compile('date|day|period'))
+                date_str = date_tag.get_text(strip=True) if date_tag else "진행중 (공식웹)"
+                
+                link = a.get('href', '')
+                if not link.startswith('http'):
+                    link = base_url + link
+                    
+                if title and len(title) > 5 and ('이벤트' in title or '진행' in title or '안내' in title or '오픈' in title):
+                    if not any(e['title'] == f"[🎁 공식홈페이지] {title}" for e in events):
+                        events.append({"title": f"[🎁 공식홈페이지] {title}", "link": link, "date": date_str})
+                if len(events) >= 4:
+                    break
+    except Exception as e:
+        pass
     return events
 
-# ★ 블로그 콘텐츠 블랙리스트 검열 로직 수정 완료
 @st.cache_data(ttl=1800)
 def parse_competitor_blog(blog_id):
     url = f"https://rss.blog.naver.com/{blog_id}.xml"
     events = []
     generals = []
-    
-    # 이벤트 판별용 키워드
+    blacklist = ['당첨', '분배금', '배당', '지급 안내', '투자 전략', '주목할', '이슈', '안내', '발표']
     whitelist_promo = ['인증', '퀴즈', '경품', '추첨', '이벤트', '프로모션', '커피', '스타벅스', '페이', '쿠폰']
     whitelist_seminar = ['세미나', '웨비나', '간담회', 'live', '라이브']
     
@@ -302,6 +319,7 @@ def parse_competitor_blog(blog_id):
             except:
                 pub_date = "최신"
 
+            is_blacklisted = any(b in title for b in blacklist)
             is_event = False
             title_lower = title.lower()
             
@@ -314,7 +332,6 @@ def parse_competitor_blog(blog_id):
                     events.append({"title": f"[📢 세미나] {title}", "link": link, "date": pub_date})
                 is_event = True
             
-            # 일반 포스팅은 깐깐한 블랙리스트 검열 없이 무조건 수집하여 표시
             if not is_event and len(generals) < 5:
                 generals.append({"title": title, "link": link, "date": pub_date})
     except: pass
@@ -471,7 +488,6 @@ with col_main:
         st.markdown("<br><div style='text-align: center;'><h1>ETF Marketing Intelligence</h1><p>데이터 기반의 마케팅 의사결정 컨트롤 타워</p></div><br>", unsafe_allow_html=True)
         macros = get_macro_snapshot()
         
-        # ★ 가로 3단 구역 완벽 재배치 완료
         c_m1, c_m2, c_m3 = st.columns(3)
         with c_m1: 
             st.markdown("#### 📈 핵심 대표 지수")
@@ -965,7 +981,7 @@ with col_main:
                             st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:14px; font-weight:bold; color:#ffb04d; text-decoration:none;'>[규제] {row['원본제목']} 🔗</a>", unsafe_allow_html=True)
             else: st.info("관련된 최신 정책 뉴스 피드가 존재하지 않습니다.")
 
-    # === Tab 9 ===
+    # === Tab 9: ★ 프롬프트 체이닝 컨텍스트 보강 완료 ===
     with tabs[9]:
         st.markdown("### 🧠 모듈형 마케팅 리포트 자동 생성기 (Prompt Chaining)")
         st.caption("한 번에 방대한 리포트를 요구하면 AI의 결과물 품질이 떨어집니다. 아래 Step 1부터 Step 4까지 순서대로 복사하여 ChatGPT나 Claude에 입력하시면, 실무 보고용 고품질 리포트를 조립할 수 있습니다.")
@@ -974,18 +990,34 @@ with col_main:
         data_context = df_scatter.sort_values(by='주간 수익률(%)', ascending=False).head(20).to_string(index=False) if not df_scatter.empty else "데이터가 부족합니다. (우측 패널에 엑셀 데이터를 업로드해주세요.)"
         dl_context = st.session_state.get('dl_summary', "데이터랩 미연동")
 
+        # ★ 신규 추가: 타겟 탭들의 데이터(미디어 인텔리전스, 글로벌 트렌드)를 프롬프트용 텍스트로 취합
+        with st.spinner("프롬프트에 주입할 미디어 및 글로벌 인텔리전스 데이터를 취합 중입니다..."):
+            comp_yt_links = {
+                "KODEX (삼성)": "https://www.youtube.com/@KODEXETF/videos",
+                "TIGER (미래에셋)": "https://www.youtube.com/@tiger_etf/videos",
+                "ACE (한국투자)": "https://www.youtube.com/@ace_etf/videos",
+                "RISE (KB)": "https://www.youtube.com/@RISE_ETF/videos"
+            }
+            try:
+                word_counts, stats = get_media_intelligence(comp_yt_links)
+                media_context = f"[주요 운용사 유튜브 핫 키워드 Top 5]\n{dict(word_counts.most_common(5))}\n\n[운용사별 포맷 믹스(롱폼/쇼츠 건수)]\n{stats}" if word_counts else "미디어 데이터 수집 대기 중"
+            except:
+                media_context = "미디어 데이터 수집 오류"
+
+            global_context = "[미국 혁신 ETF 메가 트렌드]\n타겟 인컴 ETF 버퍼형, 0DTE 초단기 옵션 커버드콜 ETF, 가상자산 비트코인 현물 ETF, BDC 기업성장집합투자기구"
+
         st.markdown("#### 📥 [Step 1] 데이터 주입 및 컨텍스트 세팅")
-        prompt_1 = f"너는 KODEX 마케팅 총괄 최고책임자(CMO)를 보좌하는 수석 AI 에이전트야. 다음 제공되는 주간 대시보드 데이터를 완벽하게 숙지하고 분석해. 아직 리포트를 작성하지 말고, '데이터 숙지 완료. 다음 지시를 대기 중입니다.'라고만 대답해.\n\n[수급현황]\n{data_context}\n\n[포털 검색량]\n{dl_context}"
+        prompt_1 = f"너는 KODEX 마케팅 총괄 최고책임자(CMO)를 보좌하는 수석 AI 에이전트야. 다음 제공되는 이번 주 대시보드 인텔리전스 데이터를 완벽하게 숙지하고 분석해. 아직 리포트를 작성하지 말고, '데이터 숙지 완료. 다음 지시를 대기 중입니다.'라고만 대답해.\n\n[수급 및 수익률 현황]\n{data_context}\n\n[포털 검색량 동향]\n{dl_context}\n\n[미디어 마케팅 동향]\n{media_context}\n\n[글로벌 혁신 트렌드]\n{global_context}"
         st.code(prompt_1, language="text")
 
         st.markdown("#### 📝 [Step 2] 섹션 1. 시장 환경 및 수급 요약 작성")
-        prompt_2 = "숙지한 데이터를 바탕으로 [섹션 1: 시장 환경 및 수급 요약] 파트를 작성해. 기관과 외국인의 자금 쏠림 현상과 검색량 트렌드의 상관관계를 중심으로 인사이트를 도출해줘. 분량은 A4 반 페이지 수준으로, 실무 보고용 개조식(Bullet point) 문체를 사용해."
+        prompt_2 = "숙지한 데이터를 바탕으로 [섹션 1: 시장 환경 및 수급 요약] 파트를 작성해. 개인과 기관/외국인의 자금 쏠림 현상, 그리고 실제 수익률과 검색량 트렌드의 상관관계를 중심으로 핵심 인사이트 3가지를 도출해줘. 분량은 A4 반 페이지 수준으로, 실무 보고용 개조식(Bullet point) 문체를 사용해."
         st.code(prompt_2, language="text")
 
         st.markdown("#### ⚔️ [Step 3] 섹션 2. 타사 마케팅 동향 및 위협 분석")
-        prompt_3 = "이어서 [섹션 2: 타사 마케팅 동향 분석] 파트를 작성해. 시장 심리 요약과 수급 동향을 고려할 때, 현재 KODEX가 가장 경계해야 할 타사(TIGER, ACE 등)의 예상 마케팅 전략과 우리에게 다가올 위협 요인을 2가지로 압축해서 서술해."
+        prompt_3 = "이어서 [섹션 2: 타사 마케팅 동향 및 위협 분석] 파트를 작성해. 내가 제공한 [미디어 마케팅 동향]의 키워드 랭킹과 쇼츠/롱폼 믹스 비율을 바탕으로, 현재 KODEX가 가장 경계해야 할 타사(TIGER, ACE 등)의 마케팅 타겟팅 전략을 역추적하고, 우리에게 다가올 위협 요인을 2가지로 압축해서 서술해."
         st.code(prompt_3, language="text")
 
         st.markdown("#### 🚀 [Step 4] 섹션 3. KODEX 세일즈 액션 플랜 도출")
-        prompt_4 = "마지막으로 [섹션 3: KODEX 세일즈 액션 플랜] 파트를 작성해. 위 분석을 총망라하여, 다음 주 KODEX 마케팅팀이 즉각 실행해야 할 구체적인 리테일 프로모션 아이디어 1가지와 영업점 하달용 세일즈 톡(Sales Talk) 초안 2가지를 제안해줘."
+        prompt_4 = "마지막으로 [섹션 3: KODEX 세일즈 액션 플랜] 파트를 작성해. 위 분석과 [글로벌 혁신 트렌드]를 총망라하여, 다음 주 KODEX 마케팅팀이 즉각 실행해야 할 구체적인 리테일 프로모션 아이디어 1가지와, 시중 은행/증권사 창구 영업점 하달용 세일즈 톡(Sales Talk) 초안 2가지를 제안해줘."
         st.code(prompt_4, language="text")
