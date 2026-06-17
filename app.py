@@ -214,7 +214,7 @@ def render_compact_metric(title, data):
     """
 
 @st.cache_data(ttl=3600)
-def get_realtime_news(keyword="ETF", timeframe="7d", max_items=12): # 요구사항: 10개 -> 12개
+def get_realtime_news(keyword="ETF", timeframe="7d", max_items=12):
     url = f"https://news.google.com/rss/search?q={keyword}+when:{timeframe}&hl=ko&gl=KR&ceid=KR:ko"
     try:
         res = requests.get(url, timeout=5)
@@ -601,7 +601,7 @@ with col_main:
     with tabs[3]:
         st.markdown("### 📰 실시간 뉴스 리스트")
         st.caption("관련 검색어 기반의 실시간 최신 뉴스 피드입니다.")
-        df_real_news = get_realtime_news("ETF", timeframe="7d", max_items=12) # 요구사항: 12개 스크랩
+        df_real_news = get_realtime_news("ETF", timeframe="7d", max_items=12)
         
         st.divider()
         if "링크" in df_real_news.columns and df_real_news["링크"].iloc[0] != "":
@@ -929,8 +929,7 @@ with col_main:
 
                 st.markdown("##### 🗣️ 딥다이브 인사이트 & 날것의 목소리 (Raw VOC)")
                 
-                with st.container(border=True):
-                    st.markdown("**💡 AI Sub-Agent 분석 요약**")
+                with st.expander("💡 AI Sub-Agent 분석 요약 (클릭하여 펼치기)", expanded=False):
                     if 'insight' in voc_data and voc_data['insight'].strip():
                         insight_html = voc_data['insight'].replace(chr(10), '<br>').replace('【', '<br><b style="color:#4da6ff; font-size:16px;">【').replace('】', '】</b><br>')
                         st.markdown(f"<div style='padding:15px; background:rgba(255,255,255,0.02); border-radius:10px; border:1px solid rgba(255,255,255,0.05);'>{insight_html}</div>", unsafe_allow_html=True)
@@ -1079,7 +1078,7 @@ with col_main:
                             st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:14px; font-weight:bold; color:#ffb04d; text-decoration:none;'>[규제] {row['원본제목']} 🔗</a>", unsafe_allow_html=True)
             else: st.info("관련된 최신 정책 뉴스 피드가 존재하지 않습니다.")
 
-    # === Tab 9: ★ 제한 해제 (12개 뉴스 전체 렌더링 및 원본 링크 포함) ===
+    # === Tab 9 ===
     with tabs[9]:
         st.markdown("### 🧠 모듈형 마케팅 리포트 자동 생성기 (Cross-Analysis)")
         st.caption("대시보드 내 파편화된 모든 핵심 지표(뉴스, 거래대금, AUM, 순매수)를 하나의 컨텍스트로 정렬하여 유기적인 입체 보고서를 도출합니다.")
@@ -1090,7 +1089,6 @@ with col_main:
 
         news_lines = []
         if 'df_real_news' in locals() and not df_real_news.empty and df_real_news.iloc[0]["원본제목"] != "오류":
-            # 요구사항: 12개 뉴스 전체 노출 및 원본 링크 동봉
             for _, row in df_real_news.iterrows():
                 news_lines.append(f"- [{row['게시일 / 출처']}] {row['원본제목']} (링크: {row['링크']})")
         news_context_text = "\n".join(news_lines) if news_lines else "최신 실시간 뉴스 데이터 없음"
