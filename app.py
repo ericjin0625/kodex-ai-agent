@@ -1079,19 +1079,17 @@ with col_main:
             else: st.info("관련된 최신 정책 뉴스 피드가 존재하지 않습니다.")
 
         # =====================================================================
-        # [수정된 모듈] 글로벌 대체투자 ETF 상품 기획 및 리스크 시뮬레이터 (수직 배치)
+        # [Appendix 1] 글로벌 대체투자 ETF 상품 기획 및 리스크 시뮬레이터 
         # =====================================================================
         st.markdown("---")
-        st.subheader("📊 [Appendix] 글로벌 대체투자 ETF 상품 기획 및 리스크 시뮬레이터")
-        st.info("국내 시장에 부재한 해외 메가 트렌드 자산(BDC, CLO, MLP 등)을 탐색하고, 하방 리스크 분석 및 자산운용사(AMC) 수익성을 검토합니다.")
+        st.subheader("📊 [Appendix 1] 글로벌 대체투자 ETF 상품 기획 및 리스크 시뮬레이터")
+        st.info("국내 시장에 부재한 해외 메가 트렌드 실물 자산(BDC, CLO, MLP 등)의 하방 리스크 분석 및 수익성을 검토합니다.")
 
-        # 1. 자산군 선택 드롭다운 (라인업 공백 탐색)
         asset_class = st.selectbox(
             "🌍 탐색할 해외 대체투자 자산군 선택:", 
             ["사모신용 (BDC)", "대출채권담보부증권 (CLO)", "에너지 인프라 (MLP)"]
         )
 
-        # 동적 데이터 딕셔너리 구성 (선택 시 즉각 수치/코멘트 변동)
         mock_db = {
             "사모신용 (BDC)": {
                 "tickers": ["Ares Capital (ARCC)", "Blue Owl Capital (OBDC)", "FS KKR Capital (FSK)"],
@@ -1130,91 +1128,113 @@ with col_main:
 
         current_db = mock_db[asset_class]
 
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        # ---------------------------------------------------------
-        # 섹션 1. Credit Teaser (개별 자산 분석)
-        # ---------------------------------------------------------
+        # Credit Teaser
         st.markdown(f"#### 1. {asset_class} 크레딧 피치북 요약")
         selected_ticker = st.selectbox("분석할 타겟 종목(티커) 선택:", current_db["tickers"])
-
-        # 티커 변경 시 즉각적으로 변수 할당
         t_val1, t_val2, t_val3, t_comment = current_db["data"][selected_ticker]
         l_val1, l_val2, l_val3 = current_db["labels"]
 
-        # 지표별 단위 포맷팅 함수
         def format_metric(label, value):
-            if "Yield" in label or "비중" in label or "YTM" in label or "LTV" in label:
-                return f"{value:.1f}%"
-            elif "듀레이션" in label:
-                return f"{value:.2f}년"
-            elif "커버리지" in label:
-                return f"{value:.1f}x"
+            if "Yield" in label or "비중" in label or "YTM" in label or "LTV" in label: return f"{value:.1f}%"
+            elif "듀레이션" in label: return f"{value:.2f}년"
+            elif "커버리지" in label: return f"{value:.1f}x"
             return str(value)
 
-        st.write(f"**{selected_ticker} 핵심 재무 지표**")
         col1, col2, col3 = st.columns(3)
         col1.metric(l_val1, format_metric(l_val1, t_val1))
         col2.metric(l_val2, format_metric(l_val2, t_val2))
         col3.metric(l_val3, format_metric(l_val3, t_val3))
+        st.markdown(f"> **[운용역 코멘트]**\n> {t_comment}")
+        st.markdown("<br>", unsafe_allow_html=True)
 
-        st.markdown(f"""
-        > **[운용역 코멘트]**
-        > {t_comment}
-        """)
-
-        st.markdown("<br><br>", unsafe_allow_html=True)
-
-        # ---------------------------------------------------------
-        # 섹션 2. Stress Test (하방 리스크 시뮬레이션)
-        # ---------------------------------------------------------
+        # Stress Test
         st.markdown(f"#### 2. 매크로 스트레스 테스트 (하방 리스크 시뮬레이터)")
-        st.markdown(f"거시경제 악화 시, **{asset_class}** 기초자산의 하방 압력이 ETF 배당 재원(수익률)에 미치는 실질적 타격을 계산합니다.")
-
         with st.container(border=True):
             stress_rate = st.slider(current_db["stress_name"], min_value=0.0, max_value=15.0, value=2.0, step=0.5)
             recovery_rate = st.number_input("예상 회수율/방어율 (Recovery Rate, %)", value=current_db["recovery_default"], step=5.0) / 100
-            
-            # Base Yield는 동적 데이터의 첫 번째 지표(t_val1)에서 끌어옴
             base_yield = t_val1
-            
-            # 실질 타격 계산
             loss_impact = stress_rate * (1 - recovery_rate)
             adjusted_yield = base_yield - loss_impact
             
             c1, c2 = st.columns(2)
             c1.metric("시나리오 적용 후 실질 수익률", f"{adjusted_yield:.2f}%", f"-{loss_impact:.2f}% (손실분)", delta_color="inverse")
-            
-            if adjusted_yield < 5.0:
-                st.error("⚠️ **경고:** 실질 수익률이 5% 미만으로 하락하여 타겟 투자자의 BEP(손익분기점) 이탈 위험 구간에 진입했습니다.")
-            else:
-                st.success("✅ **안정:** 해당 매크로 스트레스 시나리오에서도 타겟 인컴 방어가 가능하여 펀드 펀더멘털이 유지됩니다.")
+            if adjusted_yield < 5.0: st.error("⚠️ **경고:** 실질 수익률이 5% 미만으로 하락하여 타겟 투자자의 BEP(손익분기점) 이탈 위험 구간에 진입했습니다.")
+            else: st.success("✅ **안정:** 해당 매크로 스트레스 시나리오에서도 타겟 인컴 방어가 가능하여 펀드 펀더멘털이 유지됩니다.")
 
-        st.markdown("<br><br>", unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
 
-        # ---------------------------------------------------------
-        # 섹션 3. AMC Feasibility (운용사 비즈니스 손익 추정)
-        # ---------------------------------------------------------
+        # AMC Feasibility
         st.markdown("#### 3. 자산운용사(AMC) 비즈니스 손익 추정")
-        st.markdown("ETF 상품 런칭 시 운용사의 손익분기점(BEP) 달성 목표치를 산출합니다.")
-
         with st.container(border=True):
             target_aum = st.number_input("초기 목표 AUM (억원)", value=500, step=50)
             ter = st.number_input("ETF 총보수율 (TER, bps)", value=45, step=5)
             fixed_cost = st.number_input("연간 고정비용 (상장유지비, 마케팅, 인건비 등 / 억원)", value=2.0, step=0.5)
-            
-            # 운용수익 계산: AUM * (TER / 10000)
             expected_revenue = target_aum * (ter / 10000)
             net_profit = expected_revenue - fixed_cost
-            
             c3, c4 = st.columns(2)
             c3.metric("예상 연간 운용보수 수익", f"{expected_revenue:.2f} 억원")
             c4.metric("예상 영업이익 (Net Profit)", f"{net_profit:.2f} 억원")
-            
-            # BEP AUM 도출 수식
             bep_aum = fixed_cost / (ter / 10000)
             st.info(f"💡 현재 총보수율(**{ter}bp**) 세팅 기준, 본 상품이 흑자 전환하기 위해 시장에서 모아야 하는 **최소 손익분기점(BEP) AUM은 약 {bep_aum:.0f}억원**입니다.")
+
+
         # =====================================================================
+        # [Appendix 2] 파생상품(옵션) 기반 ETF 페이오프 시뮬레이터 (신규 추가)
+        # =====================================================================
+        st.markdown("---")
+        st.subheader("📈 [Appendix 2] 파생상품(옵션) 기반 ETF 수익 시뮬레이터")
+        st.info("초단기 커버드콜(0DTE) 및 하방 방어형(Buffer) ETF 등 파생상품이 결합된 ETF의 만기 시점 페이오프(Payoff) 구조를 시각화합니다.")
+
+        opt_strategy = st.radio("시뮬레이션 전략 선택:", ["초단기 커버드콜 (Covered Call)", "하방 방어형 (Buffer ETF)"], horizontal=True)
+
+        c_opt1, c_opt2 = st.columns([1, 2])
+        
+        with c_opt1:
+            st.markdown("#### ⚙️ 파라미터(옵션 조건) 설정")
+            if "Covered Call" in opt_strategy:
+                strike_pct = st.slider("콜옵션 행사가격 (Strike, % OTM)", min_value=0.0, max_value=10.0, value=2.0, step=0.5)
+                premium = st.slider("수취 프리미엄 (Premium, %)", min_value=0.5, max_value=5.0, value=1.5, step=0.1)
+            else:
+                buffer_pct = st.slider("하방 방어 수준 (Buffer, %)", min_value=5.0, max_value=20.0, value=10.0, step=1.0)
+                cap_pct = st.slider("상방 제한 수준 (Cap, %)", min_value=5.0, max_value=15.0, value=8.0, step=1.0)
+        
+        with c_opt2:
+            st.markdown("#### 📉 만기 시점 수익률 구조 (Payoff Diagram)")
+            x_vals = np.linspace(-30, 30, 200)
+            
+            if "Covered Call" in opt_strategy:
+                # 커버드콜 수식: 기초자산 수익 + 프리미엄 (단, 기초자산 수익이 Strike를 넘으면 Strike로 고정)
+                y_vals = np.where(x_vals < strike_pct, x_vals + premium, strike_pct + premium)
+                max_return = strike_pct + premium
+                
+                fig_opt = go.Figure()
+                fig_opt.add_trace(go.Scatter(x=x_vals, y=x_vals, mode='lines', name='기초지수 (S&P 500 등)', line=dict(dash='dash', color='gray')))
+                fig_opt.add_trace(go.Scatter(x=x_vals, y=y_vals, mode='lines', name='커버드콜 ETF 수익률', line=dict(color='#4da6ff', width=3)))
+                
+                fig_opt.update_layout(height=400, template="plotly_dark", xaxis_title="기초자산 가격 변동 (%)", yaxis_title="ETF 만기 수익률 (%)", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
+                st.plotly_chart(fig_opt, use_container_width=True)
+                
+                st.metric("최대 기대 수익률 (상방 캡)", f"{max_return:.2f}%")
+                st.caption(f"💡 프리미엄 {premium}%를 수취하여 하락장에서는 그만큼 손실을 방어하지만, 기초자산이 {strike_pct}% 이상 급등할 경우 수익은 {max_return}%로 제한됩니다.")
+
+            else:
+                # 버퍼 ETF 수식
+                # 상승 시: min(x, cap)
+                # 하락 시: x가 -buffer 범위 내면 0. 그 이상 하락하면 x + buffer
+                y_vals = np.where(x_vals > 0, np.minimum(x_vals, cap_pct), np.where(x_vals >= -buffer_pct, 0, x_vals + buffer_pct))
+                
+                fig_opt = go.Figure()
+                fig_opt.add_trace(go.Scatter(x=x_vals, y=x_vals, mode='lines', name='기초지수 (S&P 500 등)', line=dict(dash='dash', color='gray')))
+                fig_opt.add_trace(go.Scatter(x=x_vals, y=y_vals, mode='lines', name='버퍼 ETF 수익률', line=dict(color='#ffb04d', width=3)))
+                
+                # 방어 구간 하이라이트
+                fig_opt.add_vrect(x0=-buffer_pct, x1=0, fillcolor="#ffb04d", opacity=0.1, layer="below", line_width=0, annotation_text="100% 방어 구간", annotation_position="bottom right")
+                
+                fig_opt.update_layout(height=400, template="plotly_dark", xaxis_title="기초자산 가격 변동 (%)", yaxis_title="ETF 만기 수익률 (%)", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
+                st.plotly_chart(fig_opt, use_container_width=True)
+                
+                st.metric("하방 100% 방어 임계점", f"-{buffer_pct:.1f}%")
+                st.caption(f"💡 기초자산이 최대 -{buffer_pct}%까지 하락해도 원금을 100% 보존하지만, 방어 비용 지불을 위해 상승장에서는 최대 {cap_pct}%까지만 수익을 공유합니다.")
 
     # === Tab 9 ===
     with tabs[9]:
