@@ -1078,6 +1078,83 @@ with col_main:
                             st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:14px; font-weight:bold; color:#ffb04d; text-decoration:none;'>[규제] {row['원본제목']} 🔗</a>", unsafe_allow_html=True)
             else: st.info("관련된 최신 정책 뉴스 피드가 존재하지 않습니다.")
 
+        # =====================================================================
+        # [신규 모듈 삽입] 9번째 탭 맨 아래: BDC ETF 상품 기획 및 스트레스 테스트
+        # =====================================================================
+        st.markdown("---")
+        st.subheader("📊 [Appendix] BDC ETF 상품 기획 및 리스크 시뮬레이터")
+        st.info("사모신용(Private Credit) 기초자산의 하방 리스크 분석 및 자산운용사(AMC) 수익성을 검토합니다.")
+
+        # 9번째 탭 내부에 3개의 서브 탭 생성
+        sub_tabs = st.tabs([
+            "1. Credit Teaser (개별 자산 분석)", 
+            "2. Stress Test (하방 리스크 시뮬레이션)", 
+            "3. AMC Feasibility (운용사 P&L)"
+        ])
+
+        # --- Sub-Tab 1: Credit Teaser ---
+        with sub_tabs[0]:
+            st.markdown("#### 기초자산(BDC) 크레딧 피치북 요약")
+            bdc_ticker = st.selectbox(
+                "분석할 타겟 BDC 종목 선택:", 
+                ["Ares Capital (ARCC)", "Blue Owl Capital (OBDC)", "FS KKR Capital (FSK)"]
+            )
+            
+            # 기초자산 재무 지표 (Mock Data - 향후 API 연동 가능)
+            st.write(f"**{bdc_ticker} 핵심 재무 지표**")
+            col1, col2, col3 = st.columns(3)
+            col1.metric("예상 배당수익률 (Yield)", "9.5%")
+            col2.metric("포트폴리오 평균 LTV", "45.2%")
+            col3.metric("변동금리 대출 비중", "98.0%")
+            
+            st.markdown("""
+            > **[운용역 코멘트]**
+            > 고정 금리 대비 변동 금리 대출 비중이 압도적으로 높아, 현행 고금리 기조에서 강력한 이자 수익 방어력을 지니고 있습니다. 평균 LTV가 50% 미만으로 통제되어 선순위 담보 채권으로서의 크레딧 리스크가 안정적입니다.
+            """)
+
+        # --- Sub-Tab 2: Stress Test (하방 리스크) ---
+        with sub_tabs[1]:
+            st.markdown("#### 부도율(Default Rate) 기반 BEP 시뮬레이터")
+            st.markdown("거시경제 악화 시, 편입 기업들의 부도율 상승이 ETF 배당 재원에 미치는 실질적 타격을 계산합니다.")
+            
+            default_rate = st.slider("예상 시장 부도율 (Default Rate, %)", min_value=0.0, max_value=15.0, value=2.0, step=0.5)
+            recovery_rate = st.number_input("예상 회수율 (Recovery Rate, %)", value=60.0, step=5.0) / 100
+            base_yield = 9.5
+            
+            # 손실률 계산: 부도율 * (1 - 회수율)
+            loss_impact = default_rate * (1 - recovery_rate)
+            adjusted_yield = base_yield - loss_impact
+            
+            col1, col2 = st.columns(2)
+            col1.metric("시나리오 적용 후 실질 배당수익률", f"{adjusted_yield:.2f}%", f"-{loss_impact:.2f}% (손실분)", delta_color="inverse")
+            
+            if adjusted_yield < 5.0:
+                st.error("⚠️ **경고:** 실질 수익률이 5% 미만으로 하락하여 타겟 투자자의 BEP(손익분기점) 이탈 위험 구간에 진입했습니다.")
+            else:
+                st.success("✅ **안정:** 해당 부도율 시나리오에서도 타겟 인컴 방어가 가능하여 펀드 펀더멘털이 유지됩니다.")
+
+        # --- Sub-Tab 3: AMC Feasibility (운용사 손익) ---
+        with sub_tabs[2]:
+            st.markdown("#### 자산운용사(AMC) 비즈니스 손익 추정")
+            st.markdown("ETF 상품 런칭 시 운용사의 손익분기점(BEP) 달성 목표치를 산출합니다.")
+            
+            target_aum = st.number_input("초기 목표 AUM (억원)", value=500, step=50)
+            ter = st.number_input("ETF 총보수율 (TER, bps)", value=45, step=5)
+            fixed_cost = st.number_input("연간 고정비용 (상장유지비, 마케팅, 인건비 등 / 억원)", value=2.0, step=0.5)
+            
+            # 운용수익 계산: AUM * (TER / 10000)
+            expected_revenue = target_aum * (ter / 10000)
+            net_profit = expected_revenue - fixed_cost
+            
+            col1, col2 = st.columns(2)
+            col1.metric("예상 연간 운용보수 수익", f"{expected_revenue:.2f} 억원")
+            col2.metric("예상 영업이익 (Net Profit)", f"{net_profit:.2f} 억원")
+            
+            # BEP AUM 도출 수식: 고정비용 / 보수율
+            bep_aum = fixed_cost / (ter / 10000)
+            st.info(f"💡 현재 총보수율(**{ter}bp**) 세팅 기준, 본 상품이 흑자 전환하기 위해 시장에서 모아야 하는 **최소 손익분기점(BEP) AUM은 약 {bep_aum:.0f}억원**입니다.")
+        # =====================================================================
+
     # === Tab 9 ===
     with tabs[9]:
         st.markdown("### 🧠 모듈형 마케팅 리포트 자동 생성기 (Cross-Analysis)")
