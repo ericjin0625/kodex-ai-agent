@@ -12,7 +12,6 @@ import json
 import time
 import re
 from collections import Counter
-import io  # 추가: 판다스 html 파싱을 위해 필요
 
 # 1. 페이지 레이아웃 및 기본 테마 설정
 st.set_page_config(page_title="ETF Monitoring AI Agent", layout="wide", initial_sidebar_state="collapsed")
@@ -166,7 +165,6 @@ def get_macro_snapshot():
                         break 
                 except: pass
 
-    # 수정된 부분: 네이버 크롤링 오류(io.StringIO 및 인코딩) 해결
     rates_map = {
         "콜금리": "IRR_CALL",
         "CD(91일)": "IRR_CD91",
@@ -176,11 +174,10 @@ def get_macro_snapshot():
         try:
             url = f"https://finance.naver.com/marketindex/interestDailyQuote.naver?marketindexCd={code}&page=1"
             res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
-            res.encoding = 'euc-kr' # 인코딩 명시
-            df_ir = pd.read_html(io.StringIO(res.text))[0] # StringIO로 감싸기
+            df_ir = pd.read_html(res.text)[0]
             if not df_ir.empty and len(df_ir) >= 2:
-                c = float(str(df_ir.iloc[0, 1]).replace('%', '').strip())
-                p = float(str(df_ir.iloc[1, 1]).replace('%', '').strip())
+                c = float(str(df_ir.iloc[0, 1]).replace('%', ''))
+                p = float(str(df_ir.iloc[1, 1]).replace('%', ''))
                 
                 val_str = f"{c:,.3f}%"
                 delta = c - p
@@ -217,7 +214,7 @@ def render_compact_metric(title, data):
     """
 
 @st.cache_data(ttl=3600)
-def get_realtime_news(keyword="ETF", timeframe="7d", max_items=5):
+def get_realtime_news(keyword="ETF", timeframe="7d", max_items=12): # 요구사항: 10개 -> 12개
     url = f"https://news.google.com/rss/search?q={keyword}+when:{timeframe}&hl=ko&gl=KR&ceid=KR:ko"
     try:
         res = requests.get(url, timeout=5)
@@ -291,7 +288,6 @@ def parse_competitor_blog(blog_id):
             except:
                 pub_date = "최신"
 
-            is_event = False
             title_lower = title.lower()
             
             if any(w in title_lower for w in whitelist_promo):
@@ -605,7 +601,7 @@ with col_main:
     with tabs[3]:
         st.markdown("### 📰 실시간 뉴스 리스트")
         st.caption("관련 검색어 기반의 실시간 최신 뉴스 피드입니다.")
-        df_real_news = get_realtime_news("ETF", timeframe="7d", max_items=10)
+        df_real_news = get_realtime_news("ETF", timeframe="7d", max_items=12) # 요구사항: 12개 스크랩
         
         st.divider()
         if "링크" in df_real_news.columns and df_real_news["링크"].iloc[0] != "":
@@ -687,6 +683,9 @@ with col_main:
     # === Tab 5 ===
     with tabs[5]:
         
+        # ----------------------------------------------------
+        # 1. 마케팅 임팩트 분석기 (최상단)
+        # ----------------------------------------------------
         st.markdown("### 📊 마케팅 촉매(이벤트/영상) 임팩트 분석기")
         st.caption("수동으로 마케팅 캠페인 기간(시작~종료)을 설정하여, 해당 기간 동안의 수급 변화(펌핑 효과)를 사후적으로 분석합니다.")
         
@@ -699,7 +698,7 @@ with col_main:
                     st.markdown("**1. 분석 대상 ETF 선택**")
                     default_target_idx = all_etf_names.index("KODEX 200") if "KODEX 200" in all_etf_names else 0
                     default_comp_idx = all_etf_names.index("TIGER 200") if "TIGER 200" in all_etf_names else (1 if len(all_etf_names) > 1 else 0)
-                    target_etf = st.selectbox("🎯 Target 연동 (자사):", options=all_etf_names, index=default_target_idx)
+                    target_etf = st.selectbox("🎯 Target ETF (자사):", options=all_etf_names, index=default_target_idx)
                     comp_etf = st.selectbox("⚔️ Competitor ETF (타사):", options=all_etf_names, index=default_comp_idx)
                 with col_sel2:
                     st.markdown("**2. 차트 조회 기간 및 수동 이벤트 영역 설정**")
@@ -747,6 +746,9 @@ with col_main:
 
         st.divider()
         
+        # ----------------------------------------------------
+        # 2. 유튜브 사후 성과 분석기 (중간으로 이동)
+        # ----------------------------------------------------
         st.markdown("### 📺 유튜브 사후 성과 분석 (Post-Hoc Analysis)")
         st.caption("유튜브 공식 웹페이지 차단을 피해, '유튜브 검색 결과'를 통해 주요 운용사 관련 최신 영상들의 실제 조회수 성과를 사후적으로 추출합니다.")
         
@@ -789,6 +791,9 @@ with col_main:
 
         st.divider()
 
+        # ----------------------------------------------------
+        # 3. 운용사별 블로그 동향 (최하단으로 이동)
+        # ----------------------------------------------------
         st.markdown("### 🏢 운용사별 세일즈 액션 및 마케팅 동향 (블로그 피드)")
         brand_mappings = {
             "KODEX (삼성)": {"blog": "samsung_fund"}, "TIGER (미래에셋)": {"blog": "m_invest"},
@@ -813,7 +818,7 @@ with col_main:
                         for g in generals[:3]: st.write(f"- [{g['date']}] [{g['title']}]({g['link']})")
                     else: st.write("- 최신 게시글이 없습니다.")
 
-    # === Tab 6 (수정 사항 반영된 탭) ===
+    # === Tab 6 ===
     with tabs[6]:
         st.markdown("### 🗣️ 고객 Voice (VOC) & 투자자 심리 모니터링")
         st.caption("Sub-Agent가 백그라운드에서 수집·정제한 커뮤니티(종토방) 엑셀 데이터와 앱스토어/뉴스 리스크를 통합 분석합니다.")
@@ -924,7 +929,15 @@ with col_main:
 
                 st.markdown("##### 🗣️ 딥다이브 인사이트 & 날것의 목소리 (Raw VOC)")
                 
-                # 수정된 부분: "당일 조회수 폭발 Top 3 게시물"을 위로 올림
+                with st.container(border=True):
+                    st.markdown("**💡 AI Sub-Agent 분석 요약**")
+                    if 'insight' in voc_data and voc_data['insight'].strip():
+                        insight_html = voc_data['insight'].replace(chr(10), '<br>').replace('【', '<br><b style="color:#4da6ff; font-size:16px;">【').replace('】', '】</b><br>')
+                        st.markdown(f"<div style='padding:15px; background:rgba(255,255,255,0.02); border-radius:10px; border:1px solid rgba(255,255,255,0.05);'>{insight_html}</div>", unsafe_allow_html=True)
+                    else: st.caption("인사이트 리포트 시트/데이터가 없습니다.")
+                
+                st.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
+
                 with st.container(border=True):
                     st.markdown("**🔥 당일 조회수 폭발 Top 3 게시물**")
                     if 'posts' in voc_data and not voc_data['posts'].empty:
@@ -945,16 +958,6 @@ with col_main:
                                 st.markdown("</div>", unsafe_allow_html=True)
                         except: st.caption("원문 게시글을 파싱할 수 없는 데이터 규격입니다.")
                     else: st.caption("게시물 전체 시트/데이터가 없습니다.")
-                
-                st.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
-
-                # 수정된 부분: "AI Sub-Agent 분석 요약"을 아래로 내리고 expander 형태로 변경
-                with st.expander("💡 AI Sub-Agent 분석 요약", expanded=False):
-                    if 'insight' in voc_data and voc_data['insight'].strip():
-                        insight_html = voc_data['insight'].replace(chr(10), '<br>').replace('【', '<br><b style="color:#4da6ff; font-size:16px;">【').replace('】', '】</b><br>')
-                        st.markdown(f"<div style='padding:15px; background:rgba(255,255,255,0.02); border-radius:10px; border:1px solid rgba(255,255,255,0.05);'>{insight_html}</div>", unsafe_allow_html=True)
-                    else: st.caption("인사이트 리포트 시트/데이터가 없습니다.")
-
             else:
                 st.info("👉 우측 패널에 코랩에서 추출한 '종목토론방 엑셀 파일'을 업로드해주세요.")
 
@@ -1076,7 +1079,7 @@ with col_main:
                             st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:14px; font-weight:bold; color:#ffb04d; text-decoration:none;'>[규제] {row['원본제목']} 🔗</a>", unsafe_allow_html=True)
             else: st.info("관련된 최신 정책 뉴스 피드가 존재하지 않습니다.")
 
-    # === Tab 9 ===
+    # === Tab 9: ★ 제한 해제 (12개 뉴스 전체 렌더링 및 원본 링크 포함) ===
     with tabs[9]:
         st.markdown("### 🧠 모듈형 마케팅 리포트 자동 생성기 (Cross-Analysis)")
         st.caption("대시보드 내 파편화된 모든 핵심 지표(뉴스, 거래대금, AUM, 순매수)를 하나의 컨텍스트로 정렬하여 유기적인 입체 보고서를 도출합니다.")
@@ -1087,12 +1090,19 @@ with col_main:
 
         news_lines = []
         if 'df_real_news' in locals() and not df_real_news.empty and df_real_news.iloc[0]["원본제목"] != "오류":
-            for _, row in df_real_news.head(5).iterrows():
-                news_lines.append(f"- [{row['게시일 / 출처']}] {row['원본제목']}")
+            # 요구사항: 12개 뉴스 전체 노출 및 원본 링크 동봉
+            for _, row in df_real_news.iterrows():
+                news_lines.append(f"- [{row['게시일 / 출처']}] {row['원본제목']} (링크: {row['링크']})")
         news_context_text = "\n".join(news_lines) if news_lines else "최신 실시간 뉴스 데이터 없음"
 
+        try:
+            word_counts, stats = get_media_intelligence(comp_yt_links)
+            media_context = f"[유튜브 키워드 Top 5]: {dict(word_counts.most_common(5))}\n[포맷 믹스 구조]: {stats}"
+        except:
+            media_context = "미디어 데이터 대기 중"
+
         st.markdown("#### 📥 [Step 1] 전체 수치 데이터 주입 및 컨텍스트 동기화")
-        prompt_1 = f"너는 KODEX 마케팅 총괄 최고책임자(CMO)를 보좌하는 수석 AI 인텔리전스 에이전트야. 제공하는 대시보드 연동 교차 데이터를 공백 없이 숙지해줘. 지금 분석 결과를 내지 말고 '교차 데이터 동기화 완료. 다음 분석 지시를 대기합니다.'라고만 답변해.\n\n[1. 실시간 뉴스 리스트]\n{news_context_text}\n\n[2. 자산 흐름 및 실제 거래량]\n{data_context}\n\n[3. 주요 종목별 실제 주간 거래량 추이]\n{df_volume_summary_text}\n\n[4. 네이버 DataLab 포털 검색량]\n{dl_context}\n\n[5. TOP 4 운용사 테마별 AUM 현황]\n{aum_context_text}"
+        prompt_1 = f"너는 KODEX 마케팅 총괄 최고책임자(CMO)를 보좌하는 수석 AI 인텔리전스 에이전트야. 제공하는 대시보드 연동 교차 데이터를 공백 없이 숙지해줘. 지금 분석 결과를 내지 말고 '교차 데이터 동기화 완료. 다음 분석 지시를 대기합니다.'라고만 답변해.\n\n[1. 실시간 뉴스 리스트]\n{news_context_text}\n\n[2. 자산 흐름 및 실제 거래량]\n{data_context}\n\n[3. 주요 종목별 실제 주간 거래량 추이]\n{df_volume_summary_text}\n\n[4. 네이버 DataLab 포털 검색량]\n{dl_context}\n\n[5. TOP 4 운용사 테마별 AUM 현황]\n{aum_context_text}\n\n[6. 경쟁사 미디어 마케팅 동향]\n{media_context}"
         st.code(prompt_1, language="text")
 
         st.markdown("#### 📝 [Step 2] 섹션 1. 뉴스 & 수급 & 검색량 교차 매커니즘 분석")
