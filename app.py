@@ -439,7 +439,9 @@ with col_right:
 
 with col_main:
     st.session_state.setdefault('dl_summary', "DataLab 데이터가 업로드되지 않았습니다.")
-    tab_names = ["🏠 Home", "📊 Weekly Info", "📈 순매수 & 수익률", "📰 뉴스 & 트렌드", "💸 거래량 추이", "📺 경쟁사 이벤트/동향", "🗣️ 고객 UX", "🥧 AUM 현황", "🇺🇸 글로벌 동향", "🧠 AI 프롬프트"]
+    
+    # === 탭 구성 변경 (AUM 현황 -> ETF/AUM 현황, 글로벌 동향 병합) ===
+    tab_names = ["🏠 Home", "📊 Weekly Info", "📈 순매수 & 수익률", "📰 뉴스 & 트렌드", "💸 거래량 추이", "📺 경쟁사 이벤트/동향", "🗣️ 고객 UX", "🥧 ETF/AUM 현황", "🧠 AI 프롬프트"]
     tabs = st.tabs(tab_names)
 
     # === Tab 0 ===
@@ -985,7 +987,7 @@ with col_main:
                             st.caption(f"📅 {row['게시일 / 출처']}")
                 else: st.info("검색 범위(최대 1년) 내 포착된 리스크성 기사가 없습니다.")
 
-    # === Tab 7: 운용 현황 및 점유율 ===
+    # === Tab 7: 운용 현황 및 점유율 (미국 동향까지 통합) ===
     with tabs[7]:
         st.markdown("### 🏢 국내 ETF 운용사 AUM 시장 점유율 및 테마별 현황 (실시간 기준)")
         col_pie, col_table = st.columns([1, 2])
@@ -1051,8 +1053,10 @@ with col_main:
                 st.plotly_chart(fig_trend, use_container_width=True)
         else: st.info("👉 우측 패널에 엑셀 데이터를 업로드하시면 트렌드 그래프가 활성화됩니다.")
 
-    # === Tab 8 ===
-    with tabs[8]:
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        st.markdown("---")
+        
+        # 여기서부터 기존 9번째 탭(US 글로벌 동향) 내용 병합
         st.markdown("### 🇺🇸 글로벌 혁신 구조 공백 분석 (US Mega Trends vs KODEX)")
         raw_keywords = ["타겟 인컴 ETF 버퍼형", "0DTE 초단기 옵션 커버드콜 ETF", "가상자산 비트코인 현물 ETF", "BDC 기업성장집합투자기구 대체투자", "하방 방어형 100% 버퍼 ETF"]
         trend_strengths = []
@@ -1177,9 +1181,8 @@ with col_main:
             bep_aum = fixed_cost / (ter / 10000)
             st.info(f"💡 현재 총보수율(**{ter}bp**) 세팅 기준, 본 상품이 흑자 전환하기 위해 시장에서 모아야 하는 **최소 손익분기점(BEP) AUM은 약 {bep_aum:.0f}억원**입니다.")
 
-
         # =====================================================================
-        # [Appendix 2] 파생상품(옵션) 기반 ETF 페이오프 시뮬레이터 (신규 추가)
+        # [Appendix 2] 파생상품(옵션) 기반 ETF 페이오프 시뮬레이터
         # =====================================================================
         st.markdown("---")
         st.subheader("📈 [Appendix 2] 파생상품(옵션) 기반 ETF 수익 시뮬레이터")
@@ -1236,8 +1239,8 @@ with col_main:
                 st.metric("하방 100% 방어 임계점", f"-{buffer_pct:.1f}%")
                 st.caption(f"💡 기초자산이 최대 -{buffer_pct}%까지 하락해도 원금을 100% 보존하지만, 방어 비용 지불을 위해 상승장에서는 최대 {cap_pct}%까지만 수익을 공유합니다.")
 
-    # === Tab 9 ===
-    with tabs[9]:
+    # === Tab 8 (기존 9번째 탭 AI 프롬프트) ===
+    with tabs[8]:
         st.markdown("### 🧠 모듈형 마케팅 리포트 자동 생성기 (Cross-Analysis)")
         st.caption("대시보드 내 파편화된 모든 핵심 지표(뉴스, 거래대금, AUM, 순매수)를 하나의 컨텍스트로 정렬하여 유기적인 입체 보고서를 도출합니다.")
         st.divider()
