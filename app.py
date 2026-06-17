@@ -440,7 +440,6 @@ with col_right:
 with col_main:
     st.session_state.setdefault('dl_summary', "DataLab 데이터가 업로드되지 않았습니다.")
     
-    # === 탭 구성 변경 (AUM 현황 -> ETF/AUM 현황, 글로벌 동향 병합) ===
     tab_names = ["🏠 Home", "📊 Weekly Info", "📈 순매수 & 수익률", "📰 뉴스 & 트렌드", "💸 거래량 추이", "📺 경쟁사 이벤트/동향", "🗣️ 고객 UX", "🥧 ETF/AUM 현황", "🧠 AI 프롬프트"]
     tabs = st.tabs(tab_names)
 
@@ -987,7 +986,7 @@ with col_main:
                             st.caption(f"📅 {row['게시일 / 출처']}")
                 else: st.info("검색 범위(최대 1년) 내 포착된 리스크성 기사가 없습니다.")
 
-    # === Tab 7: 운용 현황 및 점유율 (미국 동향까지 통합) ===
+    # === Tab 7: ETF/AUM 현황 (미국 동향 통합) ===
     with tabs[7]:
         st.markdown("### 🏢 국내 ETF 운용사 AUM 시장 점유율 및 테마별 현황 (실시간 기준)")
         col_pie, col_table = st.columns([1, 2])
@@ -1056,7 +1055,9 @@ with col_main:
         st.markdown("<br><br>", unsafe_allow_html=True)
         st.markdown("---")
         
-        # 여기서부터 기존 9번째 탭(US 글로벌 동향) 내용 병합
+        # ----------------------------------------------------
+        # US 글로벌 동향 병합 영역
+        # ----------------------------------------------------
         st.markdown("### 🇺🇸 글로벌 혁신 구조 공백 분석 (US Mega Trends vs KODEX)")
         raw_keywords = ["타겟 인컴 ETF 버퍼형", "0DTE 초단기 옵션 커버드콜 ETF", "가상자산 비트코인 현물 ETF", "BDC 기업성장집합투자기구 대체투자", "하방 방어형 100% 버퍼 ETF"]
         trend_strengths = []
@@ -1083,7 +1084,7 @@ with col_main:
             else: st.info("관련된 최신 정책 뉴스 피드가 존재하지 않습니다.")
 
         # =====================================================================
-        # [Appendix 1] 글로벌 대체투자 ETF 상품 기획 및 리스크 시뮬레이터 
+        # [Appendix 1] 글로벌 대체투자 ETF 상품 기획 및 리스크 시뮬레이터 (가로 3분할 배치)
         # =====================================================================
         st.markdown("---")
         st.subheader("📊 [Appendix 1] 글로벌 대체투자 ETF 상품 기획 및 리스크 시뮬레이터")
@@ -1091,7 +1092,8 @@ with col_main:
 
         asset_class = st.selectbox(
             "🌍 탐색할 해외 대체투자 자산군 선택:", 
-            ["사모신용 (BDC)", "대출채권담보부증권 (CLO)", "에너지 인프라 (MLP)"]
+            ["사모신용 (BDC)", "대출채권담보부증권 (CLO)", "에너지 인프라 (MLP)"],
+            key="asset_sel_app1"
         )
 
         mock_db = {
@@ -1099,9 +1101,9 @@ with col_main:
                 "tickers": ["Ares Capital (ARCC)", "Blue Owl Capital (OBDC)", "FS KKR Capital (FSK)"],
                 "labels": ["예상 배당수익률 (Yield)", "포트폴리오 평균 LTV", "변동금리 대출 비중"],
                 "data": {
-                    "Ares Capital (ARCC)": [9.5, 45.2, 98.0, "고정 금리 대비 변동 금리 대출 비중이 압도적으로 높아, 현행 고금리 기조에서 강력한 이자 수익 방어력을 지니고 있습니다. 평균 LTV가 50% 미만으로 통제되어 선순위 담보 채권으로서의 크레딧 리스크가 안정적입니다."],
-                    "Blue Owl Capital (OBDC)": [10.2, 41.5, 96.0, "안정적인 IT/소프트웨어 섹터의 선순위 담보 대출 위주로 포트폴리오가 구성되어 있어 하방 경직성이 강하며, PEF 스폰서 딜 위주로 펀더멘털이 우수합니다."],
-                    "FS KKR Capital (FSK)": [11.8, 48.1, 89.0, "상대적으로 높은 레버리지 비율을 통해 고수익을 창출하며, KKR의 강력한 글로벌 딜 소싱 네트워크를 활용하여 다양한 미들마켓 딜에 참여하고 있습니다."]
+                    "Ares Capital (ARCC)": [9.5, 45.2, 98.0, "고정 금리 대비 변동 금리 대출 비중이 압도적으로 높아, 현행 고금리 기조에서 강력한 이자 수익 방어력을 지니고 있습니다."],
+                    "Blue Owl Capital (OBDC)": [10.2, 41.5, 96.0, "안정적인 IT/소프트웨어 섹터의 선순위 담보 대출 위주로 포트폴리오가 구성되어 있어 하방 경직성이 강하며 펀더멘털이 우수합니다."],
+                    "FS KKR Capital (FSK)": [11.8, 48.1, 89.0, "상대적으로 높은 레버리지 비율을 통해 고수익을 창출하며, KKR의 강력한 글로벌 딜 소싱 네트워크를 활용합니다."]
                 },
                 "stress_name": "예상 시장 부도율 (Default Rate, %)",
                 "recovery_default": 60.0
@@ -1110,9 +1112,9 @@ with col_main:
                 "tickers": ["Janus Henderson AAA CLO (JAAA)", "Janus Henderson BBB CLO (JBBB)", "BlackRock AAA CLO (CLOA)"],
                 "labels": ["예상 만기수익률 (YTM)", "AAA/AA 등급 비중", "평균 듀레이션 (년)"],
                 "data": {
-                    "Janus Henderson AAA CLO (JAAA)": [6.2, 100.0, 0.2, "최상위 AAA 등급 트랜치에만 투자하여 극강의 방어력을 제공합니다. 주식 시장 급락 시에도 손실 가능성이 희박한 현금성 피난처 역할을 수행합니다."],
-                    "Janus Henderson BBB CLO (JBBB)": [8.5, 0.0, 0.3, "투자적격등급 하단(BBB) 트랜치를 타겟하여 추가 일드(Yield)를 확보합니다. 일반 하일드 채권 대비 부도율은 낮으면서도 유사한 수익률을 제공합니다."],
-                    "BlackRock AAA CLO (CLOA)": [6.1, 100.0, 0.25, "블랙락의 강력한 크레딧 소싱 능력을 바탕으로 운용되는 우량 CLO ETF로, 풍부한 유동성과 낮은 금리 민감도가 장점입니다."]
+                    "Janus Henderson AAA CLO (JAAA)": [6.2, 100.0, 0.2, "최상위 AAA 등급 트랜치에만 투자하여 극강의 방어력을 제공합니다. 주식 시장 급락 시 피난처 역할을 수행합니다."],
+                    "Janus Henderson BBB CLO (JBBB)": [8.5, 0.0, 0.3, "투자적격등급 하단(BBB) 트랜치를 타겟하여 추가 일드(Yield)를 확보합니다. 하일드 채권 대비 부도율이 낮습니다."],
+                    "BlackRock AAA CLO (CLOA)": [6.1, 100.0, 0.25, "블랙락의 강력한 크레딧 소싱 능력을 바탕으로 운용되는 우량 CLO ETF로, 풍부한 유동성이 장점입니다."]
                 },
                 "stress_name": "예상 연쇄 부도율 (Systemic Default, %)",
                 "recovery_default": 75.0
@@ -1121,9 +1123,9 @@ with col_main:
                 "tickers": ["Alerian MLP ETF (AMLP)", "Enterprise Products (EPD)", "Energy Transfer (ET)"],
                 "labels": ["예상 배당수익률 (Yield)", "현금흐름 커버리지 (x)", "수수료 기반 이익 비중"],
                 "data": {
-                    "Alerian MLP ETF (AMLP)": [7.8, 1.8, 85.0, "원자재 가격 변동성보다는 파이프라인 통행료(Toll-road) 방식의 고정 수수료 수익 비중이 높아 예측 가능한 강력한 현금흐름을 창출합니다."],
-                    "Enterprise Products (EPD)": [7.2, 1.9, 90.0, "미국 최대 에너지 인프라 기업으로, 압도적인 규모의 경제를 바탕으로 25년 이상 꾸준히 배당금을 인상해 온 배당 성장 자산입니다."],
-                    "Energy Transfer (ET)": [8.5, 1.7, 80.0, "공격적인 파이프라인 확장 및 M&A를 통해 성장성을 확보했으며, 동종 업계 대비 높은 수준의 배당률을 제공해 인컴 목적에 매우 부합합니다."]
+                    "Alerian MLP ETF (AMLP)": [7.8, 1.8, 85.0, "원자재 가격 변동성보다는 파이프라인 통행료(Toll-road) 방식의 수익 비중이 높아 예측 가능한 강력한 현금흐름을 창출합니다."],
+                    "Enterprise Products (EPD)": [7.2, 1.9, 90.0, "미국 최대 에너지 인프라 기업으로, 압도적인 규모의 경제를 바탕으로 꾸준히 배당금을 인상해 온 배당 성장 자산입니다."],
+                    "Energy Transfer (ET)": [8.5, 1.7, 80.0, "공격적인 파이프라인 확장 및 M&A를 통해 성장성을 확보했으며, 동종 업계 대비 높은 수준의 배당률을 제공합니다."]
                 },
                 "stress_name": "글로벌 유가 폭락 충격률 (Price Shock, %)",
                 "recovery_default": 80.0
@@ -1131,55 +1133,59 @@ with col_main:
         }
 
         current_db = mock_db[asset_class]
+        
+        # 가로 3분할 컬럼 생성
+        col_app1_1, col_app1_2, col_app1_3 = st.columns(3)
 
-        # Credit Teaser
-        st.markdown(f"#### 1. {asset_class} 크레딧 피치북 요약")
-        selected_ticker = st.selectbox("분석할 타겟 종목(티커) 선택:", current_db["tickers"])
-        t_val1, t_val2, t_val3, t_comment = current_db["data"][selected_ticker]
-        l_val1, l_val2, l_val3 = current_db["labels"]
+        # [컬럼 1] Credit Teaser
+        with col_app1_1:
+            with st.container(border=True):
+                st.markdown(f"#### 1. 크레딧 피치북 요약")
+                selected_ticker = st.selectbox("분석할 타겟 종목(티커):", current_db["tickers"], key="ticker_sel_app1")
+                t_val1, t_val2, t_val3, t_comment = current_db["data"][selected_ticker]
+                l_val1, l_val2, l_val3 = current_db["labels"]
 
-        def format_metric(label, value):
-            if "Yield" in label or "비중" in label or "YTM" in label or "LTV" in label: return f"{value:.1f}%"
-            elif "듀레이션" in label: return f"{value:.2f}년"
-            elif "커버리지" in label: return f"{value:.1f}x"
-            return str(value)
+                def format_metric(label, value):
+                    if "Yield" in label or "비중" in label or "YTM" in label or "LTV" in label: return f"{value:.1f}%"
+                    elif "듀레이션" in label: return f"{value:.2f}년"
+                    elif "커버리지" in label: return f"{value:.1f}x"
+                    return str(value)
 
-        col1, col2, col3 = st.columns(3)
-        col1.metric(l_val1, format_metric(l_val1, t_val1))
-        col2.metric(l_val2, format_metric(l_val2, t_val2))
-        col3.metric(l_val3, format_metric(l_val3, t_val3))
-        st.markdown(f"> **[운용역 코멘트]**\n> {t_comment}")
-        st.markdown("<br>", unsafe_allow_html=True)
+                st.metric(l_val1, format_metric(l_val1, t_val1))
+                st.metric(l_val2, format_metric(l_val2, t_val2))
+                st.metric(l_val3, format_metric(l_val3, t_val3))
+                st.markdown(f"> **[코멘트]** {t_comment}")
 
-        # Stress Test
-        st.markdown(f"#### 2. 매크로 스트레스 테스트 (하방 리스크 시뮬레이터)")
-        with st.container(border=True):
-            stress_rate = st.slider(current_db["stress_name"], min_value=0.0, max_value=15.0, value=2.0, step=0.5)
-            recovery_rate = st.number_input("예상 회수율/방어율 (Recovery Rate, %)", value=current_db["recovery_default"], step=5.0) / 100
-            base_yield = t_val1
-            loss_impact = stress_rate * (1 - recovery_rate)
-            adjusted_yield = base_yield - loss_impact
-            
-            c1, c2 = st.columns(2)
-            c1.metric("시나리오 적용 후 실질 수익률", f"{adjusted_yield:.2f}%", f"-{loss_impact:.2f}% (손실분)", delta_color="inverse")
-            if adjusted_yield < 5.0: st.error("⚠️ **경고:** 실질 수익률이 5% 미만으로 하락하여 타겟 투자자의 BEP(손익분기점) 이탈 위험 구간에 진입했습니다.")
-            else: st.success("✅ **안정:** 해당 매크로 스트레스 시나리오에서도 타겟 인컴 방어가 가능하여 펀드 펀더멘털이 유지됩니다.")
+        # [컬럼 2] Stress Test
+        with col_app1_2:
+            with st.container(border=True):
+                st.markdown(f"#### 2. 매크로 스트레스 테스트")
+                stress_rate = st.slider(current_db["stress_name"], min_value=0.0, max_value=15.0, value=2.0, step=0.5, key="stress_slider_app1")
+                recovery_rate = st.number_input("예상 회수율/방어율 (Recovery Rate, %)", value=current_db["recovery_default"], step=5.0, key="rec_rate_app1") / 100
+                base_yield = t_val1
+                loss_impact = stress_rate * (1 - recovery_rate)
+                adjusted_yield = base_yield - loss_impact
+                
+                st.metric("시나리오 적용 후 실질 수익률", f"{adjusted_yield:.2f}%", f"-{loss_impact:.2f}% (손실분)", delta_color="inverse")
+                if adjusted_yield < 5.0: 
+                    st.error("⚠️ **경고:** 실질 수익률 5% 미만 하락 (BEP 이탈 위험 진입)")
+                else: 
+                    st.success("✅ **안정:** 타겟 인컴 방어 가능 (펀드 펀더멘털 유지)")
 
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        # AMC Feasibility
-        st.markdown("#### 3. 자산운용사(AMC) 비즈니스 손익 추정")
-        with st.container(border=True):
-            target_aum = st.number_input("초기 목표 AUM (억원)", value=500, step=50)
-            ter = st.number_input("ETF 총보수율 (TER, bps)", value=45, step=5)
-            fixed_cost = st.number_input("연간 고정비용 (상장유지비, 마케팅, 인건비 등 / 억원)", value=2.0, step=0.5)
-            expected_revenue = target_aum * (ter / 10000)
-            net_profit = expected_revenue - fixed_cost
-            c3, c4 = st.columns(2)
-            c3.metric("예상 연간 운용보수 수익", f"{expected_revenue:.2f} 억원")
-            c4.metric("예상 영업이익 (Net Profit)", f"{net_profit:.2f} 억원")
-            bep_aum = fixed_cost / (ter / 10000)
-            st.info(f"💡 현재 총보수율(**{ter}bp**) 세팅 기준, 본 상품이 흑자 전환하기 위해 시장에서 모아야 하는 **최소 손익분기점(BEP) AUM은 약 {bep_aum:.0f}억원**입니다.")
+        # [컬럼 3] AMC Feasibility
+        with col_app1_3:
+            with st.container(border=True):
+                st.markdown("#### 3. 자산운용사(AMC) 손익 추정")
+                target_aum = st.number_input("초기 목표 AUM (억원)", value=500, step=50, key="t_aum_app1")
+                ter = st.number_input("ETF 총보수율 (TER, bps)", value=45, step=5, key="ter_val_app1")
+                fixed_cost = st.number_input("연간 고정비용 (상장유지비 등 / 억원)", value=2.0, step=0.5, key="f_cost_app1")
+                expected_revenue = target_aum * (ter / 10000)
+                net_profit = expected_revenue - fixed_cost
+                
+                st.metric("예상 연간 운용보수 수익", f"{expected_revenue:.2f} 억원")
+                st.metric("예상 영업이익 (Net Profit)", f"{net_profit:.2f} 억원")
+                bep_aum = fixed_cost / (ter / 10000)
+                st.info(f"💡 흑자 전환을 위한 최소 손익분기점(BEP) AUM: 약 **{bep_aum:.0f}억원**")
 
         # =====================================================================
         # [Appendix 2] 파생상품(옵션) 기반 ETF 페이오프 시뮬레이터
@@ -1188,18 +1194,18 @@ with col_main:
         st.subheader("📈 [Appendix 2] 파생상품(옵션) 기반 ETF 수익 시뮬레이터")
         st.info("초단기 커버드콜(0DTE) 및 하방 방어형(Buffer) ETF 등 파생상품이 결합된 ETF의 만기 시점 페이오프(Payoff) 구조를 시각화합니다.")
 
-        opt_strategy = st.radio("시뮬레이션 전략 선택:", ["초단기 커버드콜 (Covered Call)", "하방 방어형 (Buffer ETF)"], horizontal=True)
+        opt_strategy = st.radio("시뮬레이션 전략 선택:", ["초단기 커버드콜 (Covered Call)", "하방 방어형 (Buffer ETF)"], horizontal=True, key="opt_strat_sel")
 
         c_opt1, c_opt2 = st.columns([1, 2])
         
         with c_opt1:
             st.markdown("#### ⚙️ 파라미터(옵션 조건) 설정")
             if "Covered Call" in opt_strategy:
-                strike_pct = st.slider("콜옵션 행사가격 (Strike, % OTM)", min_value=0.0, max_value=10.0, value=2.0, step=0.5)
-                premium = st.slider("수취 프리미엄 (Premium, %)", min_value=0.5, max_value=5.0, value=1.5, step=0.1)
+                strike_pct = st.slider("콜옵션 행사가격 (Strike, % OTM)", min_value=0.0, max_value=10.0, value=2.0, step=0.5, key="strike_pct_app2")
+                premium = st.slider("수취 프리미엄 (Premium, %)", min_value=0.5, max_value=5.0, value=1.5, step=0.1, key="prem_app2")
             else:
-                buffer_pct = st.slider("하방 방어 수준 (Buffer, %)", min_value=5.0, max_value=20.0, value=10.0, step=1.0)
-                cap_pct = st.slider("상방 제한 수준 (Cap, %)", min_value=5.0, max_value=15.0, value=8.0, step=1.0)
+                buffer_pct = st.slider("하방 방어 수준 (Buffer, %)", min_value=5.0, max_value=20.0, value=10.0, step=1.0, key="buff_pct_app2")
+                cap_pct = st.slider("상방 제한 수준 (Cap, %)", min_value=5.0, max_value=15.0, value=8.0, step=1.0, key="cap_pct_app2")
         
         with c_opt2:
             st.markdown("#### 📉 만기 시점 수익률 구조 (Payoff Diagram)")
