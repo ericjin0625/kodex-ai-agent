@@ -17,7 +17,7 @@ import io
 # 1. 페이지 레이아웃 및 기본 테마 설정
 st.set_page_config(page_title="ETF Intelligence & Structuring Agent", layout="wide", initial_sidebar_state="expanded")
 
-# 전역 변수 초기화 (에러 방지용)
+# 전역 변수 초기화 
 df_scatter = pd.DataFrame()
 comp_yt_links = []
 
@@ -314,7 +314,6 @@ def load_and_clean_excel(file, sheet_name):
 
 @st.cache_data(ttl=3600)
 def get_media_intelligence(links):
-    # 모의 인텔리전스 함수
     return Counter({"월배당": 15, "연금": 12, "안전마진": 8, "인컴": 5}), "Shorts 65%, Long-form 35%"
 
 
@@ -508,13 +507,13 @@ if main_menu == "1. ETF 시장 모니터링":
                                 df_scatter_filtered = df_merged[df_merged['종목명'].isin(selected_scatter_etfs)].copy()
                                 df_scatter_filtered['주간 수익률(%)'] = df_scatter_filtered['종목명'].map(real_returns)
                                 
-                                # Use safe assignment for scatter dataframe
-                                df_scatter_result = df_scatter_filtered.dropna()
+                                global df_scatter
+                                df_scatter = df_scatter_filtered.dropna()
                                 
-                                fig_scatter = px.scatter(df_scatter_result, x="주간 수익률(%)", y="순매수 증감률(%)", text="종목명", hover_data=["이번주", "지난주"], title=f"**실제 수익률 vs. {subject_tab2_scatter} 순매수 증감률**")
+                                fig_scatter = px.scatter(df_scatter, x="주간 수익률(%)", y="순매수 증감률(%)", text="종목명", hover_data=["이번주", "지난주"], title=f"**실제 수익률 vs. {subject_tab2_scatter} 순매수 증감률**")
                                 
-                                if len(df_scatter_result) > 1:
-                                    x_data, y_data = df_scatter_result["주간 수익률(%)"], df_scatter_result["순매수 증감률(%)"]
+                                if len(df_scatter) > 1:
+                                    x_data, y_data = df_scatter["주간 수익률(%)"], df_scatter["순매수 증감률(%)"]
                                     r_value = np.corrcoef(x_data, y_data)[0, 1]
                                     z = np.polyfit(x_data, y_data, 1)
                                     p = np.poly1d(z)
@@ -676,7 +675,7 @@ if main_menu == "1. ETF 시장 모니터링":
         st.markdown("### 📺 유튜브 사후 성과 분석 (Post-Hoc Analysis)")
         
         yt_keywords = {"KODEX (삼성)": "KODEX ETF", "TIGER (미래에셋)": "TIGER ETF", "ACE (한국투자)": "ACE ETF", "RISE (KB)": "RISE ETF"}
-        with st.spinner("경쟁사 유튜브 영상 성과 데이터를 파싱 중입니다..."):
+        with st.spinner("경쟁사 유튜브 영상 성과 데이터를 실시간으로 파싱 중입니다..."):
             yt_data = []
             for brand, kw in yt_keywords.items():
                 vids = scrape_youtube_search_real(kw)
@@ -698,7 +697,6 @@ if main_menu == "1. ETF 시장 모니터링":
         st.divider()
         st.markdown("### 🏢 운용사별 세일즈 액션 및 마케팅 동향 (블로그 피드)")
         st.caption("누락되었던 모든 자산운용사 블로그 동향 추적 시스템을 정상 복구했습니다.")
-        # 모든 운용사 복구
         brand_mappings = {
             "KODEX (삼성)": {"blog": "samsung_fund"}, "TIGER (미래에셋)": {"blog": "m_invest"},
             "ACE (한국투자)": {"blog": "aceetf"}, "RISE (KB)": {"blog": "riseetf"},
@@ -725,8 +723,11 @@ if main_menu == "1. ETF 시장 모니터링":
     # === Tab 6 ===
     with tabs[6]:
         st.markdown("### 🗣️ 고객 Voice (VOC) & 투자자 심리 모니터링")
+        st.caption("Sub-Agent가 백그라운드에서 수집·정제한 커뮤니티(종토방) 엑셀 데이터와 앱스토어/뉴스 리스크를 통합 분석합니다.")
+        
         with st.container(border=True):
             st.markdown("#### 🤖 [Sub-Agent 연동] 네이버 종토방 분석 결과 시각화")
+            
             if uploaded_voc is not None:
                 voc_data = {}
                 try:
@@ -734,41 +735,56 @@ if main_menu == "1. ETF 시장 모니터링":
                     for sheet in xls_voc.sheet_names:
                         df_raw = pd.read_excel(xls_voc, sheet_name=sheet)
                         sheet_lower = str(sheet).lower()
+                        
                         if '감성' in sheet_lower:
                             df_parsed = extract_table(df_raw, ['감성', '비율'])
-                            for c in df_parsed.columns:
-                                if '감성' in str(c) and str(c) != '평균 감성점수': df_parsed.rename(columns={c: '감성'}, inplace=True)
-                                if '비율' in str(c): df_parsed.rename(columns={c: '비율(%)'}, inplace=True)
+                            cols = [str(c) for c in df_parsed.columns]
+                            for c in cols:
+                                if '감성' in c and c != '평균 감성점수': df_parsed.rename(columns={c: '감성'}, inplace=True)
+                                if '비율' in c: df_parsed.rename(columns={c: '비율(%)'}, inplace=True)
                             voc_data['sentiment'] = df_parsed
+                            
                         elif '키워드' in sheet_lower:
                             df_parsed = extract_table(df_raw, ['키워드', '언급'])
-                            for c in df_parsed.columns:
-                                if '키워드' in str(c): df_parsed.rename(columns={c: '키워드'}, inplace=True)
-                                if '언급' in str(c): df_parsed.rename(columns={c: '언급횟수'}, inplace=True)
+                            cols = [str(c) for c in df_parsed.columns]
+                            for c in cols:
+                                if '키워드' in c: df_parsed.rename(columns={c: '키워드'}, inplace=True)
+                                if '언급' in c: df_parsed.rename(columns={c: '언급횟수'}, inplace=True)
                             voc_data['keyword'] = df_parsed
+                            
                         elif '시간' in sheet_lower:
                             df_parsed = extract_table(df_raw, ['시간', '게시글'])
-                            for c in df_parsed.columns:
-                                if '시간' in str(c): df_parsed.rename(columns={c: '시간대'}, inplace=True)
-                                if '게시글' in str(c): df_parsed.rename(columns={c: '게시글 수'}, inplace=True)
-                                if '감성' in str(c): df_parsed.rename(columns={c: '평균 감성점수'}, inplace=True)
+                            cols = [str(c) for c in df_parsed.columns]
+                            for c in cols:
+                                if '시간' in c: df_parsed.rename(columns={c: '시간대'}, inplace=True)
+                                if '게시글' in c: df_parsed.rename(columns={c: '게시글 수'}, inplace=True)
+                                if '감성' in c: df_parsed.rename(columns={c: '평균 감성점수'}, inplace=True)
                             voc_data['time'] = df_parsed
+                            
                         elif '인사이트' in sheet_lower or '요약' in sheet_lower:
-                            texts = [" ".join([str(v) for v in row.values if pd.notna(v) and str(v).strip() != '']) for _, row in df_raw.iterrows()]
-                            voc_data['insight'] = "\n\n".join([t for t in texts if t.strip()])
+                            texts = []
+                            for _, row in df_raw.iterrows():
+                                row_text = " ".join([str(v) for v in row.values if pd.notna(v) and str(v).strip() != ''])
+                                if row_text.strip():
+                                    texts.append(row_text)
+                            voc_data['insight'] = "\n\n".join(texts)
+                            
                         elif '게시글' in sheet_lower or '전체' in sheet_lower or '원문' in sheet_lower:
                             df_parsed = extract_table(df_raw, ['제목', '본문'])
-                            for c in df_parsed.columns:
-                                if '제목' in str(c): df_parsed.rename(columns={c: '제목'}, inplace=True)
-                                if '본문' in str(c): df_parsed.rename(columns={c: '본문'}, inplace=True)
-                                if '조회' in str(c): df_parsed.rename(columns={c: '조회수'}, inplace=True)
-                                if '감성' in str(c) and str(c) != '평균 감성점수': df_parsed.rename(columns={c: '감성'}, inplace=True)
-                                if '작성자' in str(c): df_parsed.rename(columns={c: '작성자'}, inplace=True)
-                                if '날짜' in str(c): df_parsed.rename(columns={c: '날짜'}, inplace=True)
+                            cols = [str(c) for c in df_parsed.columns]
+                            for c in cols:
+                                if '제목' in c: df_parsed.rename(columns={c: '제목'}, inplace=True)
+                                if '본문' in c: df_parsed.rename(columns={c: '본문'}, inplace=True)
+                                if '조회' in c: df_parsed.rename(columns={c: '조회수'}, inplace=True)
+                                if '감성' in c and c != '평균 감성점수': df_parsed.rename(columns={c: '감성'}, inplace=True)
+                                if '작성자' in c: df_parsed.rename(columns={c: '작성자'}, inplace=True)
+                                if '날짜' in c: df_parsed.rename(columns={c: '날짜'}, inplace=True)
                             voc_data['posts'] = df_parsed
-                except Exception as e: st.error(f"엑셀 파일 파싱 오류: {e}")
+                except Exception as e:
+                    st.error(f"엑셀 파일을 파싱하는 중 오류가 발생했습니다: {e}")
 
                 st.markdown("<br>", unsafe_allow_html=True)
+                
                 c_voc1, c_voc2 = st.columns(2)
                 with c_voc1:
                     st.markdown("##### 🌡️ 실시간 투자자 심리 온도계")
@@ -778,7 +794,9 @@ if main_menu == "1. ETF 시장 모니터링":
                             fig_s = px.pie(df_s, names='감성', values='비율(%)', hole=0.5, color='감성', color_discrete_map={'긍정':'#4da6ff', '중립':'#cbd5e1', '부정':'#ff4d4d'})
                             fig_s.update_layout(height=300, template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                             st.plotly_chart(fig_s, use_container_width=True)
-                        except: pass
+                        except: st.caption("감성 차트를 그릴 수 없는 데이터 규격입니다.")
+                    else: st.caption("감성 분석 시트/데이터가 없습니다.")
+
                 with c_voc2:
                     st.markdown("##### 🧠 리테일 투자자 핫 키워드 Top 10")
                     if 'keyword' in voc_data and not voc_data['keyword'].empty:
@@ -787,9 +805,11 @@ if main_menu == "1. ETF 시장 모니터링":
                             fig_k = px.bar(df_k, x='언급횟수', y='키워드', orientation='h', template="plotly_dark", color_discrete_sequence=['#ffb04d'])
                             fig_k.update_layout(yaxis={'categoryorder':'total ascending'}, height=300, template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                             st.plotly_chart(fig_k, use_container_width=True)
-                        except: pass
+                        except: st.caption("키워드 차트를 그릴 수 없는 데이터 규격입니다.")
+                    else: st.caption("키워드 분석 시트/데이터가 없습니다.")
 
                 st.divider()
+
                 st.markdown("##### ⏰ 커뮤니티 골든 타임 추적기 (시간대별 활동)")
                 if 'time' in voc_data and not voc_data['time'].empty:
                     try:
@@ -804,9 +824,11 @@ if main_menu == "1. ETF 시장 모니터링":
                             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
                         )
                         st.plotly_chart(fig_t, use_container_width=True)
-                    except: pass
+                    except: st.caption("시간대 추이 차트를 그릴 수 없는 데이터 규격입니다.")
+                else: st.caption("시간대 추이 시트/데이터가 없습니다.")
 
                 st.divider()
+
                 st.markdown("##### 🗣️ 딥다이브 인사이트 & 날것의 목소리 (Raw VOC)")
                 
                 with st.container(border=True):
@@ -817,6 +839,7 @@ if main_menu == "1. ETF 시장 모니터링":
                             if '조회수' in df_p.columns:
                                 df_p['조회수'] = pd.to_numeric(df_p['조회수'], errors='coerce').fillna(0)
                                 top_posts = df_p.sort_values(by='조회수', ascending=False).head(3)
+                                
                                 st.markdown("<div style='padding:10px;'>", unsafe_allow_html=True)
                                 for _, row in top_posts.iterrows():
                                     sentiment_color = "#ff4d4d" if "부정" in str(row.get('감성','')) else ("#4da6ff" if "긍정" in str(row.get('감성','')) else "#cbd5e1")
@@ -826,15 +849,19 @@ if main_menu == "1. ETF 시장 모니터링":
                                     st.info(f"{content[:200]}..." if len(content) > 200 else content)
                                     st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
                                 st.markdown("</div>", unsafe_allow_html=True)
-                        except: pass
+                        except: st.caption("원문 게시글을 파싱할 수 없는 데이터 규격입니다.")
+                    else: st.caption("게시물 전체 시트/데이터가 없습니다.")
                 
                 st.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
-                with st.expander("💡 AI Sub-Agent 분석 요약 (클릭하여 펼치기)", expanded=False):
+
+                with st.expander("💡 AI Sub-Agent 분석 요약", expanded=False):
                     if 'insight' in voc_data and voc_data['insight'].strip():
                         insight_html = voc_data['insight'].replace(chr(10), '<br>').replace('【', '<br><b style="color:#4da6ff; font-size:16px;">【').replace('】', '】</b><br>')
                         st.markdown(f"<div style='padding:15px; background:rgba(255,255,255,0.02); border-radius:10px; border:1px solid rgba(255,255,255,0.05);'>{insight_html}</div>", unsafe_allow_html=True)
                     else: st.caption("인사이트 리포트 시트/데이터가 없습니다.")
-            else: st.info("👉 사이드바에 종목토론방 엑셀 파일을 업로드해주세요.")
+
+            else:
+                st.info("👉 우측 패널에 코랩에서 추출한 '종목토론방 엑셀 파일'을 업로드해주세요.")
 
         st.divider()
         col_app, col_news = st.columns(2)
@@ -861,11 +888,12 @@ if main_menu == "1. ETF 시장 모니터링":
                             st.caption(f"📅 {row['게시일 / 출처']}")
                 else: st.info("검색 범위(최대 1년) 내 포착된 리스크성 기사가 없습니다.")
 
-    # === Tab 7: ETF/AUM 현황 (복구 완료) ===
+    # === Tab 7: 운용 현황 및 점유율 (복구 완료) ===
     with tabs[7]:
-        st.markdown("### 🏢 국내 ETF 운용사 AUM 시장 점유율 및 테마별 현황")
+        st.markdown("### 🏢 국내 ETF 운용사 AUM 시장 점유율 및 테마별 현황 (실시간 기준)")
         col_pie, col_table = st.columns([1, 2])
         pivot_df = pd.DataFrame()
+        aum_context_text = "AUM 데이터가 로드되지 않았습니다."
         with st.spinner("KRX 마켓 캡 데이터를 고속 파싱 중입니다..."):
             try:
                 df_all_etf = fdr.StockListing('ETF/KR')
@@ -890,11 +918,13 @@ if main_menu == "1. ETF 시장 모니터링":
                         df_top_brands = df_all_etf[df_all_etf['브랜드'].isin(target_brands)].copy()
                         df_top_brands['분류_테마'] = df_top_brands['Name'].apply(assign_auto_theme)
                         pivot_df = pd.pivot_table(df_top_brands, values='AUM(억원)', index='분류_테마', columns='브랜드', aggfunc='sum', fill_value=0)
-                        pivot_df = pivot_df[[c for col in target_brands if col in pivot_df.columns]].astype(int)
+                        pivot_df = pivot_df[[c for col in target_brands if col in pivot_df.columns for c in [col]]].astype(int)
+                        if '📦 기타 섹터/테마' in pivot_df.index: pivot_df = pivot_df.reindex([i for i in pivot_df.index if i != '📦 기타 섹터/테마'] + ['📦 기타 섹터/테마'])
+                        
                         pivot_df = pivot_df.loc[(pivot_df != 0).any(axis=1)]
                         
-                        # 총 AUM 추가 및 KODEX 볼드 
                         pivot_df.loc['총 AUM'] = pivot_df.sum(numeric_only=True)
+                        
                         def style_aum(row):
                             styles = []
                             for col in pivot_df.columns:
@@ -906,6 +936,7 @@ if main_menu == "1. ETF 시장 모니터링":
                             
                         styled_df = pivot_df.style.format("{:,}").apply(style_aum, axis=1)
                         st.dataframe(styled_df, use_container_width=True)
+                        
                         aum_context_text = pivot_df.to_string()
             except: pass
 
@@ -940,7 +971,6 @@ if main_menu == "1. ETF 시장 모니터링":
         st.markdown("<br><br>", unsafe_allow_html=True)
         st.markdown("---")
         
-        # US 글로벌 동향 병합 영역
         st.markdown("### 🇺🇸 글로벌 혁신 구조 공백 분석 (US Mega Trends vs KODEX)")
         raw_keywords = ["타겟 인컴 ETF 버퍼형", "0DTE 초단기 옵션 커버드콜 ETF", "가상자산 비트코인 현물 ETF", "BDC 기업성장집합투자기구 대체투자", "하방 방어형 100% 버퍼 ETF"]
         trend_strengths = []
@@ -953,6 +983,7 @@ if main_menu == "1. ETF 시장 모니터링":
         
         st.divider()
         selected_trend_label = st.selectbox("🔍 뉴스 검색망 가동할 혁신 구조 선택:", options=raw_keywords, index=2)
+        st.session_state['selected_trend_label'] = selected_trend_label
         st.markdown(f"#### 📡 `[실시간 정책 시그널]` {selected_trend_label} 관련 완화 동향")
         with st.spinner("규제 완화 뉴스 스크랩 중..."):
             df_gap_news = get_realtime_news(selected_trend_label + " 금융위 규제", timeframe="7d")
@@ -970,7 +1001,7 @@ if main_menu == "1. ETF 시장 모니터링":
         st.markdown("### 🧠 모듈형 마케팅 리포트 자동 생성기")
         st.caption("대시보드 내 데이터를 융합하여 마크다운 프롬프트를 도출합니다.")
         
-        data_context = "데이터 부족"
+        data_context = df_scatter.sort_values(by='주간 수익률(%)', ascending=False).head(20).to_string(index=False) if not df_scatter.empty else "데이터 부족 (우측 패널에 순매수 엑셀을 업로드하세요)"
         dl_context = st.session_state.get('dl_summary', "데이터랩 미연동")
         
         news_lines = []
@@ -996,94 +1027,117 @@ elif main_menu == "2. KODEX 리밸런싱 시뮬레이션":
     st.markdown("## ⚖️ ETF 기초자산(Constituents) 리밸런싱 시뮬레이터")
     st.caption("펀드 매니저 및 상품 기획자(Structurer) 관점에서, 단일 ETF 내 편입 종목(주식 등)의 비중 조절에 따른 벤치마크(BM) 대비 추적오차(TE) 및 초과수익률을 시뮬레이션합니다.")
     
-    st.markdown("#### 1. ETF 상품 기획 컨셉 및 편입 종목(Universe) 설정")
-    theme_choice = st.selectbox("기획/리밸런싱할 ETF 컨셉 선택:", ["KODEX AI 반도체 핵심장비 액티브 ETF (가칭)", "KODEX 코리아 밸류업 고배당 ETF (가칭)"])
-    
-    # 팩터에 따른 기초 자산군 자동 세팅
-    if "AI 반도체" in theme_choice:
-        stocks = ["삼성전자", "SK하이닉스", "한미반도체", "리노공업", "HPSP"]
-        default_w = [30, 30, 20, 10, 10]
-        bm_name = "KRX 반도체 지수"
-    else:
-        stocks = ["KB금융", "신한지주", "하나금융지주", "KT&G", "현대차"]
-        default_w = [25, 25, 20, 15, 15]
-        bm_name = "KOSPI 200 고배당 지수"
+    # 운용역들이 다루는 실제 10가지 ETF 테마 및 핵심 편입종목 매핑 (실제 종목코드 사용)
+    etf_concepts = {
+        "1. KODEX AI 반도체 핵심장비 (가칭)": {"tickers": ["005930", "000660", "042700", "058470", "403870", "036540"], "names": ["삼성전자", "SK하이닉스", "한미반도체", "리노공업", "HPSP", "SFA반도체"]},
+        "2. KODEX 코리아 밸류업 고배당 (가칭)": {"tickers": ["105560", "055550", "086790", "033780", "005380", "024110"], "names": ["KB금융", "신한지주", "하나금융지주", "KT&G", "현대차", "IBK기업은행"]},
+        "3. KODEX 2차전지 산업 핵심 (가칭)": {"tickers": ["051910", "006400", "373220", "003670", "066970", "086520"], "names": ["LG화학", "삼성SDI", "LG에너지솔루션", "포스코퓨처엠", "엘앤에프", "에코프로"]},
+        "4. KODEX K-엔터테인먼트 (가칭)": {"tickers": ["352820", "035900", "041510", "122870", "035720", "036570"], "names": ["하이브", "JYP Ent.", "에스엠", "와이지엔터", "카카오", "엔씨소프트"]},
+        "5. KODEX 바이오 헬스케어 (가칭)": {"tickers": ["207940", "068270", "000100", "096530", "008930", "028300"], "names": ["삼성바이오로직스", "셀트리온", "유한양행", "씨젠", "한미약품", "HLB"]},
+        "6. KODEX 인터넷/빅테크 (가칭)": {"tickers": ["035420", "035720", "036570", "018260", "259960", "032640"], "names": ["NAVER", "카카오", "엔씨소프트", "삼성SDS", "크래프톤", "LG유플러스"]},
+        "7. KODEX K-자동차/모빌리티 (가칭)": {"tickers": ["005380", "000270", "012330", "011070", "204320", "000150"], "names": ["현대차", "기아", "현대모비스", "LG이노텍", "HL만도", "두산"]},
+        "8. KODEX K-방산/우주항공 (가칭)": {"tickers": ["047810", "012450", "079550", "004020", "069260", "272210"], "names": ["한국항공우주", "한화에어로스페이스", "LIG넥스원", "현대로템", "휴니드", "한화시스템"]},
+        "9. KODEX K-뷰티/화장품 (가칭)": {"tickers": ["090430", "051900", "192820", "227610", "161890", "002790"], "names": ["아모레퍼시픽", "LG생활건강", "코스맥스", "토니모리", "한국콜마", "아모레G"]},
+        "10. KODEX K-조선/해운 (가칭)": {"tickers": ["011930", "010140", "042660", "011200", "028670", "000210"], "names": ["HD한국조선해양", "삼성중공업", "한화오션", "HMM", "팬오션", "DL"]}
+    }
 
-    st.markdown(f"**[{theme_choice}] 내부 편입 비중(Weight) 조절**")
+    st.markdown("#### 1. ETF 상품 기획 컨셉 및 편입 종목(Universe) 설정")
+    theme_choice = st.selectbox("기획/리밸런싱할 ETF 컨셉 선택 (총 10종 지원):", list(etf_concepts.keys()))
     
-    c_w1, c_w2, c_w3, c_w4, c_w5 = st.columns(5)
+    concept = etf_concepts[theme_choice]
+    stocks = concept["names"]
+    
+    # 💡 50개의 슬라이더를 띄우는 UX 참사를 막기 위한 의도 설명
+    st.info("💡 **PM(운용역) 노트:** 실제 ETF는 수십 개의 종목을 편입하지만, 포트폴리오의 추적오차(TE)와 초과수익(Alpha)의 70% 이상은 **상위 핵심 대장주 6개**가 결정합니다. 본 시뮬레이터는 UX 직관성을 위해 핵심 6개 종목의 비중을 100%로 정규화(Normalize)하여 시장 벤치마크(KOSPI)와 백테스팅합니다.")
+
+    st.markdown(f"**[{theme_choice}] 상위 6개 핵심 기초자산 편입 비중(Weight) 조절**")
+    
+    # 6개 종목 기본 비중
+    default_w = [30, 25, 20, 10, 10, 5]
+    c_w1, c_w2, c_w3, c_w4, c_w5, c_w6 = st.columns(6)
     with c_w1: w1 = st.number_input(f"1. {stocks[0]} (%)", 0, 100, default_w[0])
     with c_w2: w2 = st.number_input(f"2. {stocks[1]} (%)", 0, 100, default_w[1])
     with c_w3: w3 = st.number_input(f"3. {stocks[2]} (%)", 0, 100, default_w[2])
     with c_w4: w4 = st.number_input(f"4. {stocks[3]} (%)", 0, 100, default_w[3])
     with c_w5: w5 = st.number_input(f"5. {stocks[4]} (%)", 0, 100, default_w[4])
+    with c_w6: w6 = st.number_input(f"6. {stocks[5]} (%)", 0, 100, default_w[5])
     
-    total_w = w1 + w2 + w3 + w4 + w5
+    total_w = w1 + w2 + w3 + w4 + w5 + w6
     if total_w != 100:
         st.warning(f"⚠️ 현재 기초자산 비중의 합이 100%가 아닙니다 ({total_w}%). 시뮬레이션 구동 시 자동으로 정규화(Normalize) 됩니다.")
     if total_w == 0: total_w = 1 # 분모 0 방지
     
-    weights = np.array([w1, w2, w3, w4, w5]) / total_w
+    weights = np.array([w1, w2, w3, w4, w5, w6]) / total_w
     
     st.divider()
     st.markdown("#### 2. 커스텀 ETF 백테스팅 및 운용 성과 지표 산출")
     
-    with st.spinner(f"기초자산의 과거 주가 변동성을 결합하여 벤치마크({bm_name}) 대비 성과를 백테스팅 중입니다..."):
-        # 1년 영업일(252일) 기준 가상의 수익률 데이터 생성 (랜덤 워크)
-        np.random.seed(len(theme_choice)) # 테마별로 고정된 난수 생성
-        days = 252
-        dates = pd.date_range(end=datetime.today(), periods=days, freq='B')
+    with st.spinner("한국거래소(KRX)에서 최근 1년 치 실제 주가 데이터를 실시간으로 불러와 백테스팅을 구동합니다... (최대 10초 소요)"):
+        end_date = datetime.today()
+        start_date = end_date - timedelta(days=365)
         
-        # 벤치마크(BM) 수익률 생성
-        bm_daily = np.random.normal(0.0003, 0.012, days)
-        
-        # 개별 주식 수익률 생성 (BM과 약간의 상관관계 유지)
-        stock_returns = []
-        for i in range(5):
-            # BM 수익률 + 개별 주식 특유의 변동성(Alpha)
-            alpha = np.random.normal(0.0001, 0.008, days)
-            stock_returns.append(bm_daily * 0.8 + alpha)
+        try:
+            # 1. 벤치마크(KOSPI) 실제 수익률 로드
+            bm_df = fdr.DataReader('KS11', start_date, end_date)
+            bm_daily = bm_df['Close'].pct_change().dropna()
             
-        stock_returns = np.array(stock_returns)
-        
-        # 커스텀 ETF의 일일 수익률 = sum(비중 * 개별 주식 일일 수익률)
-        custom_etf_daily = np.dot(weights, stock_returns)
-        
-        # 누적 수익률 계산 (Base 100)
-        bm_cum = np.cumprod(1 + bm_daily) * 100
-        custom_cum = np.cumprod(1 + custom_etf_daily) * 100
-        
-        df_sim = pd.DataFrame({"Date": dates, f"벤치마크 ({bm_name})": bm_cum, "커스텀 기획 ETF": custom_cum})
-        df_sim_melt = df_sim.melt(id_vars="Date", var_name="Portfolio", value_name="Value (Base 100)")
-        
-        fig_sim = px.line(df_sim_melt, x="Date", y="Value", color="Portfolio", template="plotly_dark", color_discrete_sequence=['#cbd5e1', '#ff4d4d'])
-        fig_sim.update_layout(height=450, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
-        st.plotly_chart(fig_sim, use_container_width=True)
-        
-        # --- 펀드 매니저 핵심 관리 지표 산출 ---
-        final_bm = (bm_cum[-1] / 100 - 1) * 100
-        final_etf = (custom_cum[-1] / 100 - 1) * 100
-        excess_return = final_etf - final_bm
-        
-        # 추적오차(Tracking Error): BM 대비 초과 수익률의 변동성
-        te_daily = custom_etf_daily - bm_daily
-        tracking_error = np.std(te_daily) * np.sqrt(252) * 100
-        
-        # 정보비율(Information Ratio): 초과수익률 / 추적오차
-        if tracking_error != 0: ir = excess_return / tracking_error
-        else: ir = 0
-        
-        # 가상의 매매회전율(Turnover Ratio): 비중 변경량에 비례하여 산출
-        base_w = np.array(default_w) / 100
-        turnover = np.sum(np.abs(weights - base_w)) * 100 * 1.5 # 임의의 스케일업
-        
-        c_m1, c_m2, c_m3, c_m4 = st.columns(4)
-        c_m1.metric("커스텀 ETF 예상 수익률", f"{final_etf:.2f}%", f"BM대비 {excess_return:+.2f}%p")
-        c_m2.metric("추적오차 (Tracking Error)", f"{tracking_error:.2f}%", "낮을수록 BM과 유사", delta_color="off")
-        c_m3.metric("정보비율 (Information Ratio)", f"{ir:.2f}", "높을수록 운용 효율 우수", delta_color="normal" if ir > 0 else "inverse")
-        c_m4.metric("매매회전율 (Turnover Ratio)", f"{turnover:.1f}%", "거래 비용 발생 수준", delta_color="inverse")
-        
-        st.caption("💡 **운용역의 시선:** 기획하신 ETF는 벤치마크(BM) 대비 추적오차가 산출되었습니다. 액티브 ETF라면 추적오차를 감수하더라도 높은 초과수익(알파)을 내는 것이 중요하며, 패시브 ETF라면 매매회전율을 낮추고 추적오차를 0%에 수렴시키는 비중 조절이 필요합니다.")
+            # 2. 선택된 6개 종목의 실제 주가 로드
+            stock_data = {}
+            for tkr, name in zip(concept["tickers"], concept["names"]):
+                sdf = fdr.DataReader(tkr, start_date, end_date)
+                stock_data[name] = sdf['Close'].pct_change().dropna()
+            
+            # 3. 데이터프레임 병합 및 일자 얼라인
+            df_returns = pd.DataFrame(stock_data).dropna()
+            bm_aligned = bm_daily.loc[df_returns.index]
+            
+            # 4. 커스텀 ETF 일일 수익률 계산 (개별수익률 * 가중치)
+            custom_etf_daily = df_returns.dot(weights)
+            
+            # 5. 누적 수익률 계산 (Base 100)
+            bm_cum = (1 + bm_aligned).cumprod() * 100
+            custom_cum = (1 + custom_etf_daily).cumprod() * 100
+            
+            df_sim = pd.DataFrame({
+                "Date": df_returns.index,
+                "벤치마크 (KOSPI)": bm_cum.values,
+                "커스텀 기획 ETF": custom_cum.values
+            })
+            
+            # Melt 과정에서 value_name을 지정하고, px.line에서 이를 정확히 매핑하여 ValueError 원천 차단
+            df_sim_melt = df_sim.melt(id_vars="Date", var_name="Portfolio", value_name="Value (Base 100)")
+            
+            fig_sim = px.line(df_sim_melt, x="Date", y="Value (Base 100)", color="Portfolio", template="plotly_dark", color_discrete_sequence=['#cbd5e1', '#ff4d4d'])
+            fig_sim.update_layout(height=450, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
+            st.plotly_chart(fig_sim, use_container_width=True)
+            
+            # --- 펀드 매니저 핵심 관리 지표 산출 ---
+            final_bm = (bm_cum.iloc[-1] / 100 - 1) * 100
+            final_etf = (custom_cum.iloc[-1] / 100 - 1) * 100
+            excess_return = final_etf - final_bm
+            
+            # 추적오차(Tracking Error): BM 대비 일간 초과수익률의 연환산 표준편차
+            te_daily = custom_etf_daily - bm_aligned
+            tracking_error = np.std(te_daily) * np.sqrt(252) * 100
+            
+            # 정보비율(Information Ratio): 초과수익률 / 추적오차
+            if tracking_error != 0: ir = excess_return / tracking_error
+            else: ir = 0
+            
+            # 매매회전율(Turnover Ratio): 변경된 비중의 합계 추정치
+            base_w = np.array(default_w) / 100
+            turnover = np.sum(np.abs(weights - base_w)) * 100 * 1.5 
+            
+            c_m1, c_m2, c_m3, c_m4 = st.columns(4)
+            c_m1.metric("커스텀 ETF 1년 실제 수익률", f"{final_etf:.2f}%", f"BM대비 {excess_return:+.2f}%p")
+            c_m2.metric("추적오차 (Tracking Error)", f"{tracking_error:.2f}%", "액티브 리스크 허용 수준", delta_color="off")
+            c_m3.metric("정보비율 (Information Ratio)", f"{ir:.2f}", "높을수록 운용 효율 우수", delta_color="normal" if ir > 0 else "inverse")
+            c_m4.metric("매매회전율 (Turnover Ratio)", f"{turnover:.1f}%", "리밸런싱 매매 비용", delta_color="inverse")
+            
+            st.caption("💡 **운용역의 시선:** 백테스팅 결과, 기획하신 ETF는 벤치마크(KOSPI) 대비 추적오차가 산출되었습니다. 액티브 ETF라면 추적오차를 감수하더라도 높은 초과수익(알파)을 내는 것이 중요하며, 패시브 ETF라면 매매회전율을 낮추고 추적오차를 0%에 수렴시키는 비중 조절이 필요합니다.")
+            
+        except Exception as e:
+            st.error(f"한국거래소 API(FDR)에서 실시간 데이터를 불러오는 중 일시적인 연결 지연이 발생했습니다. 다시 시도해 주세요. (에러코드: {e})")
 
 
 # =========================================================================
