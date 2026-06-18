@@ -1020,52 +1020,67 @@ elif main_menu == "2. KODEX 리밸런싱 시뮬레이션":
 
     if uploaded_pdf is not None:
         try:
-            # 1. 파일 읽기 및 파싱 (KODEX 가짜 엑셀 HTML 완벽 방어 로직)
+            # 1. 파일 읽기 및 파싱 (무적의 4단계 텍스트/바이너리 강제 디코딩 로직)
             file_bytes = uploaded_pdf.getvalue()
             raw_pdf = pd.DataFrame()
             parsed = False
             
-            # (1) 파일을 텍스트로 먼저 강제 디코딩 시도 (한국어 인코딩 고려)
+            # (1) 텍스트 강제 디코딩 (에러 발생 시 무시/치환 처리로 무조건 읽어들임)
             text_data = ""
-            for enc in ['utf-8', 'cp949', 'euc-kr']:
+            try:
+                text_data = file_bytes.decode('utf-8')
+            except:
                 try:
-                    text_data = file_bytes.decode(enc)
-                    break
-                except: pass
+                    text_data = file_bytes.decode('cp949')
+                except:
+                    # 여기서 errors='replace'가 핵심입니다. 깨진 문자가 있어도 강제로 읽습니다.
+                    text_data = file_bytes.decode('euc-kr', errors='replace')
             
             if text_data:
-                # (2) 텍스트 안에 HTML table 태그가 있는지 확인 (가짜 엑셀 파일인 경우)
+                # (2) HTML 형태의 가짜 엑셀 파일일 경우 (KODEX 고질적 포맷 방어)
                 if '<table' in text_data.lower():
                     try:
                         raw_pdf = pd.read_html(io.StringIO(text_data))[0]
-                        parsed = True
+                        if len(raw_pdf.columns) >= 2: parsed = True
                     except: pass
                 
-                # (3) HTML이 아니라면 일반 CSV 파싱 시도 (상단 쓰레기 메타데이터 스킵)
+                # (3) 일반 CSV 또는 TSV인 경우
                 if not parsed:
                     lines = text_data.split('\n')
                     skip_idx = 0
                     for i, line in enumerate(lines[:30]): 
-                        if '종목명' in line and ('비중' in line or '평가금액' in line):
+                        if '종목명' in line.replace(" ", "") and ('비중' in line.replace(" ", "") or '평가금액' in line.replace(" ", "")):
                             skip_idx = i
                             break
                     try:
-                        raw_pdf = pd.read_csv(io.StringIO(text_data), skiprows=skip_idx, on_bad_lines='skip')
-                        parsed = True
+                        # 쉼표 구분자 먼저 시도
+                        raw_pdf = pd.read_csv(io.StringIO(text_data), skiprows=skip_idx, sep=',', on_bad_lines='skip')
+                        if len(raw_pdf.columns) >= 3: parsed = True
                     except: pass
+                    
+                    if not parsed:
+                        try:
+                            # 탭 구분자 시도
+                            raw_pdf = pd.read_csv(io.StringIO(text_data), skiprows=skip_idx, sep='\t', on_bad_lines='skip')
+                            if len(raw_pdf.columns) >= 3: parsed = True
+                        except: pass
             
-            # (4) 텍스트가 아니거나 파싱 실패 시, 진짜 바이너리 엑셀로 간주하고 시도
+            # (4) 진짜 바이너리 엑셀(.xlsx, .xls)인 경우
             if not parsed:
                 try:
-                    raw_pdf = pd.read_excel(io.BytesIO(file_bytes))
+                    raw_pdf = pd.read_excel(io.BytesIO(file_bytes), engine='openpyxl')
                     parsed = True
-                except: pass
+                except:
+                    try:
+                        raw_pdf = pd.read_excel(io.BytesIO(file_bytes))
+                        parsed = True
+                    except: pass
                 
             if not parsed:
-                st.error("파일을 해독할 수 없습니다. 파일이 암호화되어 있거나 지원되지 않는 형식입니다.")
+                st.error("파일을 해독할 수 없습니다. KODEX 공식 사이트에서 다운로드한 형식이 맞는지 확인해주세요.")
                 st.stop()
 
-            # extract_table 함수로 헤더 자동 탐색 후 데이터프레임 추출 (키워드 유연화)
+            # extract_table 함수로 헤더 자동 탐색 후 데이터프레임 추출
             df_pdf = extract_table(raw_pdf, ['종목명', '종목코드'])
 
             # 빈 컬럼(이름이 nan이거나 빈 문자열) 제거
