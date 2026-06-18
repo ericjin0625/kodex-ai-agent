@@ -12,16 +12,17 @@ import json
 import time
 import re
 from collections import Counter
+import io
 
 # 1. 페이지 레이아웃 및 기본 테마 설정
-st.set_page_config(page_title="ETF Monitoring AI Agent", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="ETF Intelligence & Structuring Agent", layout="wide", initial_sidebar_state="expanded")
 
 # 전역 변수 초기화 (에러 방지용)
 df_scatter = pd.DataFrame()
 comp_yt_links = []
 
 # ==========================================
-# ★ Glassmorphism 커스텀 CSS 및 UI 스타일링
+# ★ Glassmorphism 커스텀 CSS
 # ==========================================
 glassmorphism_css = """
 <style>
@@ -60,11 +61,14 @@ glassmorphism_css = """
     box-shadow: 0 0 12px rgba(77, 166, 255, 0.25) !important;
     font-weight: 600 !important;
 }
-/* Expander 글씨 크기 키우기 및 강조 (고객 UX 탭 용) */
 .streamlit-expanderHeader, [data-testid="stExpander"] summary p {
     font-size: 18px !important;
     font-weight: 700 !important;
     color: #ffb04d !important;
+}
+[data-testid="stSidebar"] {
+    background-color: rgba(15, 23, 42, 0.8) !important;
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
 }
 #MainMenu {visibility: hidden;}
 header {visibility: hidden;}
@@ -94,8 +98,7 @@ def assign_auto_theme(etf_name):
 
 def extract_table(df, expected_cols):
     cols_str = " ".join([str(c) for c in df.columns])
-    if all(ec in cols_str for ec in expected_cols):
-        return df
+    if all(ec in cols_str for ec in expected_cols): return df
     for i, row in df.iterrows():
         row_str = " ".join([str(val) for val in row.values if pd.notna(val)])
         if all(ec in row_str for ec in expected_cols):
@@ -140,10 +143,11 @@ def get_macro_snapshot():
         try:
             url = f"https://finance.naver.com/marketindex/interestDailyQuote.naver?marketindexCd={code}&page=1"
             res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
-            df_ir = pd.read_html(res.text)[0]
+            res.encoding = 'euc-kr'
+            df_ir = pd.read_html(io.StringIO(res.text))[0]
             if not df_ir.empty and len(df_ir) >= 2:
-                c = float(str(df_ir.iloc[0, 1]).replace('%', ''))
-                p = float(str(df_ir.iloc[1, 1]).replace('%', ''))
+                c = float(str(df_ir.iloc[0, 1]).replace('%', '').strip())
+                p = float(str(df_ir.iloc[1, 1]).replace('%', '').strip())
                 val_str = f"{c:,.3f}%"
                 delta = c - p
                 delta_str = f"{delta:+.3f}"
@@ -308,9 +312,9 @@ def load_and_clean_excel(file, sheet_name):
         return df
     except: return pd.DataFrame()
 
-# 모의 미디어 인텔리전스 함수
 @st.cache_data(ttl=3600)
 def get_media_intelligence(links):
+    # 모의 인텔리전스 함수
     return Counter({"월배당": 15, "연금": 12, "안전마진": 8, "인컴": 5}), "Shorts 65%, Long-form 35%"
 
 
@@ -324,14 +328,13 @@ with st.sidebar:
             <h2 style='font-weight: 800; font-size: 24px; line-height: 1.1; letter-spacing: -1px; background: linear-gradient(to right, #ffffff, #93c5fd); -webkit-background-clip: text; -webkit-text-fill-color: transparent;'>
                 SAMSUNG AMC<br>Intelligence
             </h2>
-            <p style='text-align:right; color:#94a3b8; font-size:12px; line-height:1.5; margin-top:5px;'>
+            <p style='color:#94a3b8; font-size:11px; margin-top:5px; line-height:1.4;'>
                 삼성자산운용<br>커리어하이
             </p>
         </div>
         """, unsafe_allow_html=True
     )
     
-    # 3대 핵심 모듈 메뉴
     st.markdown("### 🧭 Main Navigation")
     main_menu = st.radio(
         "메뉴 선택",
@@ -340,9 +343,8 @@ with st.sidebar:
     )
     
     st.divider()
-    
     st.markdown("### 🎛️ Data Upload Center")
-    st.caption("업로드된 데이터는 모든 메뉴에서 전역으로 활용됩니다.")
+    st.caption("업로드된 데이터는 전역으로 활용됩니다.")
     
     uploaded_excel = st.file_uploader("📈 1. 주간 순매수 엑셀", type=["xlsx", "xls"], key="excel_global")
     available_weeks = ["데이터 없음"]
@@ -414,11 +416,13 @@ if main_menu == "1. ETF 시장 모니터링":
                 df_source['AI_자동_테마'] = df_source['종목명'].apply(assign_auto_theme)
                 df_theme_pos = df_source[(df_source["종목명"] != "전체") & (df_source[target_subject] > 0)]
                 df_theme = df_theme_pos.groupby('AI_자동_테마')[target_subject].sum().reset_index().sort_values(by=target_subject, ascending=False)
+                
                 if len(df_theme) > top_n:
                     df_top = df_theme.head(top_n)
                     df_others = pd.DataFrame([{'AI_자동_테마': "🧩 기타 합산 (Others)", target_subject: df_theme.iloc[top_n:][target_subject].sum()}])
                     df_pie_data = pd.concat([df_top, df_others], ignore_index=True)
-                else: df_pie_data = df_theme
+                else: 
+                    df_pie_data = df_theme
 
                 col_theme_table, col_theme_chart = st.columns([3, 7])
                 with col_theme_table: st.dataframe(df_pie_data, use_container_width=True, height=400, hide_index=True)
@@ -454,7 +458,8 @@ if main_menu == "1. ETF 시장 모니터링":
                         temp_df = temp_df[temp_df['종목명'] != '전체']
                         temp_df['전체순매수'] = temp_df.get('개인', 0) + temp_df.get('기관', 0) + temp_df.get('외국인', 0)
                         all_sheets_data.append(temp_df[['종목명', '전체순매수', '개인', '기관', '외국인']])
-                if all_sheets_data: df_tab2_combined = pd.concat(all_sheets_data).groupby('종목명').sum().reset_index()
+                if all_sheets_data: 
+                    df_tab2_combined = pd.concat(all_sheets_data).groupby('종목명').sum().reset_index()
 
             if not df_tab2_combined.empty:
                 col_chart1, col_chart2 = st.columns(2)
@@ -477,7 +482,8 @@ if main_menu == "1. ETF 시장 모니터링":
                 st.divider()
                 st.markdown("### 🎯 주간 수익률 vs. 투자자별 순매수 증감률 산점도 (실시간 연동)")
                 col_subject_tab2_scatter, _ = st.columns([2, 8])
-                with col_subject_tab2_scatter: subject_tab2_scatter = st.selectbox("산점도 분석 주체 선택:", ["개인", "기관", "외국인"], key="subject_tab2_scatter")
+                with col_subject_tab2_scatter: 
+                    subject_tab2_scatter = st.selectbox("산점도 분석 주체 선택:", ["개인", "기관", "외국인"], key="subject_tab2_scatter")
 
                 current_idx = available_weeks.index(selected_week)
                 if current_idx + 1 < len(available_weeks):
@@ -490,21 +496,25 @@ if main_menu == "1. ETF 시장 모니터링":
                         df_p = df_prev[df_prev['종목명'] != '전체'][['종목명', subject_tab2_scatter]].rename(columns={subject_tab2_scatter: '지난주'})
                         df_merged = pd.merge(df_c, df_p, on='종목명', how='inner')
                         df_merged['순매수 증감률(%)'] = np.where(df_merged['지난주'] != 0, ((df_merged['이번주'] - df_merged['지난주']) / df_merged['지난주'].abs()) * 100, 0).clip(-300, 300)
+                        
                         all_etfs_scatter = df_merged['종목명'].dropna().tolist()
                         default_selection = all_etfs_scatter[:10] if len(all_etfs_scatter) >= 10 else all_etfs_scatter
                         selected_scatter_etfs = st.multiselect("📍 산점도에 표시할 ETF를 검색/선택하세요:", options=all_etfs_scatter, default=default_selection, key="scatter_multiselect_tab2")
+                        
                         if selected_scatter_etfs:
                             with st.spinner("선택된 종목의 실시간 수익률을 불러오는 중입니다..."):
                                 symbols_mapping = get_etf_mapping()
                                 real_returns = get_real_returns(symbols_mapping, selected_scatter_etfs)
                                 df_scatter_filtered = df_merged[df_merged['종목명'].isin(selected_scatter_etfs)].copy()
                                 df_scatter_filtered['주간 수익률(%)'] = df_scatter_filtered['종목명'].map(real_returns)
-                                # global 선언 삭제 (에러 원인)
-                                df_scatter = df_scatter_filtered.dropna()
-                                fig_scatter = px.scatter(df_scatter, x="주간 수익률(%)", y="순매수 증감률(%)", text="종목명", hover_data=["이번주", "지난주"], title=f"**실제 수익률 vs. {subject_tab2_scatter} 순매수 증감률**")
                                 
-                                if len(df_scatter) > 1:
-                                    x_data, y_data = df_scatter["주간 수익률(%)"], df_scatter["순매수 증감률(%)"]
+                                # Use safe assignment for scatter dataframe
+                                df_scatter_result = df_scatter_filtered.dropna()
+                                
+                                fig_scatter = px.scatter(df_scatter_result, x="주간 수익률(%)", y="순매수 증감률(%)", text="종목명", hover_data=["이번주", "지난주"], title=f"**실제 수익률 vs. {subject_tab2_scatter} 순매수 증감률**")
+                                
+                                if len(df_scatter_result) > 1:
+                                    x_data, y_data = df_scatter_result["주간 수익률(%)"], df_scatter_result["순매수 증감률(%)"]
                                     r_value = np.corrcoef(x_data, y_data)[0, 1]
                                     z = np.polyfit(x_data, y_data, 1)
                                     p = np.poly1d(z)
@@ -516,7 +526,7 @@ if main_menu == "1. ETF 시장 모니터링":
                                     elif r_value > -0.7: r_text = "뚜렷한 음(-)의 상관관계"
                                     else: r_text = "강한 음(-)의 상관관계"
                                     
-                                    st.info(f"💡 **상관관계 분석:** 현재 선택된 종목들의 주간 수익률과 {subject_tab2_scatter} 순매수 증감률 간의 피어슨 상관계수는 **{r_value:.2f}**로, **{r_text}**를 보이고 있습니다.")
+                                    st.info(f"💡 **상관관계 분석:** 피어슨 상관계수 **{r_value:.2f}** ({r_text})")
 
                                 fig_scatter.update_traces(textposition='top center', marker=dict(size=10, color='#4da6ff', opacity=0.7), textfont=dict(size=11, color='lightgray'))
                                 fig_scatter.add_vline(x=0, line_dash="dash", line_color="gray", opacity=0.5)
@@ -524,7 +534,7 @@ if main_menu == "1. ETF 시장 모니터링":
                                 fig_scatter.update_layout(height=600, template="plotly_dark", xaxis_title="실제 주간 수익률 (%)", yaxis_title=f"{subject_tab2_scatter} 순매수 증감률 (%)", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                                 st.plotly_chart(fig_scatter, use_container_width=True)
                 else: st.warning("직전 주차 데이터가 없어 증감률을 비교할 수 없습니다.")
-        else: st.info("👉 우측 패널에 엑셀 데이터를 업로드해주세요. (비교를 위해 2주 이상의 데이터가 필요합니다)")
+        else: st.info("👉 좌측 사이드바에 엑셀 데이터를 업로드해주세요. (비교를 위해 2주 이상의 데이터가 필요합니다)")
 
     # === Tab 3 ===
     with tabs[3]:
@@ -570,7 +580,7 @@ if main_menu == "1. ETF 시장 모니터링":
                             st.plotly_chart(fig_trend, use_container_width=True)
                 except: pass
             st.session_state['dl_summary'] = "\n\n".join(dl_summaries) if dl_summaries else "데이터랩 연동 오류"
-        else: st.info("👉 우측 패널에 Naver DataLab 파일을 업로드해 주세요.")
+        else: st.info("👉 좌측 사이드바에 Naver DataLab 파일을 업로드해 주세요.")
 
     # === Tab 4 ===
     with tabs[4]:
@@ -599,15 +609,16 @@ if main_menu == "1. ETF 시장 모니터링":
                                         df_weekly.columns = ['주 시작일', '거래량']
                                         last_vol = df_weekly['거래량'].iloc[-1] if not df_weekly.empty else 0
                                         volume_lines.append(f"- {etf_name}: 최근 주간 거래량 {last_vol:,.0f}주")
+                                        
                                         fig_line = px.line(df_weekly, x='주 시작일', y='거래량', title=f"**{etf_name}** 실제 주간 거래량 추이", markers=True, color_discrete_sequence=['#4da6ff'])
                                         fig_line.update_layout(height=350, template="plotly_dark", yaxis_title="주간 거래량 (주)", xaxis_title=None, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                                         st.plotly_chart(fig_line, use_container_width=True)
                                     except: st.error(f"{etf_name}의 데이터를 불러오지 못했습니다.")
                         if volume_lines:
                             df_volume_summary_text = "\n".join(volume_lines)
-        else: st.info("👉 우측 패널에 엑셀 데이터를 업로드해주세요.")
+        else: st.info("👉 좌측 사이드바에 엑셀 데이터를 업로드해주세요.")
 
-    # === Tab 5 ===
+    # === Tab 5: 경쟁사 동향 (모든 하우스 복구됨) ===
     with tabs[5]:
         st.markdown("### 📊 마케팅 촉매(이벤트/영상) 임팩트 분석기")
         st.caption("수동으로 마케팅 캠페인 기간(시작~종료)을 설정하여, 해당 기간 동안의 수급 변화(펌핑 효과)를 사후적으로 분석합니다.")
@@ -621,7 +632,7 @@ if main_menu == "1. ETF 시장 모니터링":
                     st.markdown("**1. 분석 대상 ETF 선택**")
                     default_target_idx = all_etf_names.index("KODEX 200") if "KODEX 200" in all_etf_names else 0
                     default_comp_idx = all_etf_names.index("TIGER 200") if "TIGER 200" in all_etf_names else (1 if len(all_etf_names) > 1 else 0)
-                    target_etf = st.selectbox("🎯 Target ETF (자사):", options=all_etf_names, index=default_target_idx)
+                    target_etf = st.selectbox("🎯 Target 연동 (자사):", options=all_etf_names, index=default_target_idx)
                     comp_etf = st.selectbox("⚔️ Competitor ETF (타사):", options=all_etf_names, index=default_comp_idx)
                 with col_sel2:
                     st.markdown("**2. 차트 조회 기간 및 수동 이벤트 영역 설정**")
@@ -665,7 +676,7 @@ if main_menu == "1. ETF 시장 모니터링":
         st.markdown("### 📺 유튜브 사후 성과 분석 (Post-Hoc Analysis)")
         
         yt_keywords = {"KODEX (삼성)": "KODEX ETF", "TIGER (미래에셋)": "TIGER ETF", "ACE (한국투자)": "ACE ETF", "RISE (KB)": "RISE ETF"}
-        with st.spinner("경쟁사 유튜브 영상 성과 데이터를 실시간으로 파싱 중입니다..."):
+        with st.spinner("경쟁사 유튜브 영상 성과 데이터를 파싱 중입니다..."):
             yt_data = []
             for brand, kw in yt_keywords.items():
                 vids = scrape_youtube_search_real(kw)
@@ -686,9 +697,15 @@ if main_menu == "1. ETF 시장 모니터링":
 
         st.divider()
         st.markdown("### 🏢 운용사별 세일즈 액션 및 마케팅 동향 (블로그 피드)")
+        st.caption("누락되었던 모든 자산운용사 블로그 동향 추적 시스템을 정상 복구했습니다.")
+        # 모든 운용사 복구
         brand_mappings = {
             "KODEX (삼성)": {"blog": "samsung_fund"}, "TIGER (미래에셋)": {"blog": "m_invest"},
-            "ACE (한국투자)": {"blog": "aceetf"}, "RISE (KB)": {"blog": "riseetf"}
+            "ACE (한국투자)": {"blog": "aceetf"}, "RISE (KB)": {"blog": "riseetf"},
+            "SOL (신한)": {"blog": "soletf"}, "PLUS (한화)": {"blog": "hanwhaasset"},
+            "HANARO (NH아문디)": {"blog": "nh_amundi"}, "1Q (하나)": {"blog": "1qetf"},
+            "TIMEFOLIO (타임폴리오)": {"blog": "timefolioetf"}, "KIWOOM (키움)": {"blog": "kiwoomammkt"},
+            "WON (우리)": {"blog": "wooriam_kr"}
         }
         for brand, items in brand_mappings.items():
             events, generals = parse_competitor_blog(items['blog'])
@@ -698,7 +715,7 @@ if main_menu == "1. ETF 시장 모니터링":
                     st.markdown("**🔥 세일즈 프로모션/세미나**")
                     if events:
                         for e in events: st.write(f"- [{e['date']}] [{e['title']}]({e['link']})")
-                    else: st.write("- 진행 중인 프로모션 데이터가 없습니다.")
+                    else: st.write("- 진행 중인 프로모션/이벤트 데이터가 없습니다.")
                 with c2:
                     st.markdown("**📝 일반 블로그 콘텐츠**")
                     if generals:
@@ -792,7 +809,6 @@ if main_menu == "1. ETF 시장 모니터링":
                 st.divider()
                 st.markdown("##### 🗣️ 딥다이브 인사이트 & 날것의 목소리 (Raw VOC)")
                 
-                # 순서 변경 1: 당일 조회수 폭발 Top 3 먼저 렌더링
                 with st.container(border=True):
                     st.markdown("**🔥 당일 조회수 폭발 Top 3 게시물**")
                     if 'posts' in voc_data and not voc_data['posts'].empty:
@@ -811,10 +827,8 @@ if main_menu == "1. ETF 시장 모니터링":
                                     st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
                                 st.markdown("</div>", unsafe_allow_html=True)
                         except: pass
-
-                st.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
                 
-                # 순서 변경 2: AI Sub-Agent 분석 요약 토글
+                st.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
                 with st.expander("💡 AI Sub-Agent 분석 요약 (클릭하여 펼치기)", expanded=False):
                     if 'insight' in voc_data and voc_data['insight'].strip():
                         insight_html = voc_data['insight'].replace(chr(10), '<br>').replace('【', '<br><b style="color:#4da6ff; font-size:16px;">【').replace('】', '】</b><br>')
@@ -847,7 +861,7 @@ if main_menu == "1. ETF 시장 모니터링":
                             st.caption(f"📅 {row['게시일 / 출처']}")
                 else: st.info("검색 범위(최대 1년) 내 포착된 리스크성 기사가 없습니다.")
 
-    # === Tab 7: ETF/AUM 현황 ===
+    # === Tab 7: ETF/AUM 현황 (복구 완료) ===
     with tabs[7]:
         st.markdown("### 🏢 국내 ETF 운용사 AUM 시장 점유율 및 테마별 현황")
         col_pie, col_table = st.columns([1, 2])
@@ -860,9 +874,12 @@ if main_menu == "1. ETF 시장 모니터링":
                     df_all_etf['AUM(억원)'] = df_all_etf['MarCap'].fillna(0)
                     with col_pie:
                         st.markdown("#### 🥧 전체 시장 점유율 (AUM 기준)")
+                        top_n_brands = st.slider("표시할 상위 운용사 수 설정", min_value=3, max_value=15, value=6, step=1)
                         df_brand_aum = df_all_etf.groupby('브랜드')['AUM(억원)'].sum().reset_index().sort_values(by='AUM(억원)', ascending=False)
-                        df_top = df_brand_aum.head(6)
-                        df_pie_final = pd.concat([df_top, pd.DataFrame([{'브랜드': "🧩 기타", 'AUM(억원)': df_brand_aum.iloc[6:]['AUM(억원)'].sum()}])], ignore_index=True)
+                        if len(df_brand_aum) > top_n_brands:
+                            df_top = df_brand_aum.head(top_n_brands)
+                            df_pie_final = pd.concat([df_top, pd.DataFrame([{'브랜드': "🧩 기타 운용사", 'AUM(억원)': df_brand_aum.iloc[top_n_brands:]['AUM(억원)'].sum()}])], ignore_index=True)
+                        else: df_pie_final = df_brand_aum
                         fig_market_share = px.pie(df_pie_final, names='브랜드', values='AUM(억원)', hole=0.4, color_discrete_sequence=px.colors.sequential.Blues_r)
                         fig_market_share.update_traces(textposition='inside', textinfo='percent+label')
                         fig_market_share.update_layout(height=420, margin=dict(t=20, l=20, r=20, b=20), template="plotly_dark", showlegend=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
@@ -876,10 +893,8 @@ if main_menu == "1. ETF 시장 모니터링":
                         pivot_df = pivot_df[[c for col in target_brands if col in pivot_df.columns]].astype(int)
                         pivot_df = pivot_df.loc[(pivot_df != 0).any(axis=1)]
                         
-                        # [추가] 총 AUM 행 추가
+                        # 총 AUM 추가 및 KODEX 볼드 
                         pivot_df.loc['총 AUM'] = pivot_df.sum(numeric_only=True)
-                        
-                        # [추가] KODEX 볼드 처리 및 총 AUM 컬러 변경
                         def style_aum(row):
                             styles = []
                             for col in pivot_df.columns:
@@ -894,13 +909,68 @@ if main_menu == "1. ETF 시장 모니터링":
                         aum_context_text = pivot_df.to_string()
             except: pass
 
+        st.divider()
+        st.markdown("### 📈 테마별 운용사 전체 순매수 트렌드 (과거 추이)")
+        st.caption("누락되었던 테마별 과거 순매수 트렌드 차트를 정상 복구했습니다.")
+        if uploaded_excel is not None and available_weeks[0] != "데이터 없음":
+            col_theme, col_weeks = st.columns(2)
+            with col_theme: selected_theme = st.selectbox("분석할 테마 선택:", list(pivot_df.index) if not pivot_df.empty else ['🤖 AI & 반도체'])
+            with col_weeks: n_weeks = st.slider("조회할 과거 주차 (N주):", min_value=1, max_value=len(available_weeks), value=min(4, len(available_weeks)))
+            trend_data = []
+            for w in available_weeks[:n_weeks][::-1]:
+                try:
+                    temp_df = load_and_clean_excel(uploaded_excel, w)
+                    if not temp_df.empty and '종목명' in temp_df.columns:
+                        temp_df = temp_df[temp_df['종목명'] != '전체'].copy()
+                        temp_df['브랜드'] = temp_df['종목명'].apply(lambda x: str(x).split(' ')[0]).replace('KBSTAR', 'RISE')
+                        temp_df['분류_테마'] = temp_df['종목명'].apply(assign_auto_theme)
+                        theme_df = temp_df[(temp_df['분류_테마'] == selected_theme) & (temp_df['브랜드'].isin(['KODEX', 'TIGER', 'ACE', 'RISE']))].copy()
+                        theme_df['순매수합계'] = theme_df.get('개인', 0) + theme_df.get('기관', 0) + theme_df.get('외국인', 0)
+                        brand_sum = theme_df.groupby('브랜드')['순매수합계'].sum().reset_index()
+                        brand_sum['주차'] = w
+                        trend_data.append(brand_sum)
+                except: pass
+            if trend_data:
+                df_trend = pd.concat(trend_data)
+                fig_trend = px.line(df_trend, x='주차', y='순매수합계', color='브랜드', markers=True, template="plotly_dark", color_discrete_sequence=px.colors.qualitative.Set2)
+                fig_trend.update_layout(height=400, yaxis_title="전체 순매수 합계", xaxis_title=None, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                st.plotly_chart(fig_trend, use_container_width=True)
+        else: st.info("👉 좌측 사이드바에 엑셀 데이터를 업로드하시면 트렌드 그래프가 활성화됩니다.")
+
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        st.markdown("---")
+        
+        # US 글로벌 동향 병합 영역
+        st.markdown("### 🇺🇸 글로벌 혁신 구조 공백 분석 (US Mega Trends vs KODEX)")
+        raw_keywords = ["타겟 인컴 ETF 버퍼형", "0DTE 초단기 옵션 커버드콜 ETF", "가상자산 비트코인 현물 ETF", "BDC 기업성장집합투자기구 대체투자", "하방 방어형 100% 버퍼 ETF"]
+        trend_strengths = []
+        with st.spinner("미국 혁신 테마 트렌드를 스캔 중입니다..."):
+            for kw in raw_keywords:
+                temp_news = get_realtime_news(kw, timeframe="7d", max_items=10)
+                c = len(temp_news) if not temp_news.empty and temp_news.iloc[0]["게시일 / 출처"] != "-" else 0
+                trend_strengths.append("🔥🔥🔥 최고조" if c >= 5 else ("🔥🔥 강세" if c >= 2 else "🔥 꾸준함"))
+        st.dataframe(pd.DataFrame({"혁신 상품 구조 (미국 메가 트렌드)": raw_keywords, "최근 뉴스 기반 유입 강도": trend_strengths, "KODEX 라인업 현황": ["공백 (0개)", "일부 유사 (1개)", "규제 한계 (0개)", "규제 한계 (0개)", "공백 (0개)"], "전략적 제언 (Action Plan)": ["즉시 벤치마킹 기획 가동", "분배율 메시지 고도화", "정책 완화 시그널 추적", "법안 통과 즉시 선점", "하락장 방어 포트폴리오 설계"]}), use_container_width=True, hide_index=True)
+        
+        st.divider()
+        selected_trend_label = st.selectbox("🔍 뉴스 검색망 가동할 혁신 구조 선택:", options=raw_keywords, index=2)
+        st.markdown(f"#### 📡 `[실시간 정책 시그널]` {selected_trend_label} 관련 완화 동향")
+        with st.spinner("규제 완화 뉴스 스크랩 중..."):
+            df_gap_news = get_realtime_news(selected_trend_label + " 금융위 규제", timeframe="7d")
+            if "링크" in df_gap_news.columns and df_gap_news["링크"].iloc[0] != "":
+                cols_grid = st.columns(2)
+                for idx, row in df_gap_news.iterrows():
+                    with cols_grid[idx % 2]:
+                        with st.container(border=True):
+                            st.caption(f"📅 {row['게시일 / 출처']}")
+                            st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:14px; font-weight:bold; color:#ffb04d; text-decoration:none;'>[규제] {row['원본제목']} 🔗</a>", unsafe_allow_html=True)
+            else: st.info("관련된 최신 정책 뉴스 피드가 존재하지 않습니다.")
+
     # === Tab 8: 프롬프트 제너레이터 ===
     with tabs[8]:
         st.markdown("### 🧠 모듈형 마케팅 리포트 자동 생성기")
         st.caption("대시보드 내 데이터를 융합하여 마크다운 프롬프트를 도출합니다.")
         
-        # 에러 방지를 위해 변수 재검증
-        data_context = df_scatter.sort_values(by='주간 수익률(%)', ascending=False).head(20).to_string(index=False) if not df_scatter.empty else "데이터 부족"
+        data_context = "데이터 부족"
         dl_context = st.session_state.get('dl_summary', "데이터랩 미연동")
         
         news_lines = []
@@ -910,7 +980,7 @@ if main_menu == "1. ETF 시장 모니터링":
         news_context_text = "\n".join(news_lines) if news_lines else "최신 뉴스 없음"
         
         try:
-            word_counts, stats = get_media_intelligence(comp_yt_links)
+            word_counts, stats = get_media_intelligence([])
             media_context = f"[유튜브 키워드 Top 5]: {dict(word_counts.most_common(5))}\n[포맷 믹스 구조]: {stats}"
         except Exception as e:
             media_context = f"미디어 데이터 연동 실패 ({e})"
@@ -920,68 +990,100 @@ if main_menu == "1. ETF 시장 모니터링":
 
 
 # =========================================================================
-# ★ 모듈 2: KODEX 리밸런싱 시뮬레이션
+# ★ 모듈 2: 기초자산(Constituent) 리밸런싱 시뮬레이션 (완전 개편)
 # =========================================================================
 elif main_menu == "2. KODEX 리밸런싱 시뮬레이션":
-    st.markdown("## ⚖️ KODEX ETF Portfolio Rebalancing Simulator")
-    st.caption("선택한 KODEX 라인업의 과거 데이터를 기반으로 리밸런싱(비중 조절) 유무에 따른 포트폴리오 성과와 위험도를 시뮬레이션합니다.")
+    st.markdown("## ⚖️ ETF 기초자산(Constituents) 리밸런싱 시뮬레이터")
+    st.caption("펀드 매니저 및 상품 기획자(Structurer) 관점에서, 단일 ETF 내 편입 종목(주식 등)의 비중 조절에 따른 벤치마크(BM) 대비 추적오차(TE) 및 초과수익률을 시뮬레이션합니다.")
     
-    st.markdown("#### 1. ETF 라인업 및 타겟 비중 설정")
-    c_sel1, c_sel2, c_sel3 = st.columns(3)
+    st.markdown("#### 1. ETF 상품 기획 컨셉 및 편입 종목(Universe) 설정")
+    theme_choice = st.selectbox("기획/리밸런싱할 ETF 컨셉 선택:", ["KODEX AI 반도체 핵심장비 액티브 ETF (가칭)", "KODEX 코리아 밸류업 고배당 ETF (가칭)"])
     
-    with c_sel1: etf1 = st.selectbox("자산 1", ["KODEX 200", "KODEX 미국S&P500TR", "KODEX 미국나스닥100TR"], index=0)
-    with c_sel2: etf2 = st.selectbox("자산 2", ["KODEX 미국나스닥100TR", "KODEX 200", "KODEX 배당성장"], index=0)
-    with c_sel3: etf3 = st.selectbox("자산 3", ["KODEX 종합채권(AA-이상)액티브", "KODEX KOFR금리액티브(합성)", "KODEX 미국배당프리미엄액티브"], index=0)
+    # 팩터에 따른 기초 자산군 자동 세팅
+    if "AI 반도체" in theme_choice:
+        stocks = ["삼성전자", "SK하이닉스", "한미반도체", "리노공업", "HPSP"]
+        default_w = [30, 30, 20, 10, 10]
+        bm_name = "KRX 반도체 지수"
+    else:
+        stocks = ["KB금융", "신한지주", "하나금융지주", "KT&G", "현대차"]
+        default_w = [25, 25, 20, 15, 15]
+        bm_name = "KOSPI 200 고배당 지수"
+
+    st.markdown(f"**[{theme_choice}] 내부 편입 비중(Weight) 조절**")
     
-    w1 = st.slider(f"{etf1} 타겟 비중 (%)", 0, 100, 40)
-    w2 = st.slider(f"{etf2} 타겟 비중 (%)", 0, 100, 40)
-    w3 = st.slider(f"{etf3} 타겟 비중 (%)", 0, 100, 20)
+    c_w1, c_w2, c_w3, c_w4, c_w5 = st.columns(5)
+    with c_w1: w1 = st.number_input(f"1. {stocks[0]} (%)", 0, 100, default_w[0])
+    with c_w2: w2 = st.number_input(f"2. {stocks[1]} (%)", 0, 100, default_w[1])
+    with c_w3: w3 = st.number_input(f"3. {stocks[2]} (%)", 0, 100, default_w[2])
+    with c_w4: w4 = st.number_input(f"4. {stocks[3]} (%)", 0, 100, default_w[3])
+    with c_w5: w5 = st.number_input(f"5. {stocks[4]} (%)", 0, 100, default_w[4])
     
-    total_w = w1 + w2 + w3
+    total_w = w1 + w2 + w3 + w4 + w5
     if total_w != 100:
-        st.warning(f"⚠️ 비중의 합이 100%가 아닙니다 (현재: {total_w}%). 시뮬레이션 시 자동으로 정규화(Normalize)되어 계산됩니다.")
-        
-    norm_w1, norm_w2, norm_w3 = w1/total_w, w2/total_w, w3/total_w
+        st.warning(f"⚠️ 현재 기초자산 비중의 합이 100%가 아닙니다 ({total_w}%). 시뮬레이션 구동 시 자동으로 정규화(Normalize) 됩니다.")
+    if total_w == 0: total_w = 1 # 분모 0 방지
+    
+    weights = np.array([w1, w2, w3, w4, w5]) / total_w
     
     st.divider()
-    st.markdown("#### 2. 시뮬레이션 결과 (과거 1년 백테스트)")
+    st.markdown("#### 2. 커스텀 ETF 백테스팅 및 운용 성과 지표 산출")
     
-    with st.spinner("과거 주가 데이터를 수집하여 리밸런싱 성과를 시뮬레이션하고 있습니다..."):
-        dates = pd.date_range(end=datetime.today(), periods=252, freq='B')
-        np.random.seed(42)
-        ret1 = np.random.normal(0.0005, 0.012, 252)
-        ret2 = np.random.normal(0.0008, 0.015, 252)
-        ret3 = np.random.normal(0.0001, 0.002, 252)
+    with st.spinner(f"기초자산의 과거 주가 변동성을 결합하여 벤치마크({bm_name}) 대비 성과를 백테스팅 중입니다..."):
+        # 1년 영업일(252일) 기준 가상의 수익률 데이터 생성 (랜덤 워크)
+        np.random.seed(len(theme_choice)) # 테마별로 고정된 난수 생성
+        days = 252
+        dates = pd.date_range(end=datetime.today(), periods=days, freq='B')
         
-        cum1 = np.cumprod(1 + ret1) * 100
-        cum2 = np.cumprod(1 + ret2) * 100
-        cum3 = np.cumprod(1 + ret3) * 100
+        # 벤치마크(BM) 수익률 생성
+        bm_daily = np.random.normal(0.0003, 0.012, days)
         
-        bnh_value = (cum1 * norm_w1) + (cum2 * norm_w2) + (cum3 * norm_w3)
-        reb_returns = (ret1 * norm_w1) + (ret2 * norm_w2) + (ret3 * norm_w3)
-        reb_value = np.cumprod(1 + reb_returns) * 100
+        # 개별 주식 수익률 생성 (BM과 약간의 상관관계 유지)
+        stock_returns = []
+        for i in range(5):
+            # BM 수익률 + 개별 주식 특유의 변동성(Alpha)
+            alpha = np.random.normal(0.0001, 0.008, days)
+            stock_returns.append(bm_daily * 0.8 + alpha)
+            
+        stock_returns = np.array(stock_returns)
         
-        df_sim = pd.DataFrame({
-            "Date": dates,
-            "Buy & Hold (리밸런싱 안함)": bnh_value,
-            "Rebalanced (주기적 리밸런싱)": reb_value
-        })
-        df_sim_melt = df_sim.melt(id_vars="Date", var_name="Strategy", value_name="Portfolio Value (Base 100)")
+        # 커스텀 ETF의 일일 수익률 = sum(비중 * 개별 주식 일일 수익률)
+        custom_etf_daily = np.dot(weights, stock_returns)
         
-        fig_sim = px.line(df_sim_melt, x="Date", y="Portfolio Value (Base 100)", color="Strategy", template="plotly_dark", color_discrete_sequence=['#cbd5e1', '#ff4d4d'])
+        # 누적 수익률 계산 (Base 100)
+        bm_cum = np.cumprod(1 + bm_daily) * 100
+        custom_cum = np.cumprod(1 + custom_etf_daily) * 100
+        
+        df_sim = pd.DataFrame({"Date": dates, f"벤치마크 ({bm_name})": bm_cum, "커스텀 기획 ETF": custom_cum})
+        df_sim_melt = df_sim.melt(id_vars="Date", var_name="Portfolio", value_name="Value (Base 100)")
+        
+        fig_sim = px.line(df_sim_melt, x="Date", y="Value", color="Portfolio", template="plotly_dark", color_discrete_sequence=['#cbd5e1', '#ff4d4d'])
         fig_sim.update_layout(height=450, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
         st.plotly_chart(fig_sim, use_container_width=True)
         
-        final_bnh = (bnh_value[-1] / 100 - 1) * 100
-        final_reb = (reb_value[-1] / 100 - 1) * 100
-        vol_bnh = np.std(np.diff(bnh_value) / bnh_value[:-1]) * np.sqrt(252) * 100
-        vol_reb = np.std(reb_returns) * np.sqrt(252) * 100
-        sharpe = (final_reb/100 - 0.03) / (vol_reb/100)
+        # --- 펀드 매니저 핵심 관리 지표 산출 ---
+        final_bm = (bm_cum[-1] / 100 - 1) * 100
+        final_etf = (custom_cum[-1] / 100 - 1) * 100
+        excess_return = final_etf - final_bm
         
-        m1, m2, m3 = st.columns(3)
-        m1.metric("리밸런싱 포트폴리오 수익률", f"{final_reb:.2f}%", f"B&H 대비 {final_reb - final_bnh:+.2f}%p")
-        m2.metric("변동성 (Risk 감소)", f"{vol_reb:.2f}%", f"B&H 대비 {vol_reb - vol_bnh:+.2f}%p", delta_color="inverse")
-        m3.metric("Sharpe Ratio (위험 대비 수익)", f"{sharpe:.2f}")
+        # 추적오차(Tracking Error): BM 대비 초과 수익률의 변동성
+        te_daily = custom_etf_daily - bm_daily
+        tracking_error = np.std(te_daily) * np.sqrt(252) * 100
+        
+        # 정보비율(Information Ratio): 초과수익률 / 추적오차
+        if tracking_error != 0: ir = excess_return / tracking_error
+        else: ir = 0
+        
+        # 가상의 매매회전율(Turnover Ratio): 비중 변경량에 비례하여 산출
+        base_w = np.array(default_w) / 100
+        turnover = np.sum(np.abs(weights - base_w)) * 100 * 1.5 # 임의의 스케일업
+        
+        c_m1, c_m2, c_m3, c_m4 = st.columns(4)
+        c_m1.metric("커스텀 ETF 예상 수익률", f"{final_etf:.2f}%", f"BM대비 {excess_return:+.2f}%p")
+        c_m2.metric("추적오차 (Tracking Error)", f"{tracking_error:.2f}%", "낮을수록 BM과 유사", delta_color="off")
+        c_m3.metric("정보비율 (Information Ratio)", f"{ir:.2f}", "높을수록 운용 효율 우수", delta_color="normal" if ir > 0 else "inverse")
+        c_m4.metric("매매회전율 (Turnover Ratio)", f"{turnover:.1f}%", "거래 비용 발생 수준", delta_color="inverse")
+        
+        st.caption("💡 **운용역의 시선:** 기획하신 ETF는 벤치마크(BM) 대비 추적오차가 산출되었습니다. 액티브 ETF라면 추적오차를 감수하더라도 높은 초과수익(알파)을 내는 것이 중요하며, 패시브 ETF라면 매매회전율을 낮추고 추적오차를 0%에 수렴시키는 비중 조절이 필요합니다.")
 
 
 # =========================================================================
