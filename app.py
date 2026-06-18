@@ -23,7 +23,7 @@ if 'df_scatter' not in st.session_state:
 comp_yt_links = []
 
 # ==========================================
-# ★ Glassmorphism 커스텀 CSS (라이트 모드 충돌 완벽 방어)
+# ★ Glassmorphism 커스텀 CSS (라이트 모드 충돌 완벽 방어 적용)
 # ==========================================
 glassmorphism_css = """
 <style>
@@ -71,10 +71,41 @@ glassmorphism_css = """
     background-color: rgba(15, 23, 42, 0.8) !important;
     border-right: 1px solid rgba(255, 255, 255, 0.1);
 }
-/* 라이트 모드에서도 텍스트 박스 글씨가 무조건 흰색으로 보이도록 강제 고정 */
+/* 라이트 모드에서도 텍스트 박스 및 라벨 글씨가 무조건 흰색으로 보이도록 강제 고정 */
+[data-testid="stMarkdownContainer"] h1,
+[data-testid="stMarkdownContainer"] h2,
+[data-testid="stMarkdownContainer"] h3,
+[data-testid="stMarkdownContainer"] h4,
+[data-testid="stMarkdownContainer"] h5,
+[data-testid="stMarkdownContainer"] h6,
+[data-testid="stMarkdownContainer"] p,
+[data-testid="stMarkdownContainer"] span {
+    color: #f8fafc !important;
+}
+label, label p, [data-testid="stWidgetLabel"] p {
+    color: #f8fafc !important;
+}
+[data-testid="stCaptionContainer"] p {
+    color: #94a3b8 !important;
+}
+div[role="radiogroup"] p {
+    color: #ffffff !important;
+}
+[data-testid="stMetricLabel"] p {
+    color: #cbd5e1 !important;
+}
+[data-testid="stMetricValue"] div {
+    color: #ffffff !important;
+}
+[data-baseweb="tab"] p {
+    color: #94a3b8 !important;
+}
+[data-baseweb="tab"][aria-selected="true"] p {
+    color: #ffffff !important;
+}
 div[data-baseweb="textarea"] textarea {
-    background-color: #0f172a !important; /* 짙은 네이비 배경 */
-    color: #ffffff !important;           /* 텍스트 흰색 */
+    background-color: #0f172a !important;
+    color: #ffffff !important;
     -webkit-text-fill-color: #ffffff !important;
     border: 1px solid rgba(77, 166, 255, 0.5) !important;
 }
@@ -1020,7 +1051,7 @@ if main_menu == "1. ETF 시장 모니터링":
 
 
 # =========================================================================
-# ★ 모듈 2: ETF 기초자산(Constituents) 리밸런싱 (텍스트 복사-붙여넣기 방식 및 종목코드 0 채움 완벽 적용)
+# ★ 모듈 2: ETF 기초자산(Constituents) 리밸런싱 (텍스트 복사-붙여넣기 방식 및 종목코드/비중 정밀 클렌징 적용)
 # =========================================================================
 elif main_menu == "2. KODEX 리밸런싱 시뮬레이션":
     st.markdown("## ⚖️ ETF 기초자산(Constituents) 리밸런싱 시뮬레이터")
