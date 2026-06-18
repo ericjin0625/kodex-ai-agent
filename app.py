@@ -372,7 +372,7 @@ st.session_state.setdefault('dl_summary', "DataLab 데이터가 업로드되지 
 
 
 # =========================================================================
-# ★ 모듈 1: ETF 시장 모니터링 (원상 복구 완벽 보존)
+# ★ 모듈 1: ETF 시장 모니터링
 # =========================================================================
 if main_menu == "1. ETF 시장 모니터링":
     st.markdown("## 📊 ETF Market Intelligence")
@@ -1008,7 +1008,7 @@ if main_menu == "1. ETF 시장 모니터링":
 
 
 # =========================================================================
-# ★ 모듈 2: ETF 기초자산(Constituents) 리밸런싱 (파일 업로드 방식)
+# ★ 모듈 2: ETF 기초자산(Constituents) 리밸런싱 (수동 파싱 완벽 적용)
 # =========================================================================
 elif main_menu == "2. KODEX 리밸런싱 시뮬레이션":
     st.markdown("## ⚖️ ETF 기초자산(Constituents) 리밸런싱 시뮬레이터")
@@ -1019,60 +1019,60 @@ elif main_menu == "2. KODEX 리밸런싱 시뮬레이션":
 
     if uploaded_pdf is not None:
         try:
-            # 1. 파일 읽기 및 파싱 (수동 쪼개기 방식 적용 - Pandas 의존도 0%)
+            # 1. 파일 읽기 및 파싱 (수동 분해 로직 적용 - Pandas 의존도 최소화)
             file_bytes = uploaded_pdf.getvalue()
             raw_pdf = pd.DataFrame()
             parsed = False
             
-            # (1) 진짜 바이너리 엑셀(.xlsx, .xls)부터 시도
-            try:
-                raw_pdf = pd.read_excel(io.BytesIO(file_bytes))
-                parsed = True
-            except: pass
-            
-            # (2) 텍스트/CSV 기반 수동 해독 (Pandas 행/열 불일치 에러 원천 차단)
-            if not parsed:
-                for enc in ['utf-8', 'cp949', 'euc-kr']:
-                    try:
-                        text_data = file_bytes.decode(enc, errors='replace')
+            # (1) 텍스트/CSV 기반 수동 해독 (Pandas 행/열 불일치 에러 원천 차단)
+            for enc in ['utf-8', 'cp949', 'euc-kr']:
+                try:
+                    text_data = file_bytes.decode(enc, errors='replace')
+                    
+                    if '<table' in text_data.lower():
+                        try:
+                            raw_pdf = pd.read_html(io.StringIO(text_data))[0]
+                            if not raw_pdf.empty:
+                                parsed = True
+                                break
+                        except: pass
                         
-                        if '<table' in text_data.lower():
-                            try:
-                                raw_pdf = pd.read_html(io.StringIO(text_data))[0]
-                                if not raw_pdf.empty:
-                                    parsed = True
-                                    break
-                            except: pass
-                            
-                        if not parsed:
-                            lines = text_data.split('\n')
-                            data = []
-                            start_idx = -1
-                            
-                            # 진짜 헤더 줄 찾기
-                            for i, line in enumerate(lines):
-                                clean_line = line.replace(" ", "")
-                                if '종목명' in clean_line and ('비중' in clean_line or '종목코드' in clean_line):
-                                    start_idx = i
-                                    break
-                                    
-                            if start_idx != -1:
-                                for line in lines[start_idx:]:
-                                    clean_line = line.strip()
-                                    if not clean_line: continue
-                                    if ',' in clean_line:
-                                        data.append(clean_line.split(','))
-                                    elif '\t' in clean_line:
-                                        data.append(clean_line.split('\t'))
-                                    else:
-                                        data.append([clean_line])
+                    if not parsed:
+                        lines = text_data.split('\n')
+                        data = []
+                        start_idx = -1
+                        
+                        # 진짜 헤더 줄 찾기
+                        for i, line in enumerate(lines):
+                            clean_line = line.replace(" ", "")
+                            if '종목명' in clean_line and ('비중' in clean_line or '종목코드' in clean_line):
+                                start_idx = i
+                                break
                                 
-                                raw_pdf = pd.DataFrame(data[1:], columns=data[0]) # 첫 줄을 헤더로
-                                if not raw_pdf.empty:
-                                    parsed = True
-                                    break
-                    except: pass
+                        if start_idx != -1:
+                            for line in lines[start_idx:]:
+                                clean_line = line.strip()
+                                if not clean_line: continue
+                                if ',' in clean_line:
+                                    data.append(clean_line.split(','))
+                                elif '\t' in clean_line:
+                                    data.append(clean_line.split('\t'))
+                                else:
+                                    data.append([clean_line])
+                            
+                            raw_pdf = pd.DataFrame(data[1:], columns=data[0]) # 첫 줄을 헤더로
+                            if not raw_pdf.empty:
+                                parsed = True
+                                break
+                except: pass
             
+            # (2) 진짜 바이너리 엑셀(.xlsx, .xls)부터 시도
+            if not parsed:
+                try:
+                    raw_pdf = pd.read_excel(io.BytesIO(file_bytes))
+                    parsed = True
+                except: pass
+
             if not parsed or raw_pdf.empty:
                 st.error("파일을 해독할 수 없습니다. KODEX 공식 사이트에서 다운로드한 형식이 맞는지 확인해주세요.")
                 st.stop()
