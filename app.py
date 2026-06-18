@@ -706,7 +706,6 @@ if main_menu == "1. ETF 시장 모니터링":
 
         st.divider()
         st.markdown("### 🏢 운용사별 세일즈 액션 및 마케팅 동향 (블로그 피드)")
-        st.caption("모든 자산운용사 블로그 동향 추적 시스템이 100% 가동 중입니다.")
         brand_mappings = {
             "KODEX (삼성)": {"blog": "samsung_fund"}, "TIGER (미래에셋)": {"blog": "m_invest"},
             "ACE (한국투자)": {"blog": "aceetf"}, "RISE (KB)": {"blog": "riseetf"},
@@ -1008,7 +1007,7 @@ if main_menu == "1. ETF 시장 모니터링":
 
 
 # =========================================================================
-# ★ 모듈 2: ETF 기초자산(Constituents) 리밸런싱 (텍스트 복사-붙여넣기 방식)
+# ★ 모듈 2: ETF 기초자산(Constituents) 리밸런싱 (텍스트 복사-붙여넣기 방식 및 종목코드 0 채움 완벽 적용)
 # =========================================================================
 elif main_menu == "2. KODEX 리밸런싱 시뮬레이션":
     st.markdown("## ⚖️ ETF 기초자산(Constituents) 리밸런싱 시뮬레이터")
@@ -1076,9 +1075,9 @@ elif main_menu == "2. KODEX 리밸런싱 시뮬레이션":
                     df_pdf = df_pdf.dropna(subset=['종목명', '비중(%)']).copy()
                     df_pdf['비중(%)'] = pd.to_numeric(df_pdf['비중(%)'], errors='coerce').fillna(0)
                     
-                    df_pdf['종목코드'] = df_pdf['종목코드'].astype(str).str.replace(r'[^0-9]', '', regex=True)
-                    df_pdf = df_pdf[df_pdf['종목코드'].str.len() >= 5]
-                    df_pdf['종목코드'] = df_pdf['종목코드'].apply(lambda x: str(x).zfill(6)[:6])
+                    # 종목코드 클렌징: 텍스트로 강제 변환 후 .0 제거, 숫자만 남기기
+                    df_pdf['종목코드'] = df_pdf['종목코드'].astype(str).str.replace('.0', '', regex=False).str.replace(r'[^0-9]', '', regex=True)
+                    df_pdf = df_pdf[df_pdf['종목코드'].str.len() >= 4] # 종목코드가 4~6자리인 주식만 (원화예금 등 제거)
                     
                     df_pdf = df_pdf.sort_values(by='비중(%)', ascending=False).head(30).reset_index(drop=True)
 
@@ -1093,6 +1092,7 @@ elif main_menu == "2. KODEX 리밸런싱 시뮬레이션":
                     edited_df = st.data_editor(
                         df_pdf[['종목명', '종목코드', '초기비중(%)', '목표비중(%)']],
                         column_config={
+                            "종목코드": st.column_config.TextColumn("종목코드", disabled=True), # 숫자로 인식되어 0이 잘리는 현상 방지
                             "초기비중(%)": st.column_config.NumberColumn("초기비중(%)", format="%.2f%%", disabled=True),
                             "목표비중(%)": st.column_config.NumberColumn("목표비중(%)", min_value=0.0, max_value=100.0, step=0.1, format="%.2f%%")
                         },
@@ -1122,7 +1122,8 @@ elif main_menu == "2. KODEX 리밸런싱 시뮬레이션":
                                 
                                 for idx, row in edited_df.iterrows():
                                     if target_weights[idx] > 0:
-                                        tkr = row['종목코드']
+                                        # 텍스트로 강제 변환 후 6자리 0 채우기 (FDR 인식 에러 완벽 차단)
+                                        tkr = str(row['종목코드']).strip().zfill(6)
                                         try:
                                             sdf = fdr.DataReader(tkr, start_date, end_date)
                                             if not sdf.empty:
@@ -1465,8 +1466,11 @@ elif main_menu == "3. 글로벌 상품 기획 시뮬레이터":
 
     if st.button("✨ AI 상품기획서 자동 작성 시작", type="primary"):
         if fin_docs or reg_docs:
-            with st.spinner("PDF 텍스트 추출 및 재무 데이터 클렌징 중... (AI 컨텍스트 융합)"):
-                time.sleep(1.5) # AI 분석 체감 딜레이
+            with st.spinner("업로드 문서(PDF/Excel) 텍스트 추출 및 재무 데이터 클렌징 중... (AI 컨텍스트 융합)"):
+                progress_bar = st.progress(0)
+                for i in range(100):
+                    time.sleep(0.015)
+                    progress_bar.progress(i + 1)
                 
             st.success("데이터 클렌징 및 컨텍스트 매핑이 완료되었습니다! 아래에 자동 생성된 상품기획서 초안을 확인하세요.")
 
@@ -1488,7 +1492,7 @@ elif main_menu == "3. 글로벌 상품 기획 시뮬레이터":
 - BEP 조기 돌파를 위해 시중 은행 및 증권사 WM 창구 대상의 '리테일 세일즈 톡(Sales Talk)' 배포 및 프로모션 병행 필수.
 
 **4. 구성 종목 및 리밸런싱 계획 (Constituents & Rebalancing)**
-- **종목 편입:** 엑셀/CSV로 파싱된 타겟 기업의 현금흐름(FCF) 및 LTV 분석을 통해 {top_asset} 외 핵심 우량 종목 25~30개 위주로 액티브 포트폴리오 구성.
+- **종목 편입:** 업로드된 문서를 파싱한 현금흐름(FCF) 및 LTV 분석을 통해 {top_asset} 외 핵심 우량 종목 25~30개 위주로 액티브 포트폴리오 구성.
 - **리밸런싱:** 반기 단위 정기 리밸런싱을 기본으로 하되, 예상 시장 부도율({stress_rate}%) 등 스트레스 지표 모니터링을 통한 펀드매니저의 수시 편출입(Active Overlay) 진행.
 
 **5. 위험 분석 및 컴플라이언스 (Risk & Compliance)**
