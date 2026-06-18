@@ -1008,206 +1008,181 @@ if main_menu == "1. ETF 시장 모니터링":
 
 
 # =========================================================================
-# ★ 모듈 2: ETF 기초자산(Constituents) 리밸런싱 (수동 파싱 완벽 적용)
+# ★ 모듈 2: ETF 기초자산(Constituents) 리밸런싱 (텍스트 복사-붙여넣기 방식)
 # =========================================================================
 elif main_menu == "2. KODEX 리밸런싱 시뮬레이션":
     st.markdown("## ⚖️ ETF 기초자산(Constituents) 리밸런싱 시뮬레이터")
-    st.caption("KODEX 공식 홈페이지에서 다운로드한 구성종목(PDF) 파일을 업로드하여, 종목 비중을 자유롭게 리밸런싱(Data Editor)하고 벤치마크(KOSPI) 대비 백테스팅 성과를 확인합니다.")
+    st.caption("KODEX 공식 홈페이지의 구성종목(PDF) 엑셀 파일 데이터를 복사하여 붙여넣으면, 종목 비중을 자유롭게 조절(Data Editor)하고 벤치마크(KOSPI) 대비 백테스팅 성과를 확인할 수 있습니다.")
 
-    st.markdown("#### 1. KODEX 구성종목(PDF) 파일 업로드")
-    uploaded_pdf = st.file_uploader("KODEX 홈페이지의 '투자종목정보(PDF)' 엑셀/CSV 파일을 업로드하세요.", type=["csv", "xls", "xlsx"], key="pdf_uploader")
+    st.markdown("#### 1. KODEX 구성종목(PDF) 데이터 붙여넣기")
+    st.info("💡 **가이드:** 다운로드한 엑셀/CSV 파일을 열고, **`번호, 종목명...`이 적힌 머리글(Header) 줄부터 맨 아랫줄까지 드래그해서 복사(Ctrl+C)**한 뒤 아래 창에 **붙여넣기(Ctrl+V)** 하세요.")
+    
+    pasted_text = st.text_area(
+        "여기에 복사한 표 데이터를 붙여넣으세요:", 
+        height=150, 
+        placeholder="번호\t종목명\tISIN\t종목코드\t수량\t비중(%)\t평가금액(원)\n1\t원화예금\t...\t...\t...\t...\t..."
+    )
 
-    if uploaded_pdf is not None:
+    if pasted_text:
         try:
-            # 1. 파일 읽기 및 파싱 (수동 분해 로직 적용 - Pandas 의존도 최소화)
-            file_bytes = uploaded_pdf.getvalue()
-            raw_pdf = pd.DataFrame()
-            parsed = False
+            lines = pasted_text.strip().split('\n')
+            data = []
+            start_idx = -1
             
-            # (1) 텍스트/CSV 기반 수동 해독 (Pandas 행/열 불일치 에러 원천 차단)
-            for enc in ['utf-8', 'cp949', 'euc-kr']:
-                try:
-                    text_data = file_bytes.decode(enc, errors='replace')
+            # 헤더 줄 찾기 로직
+            for i, line in enumerate(lines):
+                clean_line = line.replace(" ", "").replace('"', '')
+                if '종목명' in clean_line and ('비중' in clean_line or '평가금액' in clean_line or '종목코드' in clean_line):
+                    start_idx = i
+                    break
                     
-                    if '<table' in text_data.lower():
-                        try:
-                            raw_pdf = pd.read_html(io.StringIO(text_data))[0]
-                            if not raw_pdf.empty:
-                                parsed = True
-                                break
-                        except: pass
-                        
-                    if not parsed:
-                        lines = text_data.split('\n')
-                        data = []
-                        start_idx = -1
-                        
-                        # 진짜 헤더 줄 찾기
-                        for i, line in enumerate(lines):
-                            clean_line = line.replace(" ", "")
-                            if '종목명' in clean_line and ('비중' in clean_line or '종목코드' in clean_line):
-                                start_idx = i
-                                break
-                                
-                        if start_idx != -1:
-                            for line in lines[start_idx:]:
-                                clean_line = line.strip()
-                                if not clean_line: continue
-                                if ',' in clean_line:
-                                    data.append(clean_line.split(','))
-                                elif '\t' in clean_line:
-                                    data.append(clean_line.split('\t'))
-                                else:
-                                    data.append([clean_line])
-                            
-                            raw_pdf = pd.DataFrame(data[1:], columns=data[0]) # 첫 줄을 헤더로
-                            if not raw_pdf.empty:
-                                parsed = True
-                                break
-                except: pass
-            
-            # (2) 진짜 바이너리 엑셀(.xlsx, .xls)부터 시도
-            if not parsed:
-                try:
-                    raw_pdf = pd.read_excel(io.BytesIO(file_bytes))
-                    parsed = True
-                except: pass
-
-            if not parsed or raw_pdf.empty:
-                st.error("파일을 해독할 수 없습니다. KODEX 공식 사이트에서 다운로드한 형식이 맞는지 확인해주세요.")
-                st.stop()
-
-            # 빈 컬럼 제거
-            raw_pdf = raw_pdf.loc[:, raw_pdf.columns.notnull()]
-            raw_pdf = raw_pdf.loc[:, raw_pdf.columns != '']
-
-            # 동적 컬럼명 매핑
-            col_name = next((c for c in raw_pdf.columns if '종목명' in str(c)), None)
-            col_code = next((c for c in raw_pdf.columns if '종목코드' in str(c)), None)
-            col_weight = next((c for c in raw_pdf.columns if '비중' in str(c) or '평가금액' in str(c)), None)
-            
-            if not (col_name and col_code and col_weight):
-                st.error("엑셀 파일 내에 '종목명', '종목코드', '비중' 열을 찾을 수 없습니다. 파일을 확인해주세요.")
-                st.stop()
+            if start_idx != -1:
+                for line in lines[start_idx:]:
+                    clean_line = line.strip()
+                    if not clean_line: continue
+                    if '\t' in clean_line:
+                        data.append(clean_line.split('\t'))
+                    elif ',' in clean_line:
+                        data.append(clean_line.split(','))
+                    else:
+                        data.append(re.split(r'\s{2,}', clean_line)) # 웹페이지 복사 방어
                 
-            df_pdf = raw_pdf.rename(columns={col_name: '종목명', col_code: '종목코드', col_weight: '비중(%)'})
-
-            # 2. 데이터 전처리 (현금/예금 제거 및 티커 클렌징)
-            df_pdf = df_pdf.dropna(subset=['종목명', '비중(%)']).copy()
-            df_pdf['비중(%)'] = pd.to_numeric(df_pdf['비중(%)'], errors='coerce').fillna(0)
-            
-            # 종목코드 클렌징: 6자리 숫자만 추출 (주식 종목만 남기기)
-            df_pdf['종목코드'] = df_pdf['종목코드'].astype(str).str.replace(r'[^0-9]', '', regex=True)
-            df_pdf = df_pdf[df_pdf['종목코드'].str.len() >= 5]
-            df_pdf['종목코드'] = df_pdf['종목코드'].apply(lambda x: str(x).zfill(6)[:6])
-            
-            # 비중 상위 30개 종목으로 컷오프
-            df_pdf = df_pdf.sort_values(by='비중(%)', ascending=False).head(30).reset_index(drop=True)
-
-            # 3. 초기 비중 100%로 정규화 세팅
-            total_init_w = df_pdf['비중(%)'].sum()
-            if total_init_w == 0: total_init_w = 1
-            df_pdf['초기비중(%)'] = (df_pdf['비중(%)'] / total_init_w) * 100
-            df_pdf['목표비중(%)'] = df_pdf['초기비중(%)'].copy()
-
-            st.markdown("#### 2. 편입 종목 비중 리밸런싱 (인터랙티브 데이터 표)")
-            st.info("💡 표의 **'목표비중(%)'** 열을 더블클릭하여 숫자를 직접 수정하세요. 시뮬레이션 버튼 클릭 시 전체 합계가 100%가 되도록 자동 정규화(Normalize) 됩니다.")
-
-            # Data Editor 렌더링
-            edited_df = st.data_editor(
-                df_pdf[['종목명', '종목코드', '초기비중(%)', '목표비중(%)']],
-                column_config={
-                    "초기비중(%)": st.column_config.NumberColumn("초기비중(%)", format="%.2f%%", disabled=True),
-                    "목표비중(%)": st.column_config.NumberColumn("목표비중(%)", min_value=0.0, max_value=100.0, step=0.1, format="%.2f%%")
-                },
-                hide_index=True,
-                use_container_width=True
-            )
-
-            if st.button("🚀 리밸런싱 시뮬레이션 및 백테스팅 실행", type="primary"):
-                st.divider()
-                st.markdown("#### 3. 커스텀 ETF 백테스팅 및 운용 성과 지표 산출")
-
-                target_weights = edited_df['목표비중(%)'].values
-                tot_w = np.sum(target_weights)
-                if tot_w == 0: tot_w = 1
-                target_weights = target_weights / tot_w
-
-                with st.spinner("한국거래소(KRX)에서 표에 편입된 종목들의 최근 1년 치 주가 데이터를 실시간으로 불러와 시뮬레이션을 구동합니다... (최대 10~20초 소요)"):
-                    end_date = datetime.today()
-                    start_date = end_date - timedelta(days=365)
-
-                    try:
-                        bm_df = fdr.DataReader('KS11', start_date, end_date)
-                        bm_daily = bm_df['Close'].pct_change().dropna()
-
-                        stock_data = {}
-                        valid_weights = []
+                # 행 길이 맞추기 (Pandas 에러 방지)
+                max_cols = max(len(r) for r in data)
+                for r in data:
+                    if len(r) < max_cols:
+                        r.extend([''] * (max_cols - len(r)))
                         
-                        for idx, row in edited_df.iterrows():
-                            if target_weights[idx] > 0:
-                                tkr = row['종목코드']
-                                try:
-                                    sdf = fdr.DataReader(tkr, start_date, end_date)
-                                    if not sdf.empty:
-                                        stock_data[row['종목명']] = sdf['Close'].pct_change().dropna()
-                                        valid_weights.append(target_weights[idx])
-                                except:
-                                    pass 
+                raw_pdf = pd.DataFrame(data[1:], columns=data[0])
+                
+                # extract_table을 이용해 2차 검증 및 추출
+                df_pdf = extract_table(raw_pdf, ['종목명', '종목코드'])
+                
+                # 빈 컬럼 제거
+                df_pdf = df_pdf.loc[:, df_pdf.columns.notnull()]
+                df_pdf = df_pdf.loc[:, df_pdf.columns != '']
 
-                        if stock_data:
-                            v_tot_w = np.sum(valid_weights)
-                            if v_tot_w == 0: v_tot_w = 1
-                            valid_weights = np.array(valid_weights) / v_tot_w
+                # 동적 컬럼명 매핑
+                col_name = next((c for c in df_pdf.columns if '종목명' in str(c)), None)
+                col_code = next((c for c in df_pdf.columns if '종목코드' in str(c)), None)
+                col_weight = next((c for c in df_pdf.columns if '비중' in str(c) or '평가금액' in str(c)), None)
+                
+                if not (col_name and col_code and col_weight):
+                    st.error("데이터 내에 '종목명', '종목코드', '비중' 열을 찾을 수 없습니다. 표 영역이 제대로 복사되었는지 확인해주세요.")
+                else:
+                    df_pdf = df_pdf.rename(columns={col_name: '종목명', col_code: '종목코드', col_weight: '비중(%)'})
+                    
+                    # 데이터 전처리
+                    df_pdf = df_pdf.dropna(subset=['종목명', '비중(%)']).copy()
+                    df_pdf['비중(%)'] = pd.to_numeric(df_pdf['비중(%)'], errors='coerce').fillna(0)
+                    
+                    df_pdf['종목코드'] = df_pdf['종목코드'].astype(str).str.replace(r'[^0-9]', '', regex=True)
+                    df_pdf = df_pdf[df_pdf['종목코드'].str.len() >= 5]
+                    df_pdf['종목코드'] = df_pdf['종목코드'].apply(lambda x: str(x).zfill(6)[:6])
+                    
+                    df_pdf = df_pdf.sort_values(by='비중(%)', ascending=False).head(30).reset_index(drop=True)
 
-                            df_returns = pd.DataFrame(stock_data).dropna()
-                            bm_aligned = bm_daily.loc[df_returns.index]
+                    total_init_w = df_pdf['비중(%)'].sum()
+                    if total_init_w == 0: total_init_w = 1
+                    df_pdf['초기비중(%)'] = (df_pdf['비중(%)'] / total_init_w) * 100
+                    df_pdf['목표비중(%)'] = df_pdf['초기비중(%)'].copy()
 
-                            custom_etf_daily = df_returns.dot(valid_weights)
+                    st.markdown("#### 2. 편입 종목 비중 리밸런싱 (인터랙티브 데이터 표)")
+                    st.success("데이터 파싱 성공! 목표 비중을 조절해보세요.")
+                    
+                    edited_df = st.data_editor(
+                        df_pdf[['종목명', '종목코드', '초기비중(%)', '목표비중(%)']],
+                        column_config={
+                            "초기비중(%)": st.column_config.NumberColumn("초기비중(%)", format="%.2f%%", disabled=True),
+                            "목표비중(%)": st.column_config.NumberColumn("목표비중(%)", min_value=0.0, max_value=100.0, step=0.1, format="%.2f%%")
+                        },
+                        hide_index=True,
+                        use_container_width=True
+                    )
 
-                            bm_cum = (1 + bm_aligned).cumprod() * 100
-                            custom_cum = (1 + custom_etf_daily).cumprod() * 100
+                    if st.button("🚀 리밸런싱 시뮬레이션 및 백테스팅 실행", type="primary"):
+                        st.divider()
+                        st.markdown("#### 3. 커스텀 ETF 백테스팅 및 운용 성과 지표 산출")
 
-                            df_sim = pd.DataFrame({
-                                "Date": df_returns.index,
-                                "벤치마크 (KOSPI)": bm_cum.values,
-                                "리밸런싱 완료 ETF": custom_cum.values
-                            })
+                        target_weights = edited_df['목표비중(%)'].values
+                        tot_w = np.sum(target_weights)
+                        if tot_w == 0: tot_w = 1
+                        target_weights = target_weights / tot_w
 
-                            df_sim_melt = df_sim.melt(id_vars="Date", var_name="Portfolio", value_name="Value (Base 100)")
+                        with st.spinner("한국거래소(KRX)에서 표에 편입된 종목들의 최근 1년 치 주가 데이터를 실시간으로 불러와 시뮬레이션을 구동합니다... (최대 10~20초 소요)"):
+                            end_date = datetime.today()
+                            start_date = end_date - timedelta(days=365)
 
-                            fig_sim = px.line(df_sim_melt, x="Date", y="Value (Base 100)", color="Portfolio", template="plotly_dark", color_discrete_sequence=['#cbd5e1', '#ff4d4d'])
-                            fig_sim.update_layout(height=450, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
-                            st.plotly_chart(fig_sim, use_container_width=True)
+                            try:
+                                bm_df = fdr.DataReader('KS11', start_date, end_date)
+                                bm_daily = bm_df['Close'].pct_change().dropna()
 
-                            final_bm = (bm_cum.iloc[-1] / 100 - 1) * 100
-                            final_etf = (custom_cum.iloc[-1] / 100 - 1) * 100
-                            excess_return = final_etf - final_bm
+                                stock_data = {}
+                                valid_weights = []
+                                
+                                for idx, row in edited_df.iterrows():
+                                    if target_weights[idx] > 0:
+                                        tkr = row['종목코드']
+                                        try:
+                                            sdf = fdr.DataReader(tkr, start_date, end_date)
+                                            if not sdf.empty:
+                                                stock_data[row['종목명']] = sdf['Close'].pct_change().dropna()
+                                                valid_weights.append(target_weights[idx])
+                                        except:
+                                            pass 
 
-                            te_daily = custom_etf_daily - bm_aligned
-                            tracking_error = np.std(te_daily) * np.sqrt(252) * 100
-                            
-                            ir = excess_return / tracking_error if tracking_error != 0 else 0
+                                if stock_data:
+                                    v_tot_w = np.sum(valid_weights)
+                                    if v_tot_w == 0: v_tot_w = 1
+                                    valid_weights = np.array(valid_weights) / v_tot_w
 
-                            init_w_valid = edited_df.loc[edited_df['종목명'].isin(stock_data.keys()), '초기비중(%)'].values / 100
-                            init_w_valid = init_w_valid / np.sum(init_w_valid)
-                            turnover = np.sum(np.abs(valid_weights - init_w_valid)) / 2 * 100
+                                    df_returns = pd.DataFrame(stock_data).dropna()
+                                    bm_aligned = bm_daily.loc[df_returns.index]
 
-                            c_m1, c_m2, c_m3, c_m4 = st.columns(4)
-                            c_m1.metric("커스텀 ETF 1년 수익률", f"{final_etf:.2f}%", f"BM대비 {excess_return:+.2f}%p")
-                            c_m2.metric("추적오차 (TE)", f"{tracking_error:.2f}%", "액티브 리스크", delta_color="off")
-                            c_m3.metric("정보비율 (IR)", f"{ir:.2f}", "BM 대비 효율성", delta_color="normal" if ir > 0 else "inverse")
-                            c_m4.metric("매매회전율 (Turnover)", f"{turnover:.1f}%", "리밸런싱 비용 수준", delta_color="inverse")
+                                    custom_etf_daily = df_returns.dot(valid_weights)
 
-                        else:
-                            st.error("해당 종목들의 주가 데이터를 불러올 수 없습니다. 종목 코드를 확인해 주세요.")
-                    except Exception as e:
-                        st.error(f"주가 데이터 연동 중 오류가 발생했습니다: {e}")
+                                    bm_cum = (1 + bm_aligned).cumprod() * 100
+                                    custom_cum = (1 + custom_etf_daily).cumprod() * 100
+
+                                    df_sim = pd.DataFrame({
+                                        "Date": df_returns.index,
+                                        "벤치마크 (KOSPI)": bm_cum.values,
+                                        "리밸런싱 완료 ETF": custom_cum.values
+                                    })
+
+                                    df_sim_melt = df_sim.melt(id_vars="Date", var_name="Portfolio", value_name="Value (Base 100)")
+
+                                    fig_sim = px.line(df_sim_melt, x="Date", y="Value (Base 100)", color="Portfolio", template="plotly_dark", color_discrete_sequence=['#cbd5e1', '#ff4d4d'])
+                                    fig_sim.update_layout(height=450, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
+                                    st.plotly_chart(fig_sim, use_container_width=True)
+
+                                    final_bm = (bm_cum.iloc[-1] / 100 - 1) * 100
+                                    final_etf = (custom_cum.iloc[-1] / 100 - 1) * 100
+                                    excess_return = final_etf - final_bm
+
+                                    te_daily = custom_etf_daily - bm_aligned
+                                    tracking_error = np.std(te_daily) * np.sqrt(252) * 100
+                                    
+                                    ir = excess_return / tracking_error if tracking_error != 0 else 0
+
+                                    init_w_valid = edited_df.loc[edited_df['종목명'].isin(stock_data.keys()), '초기비중(%)'].values / 100
+                                    init_w_valid = init_w_valid / np.sum(init_w_valid)
+                                    turnover = np.sum(np.abs(valid_weights - init_w_valid)) / 2 * 100
+
+                                    c_m1, c_m2, c_m3, c_m4 = st.columns(4)
+                                    c_m1.metric("커스텀 ETF 1년 수익률", f"{final_etf:.2f}%", f"BM대비 {excess_return:+.2f}%p")
+                                    c_m2.metric("추적오차 (TE)", f"{tracking_error:.2f}%", "액티브 리스크", delta_color="off")
+                                    c_m3.metric("정보비율 (IR)", f"{ir:.2f}", "BM 대비 효율성", delta_color="normal" if ir > 0 else "inverse")
+                                    c_m4.metric("매매회전율 (Turnover)", f"{turnover:.1f}%", "리밸런싱 비용 수준", delta_color="inverse")
+
+                                else:
+                                    st.error("해당 종목들의 주가 데이터를 불러올 수 없습니다. 종목 코드를 확인해 주세요.")
+                            except Exception as e:
+                                st.error(f"주가 데이터 연동 중 오류가 발생했습니다: {e}")
+            else:
+                st.error("붙여넣은 텍스트에서 표의 머리글('종목명', '비중' 등)을 찾을 수 없습니다. 다시 복사해주세요.")
         except Exception as e:
-            st.error(f"파일을 파싱하는 중 오류가 발생했습니다. (상세 에러: {e})")
-
-    else:
-        st.info("👉 시작하려면 KODEX 공식 홈페이지에서 다운로드한 '투자종목정보(PDF)' 파일을 업로드해주세요. (.xls, .xlsx, .csv 형식 모두 지원)")
+            st.error(f"데이터를 처리하는 중 오류가 발생했습니다. (상세 에러: {e})")
 
 
 # =========================================================================
@@ -1466,7 +1441,7 @@ elif main_menu == "3. 글로벌 상품 기획 시뮬레이터":
             st.caption(f"💡 기초자산이 최대 -{buffer_pct}%까지 하락해도 원금을 100% 보존하지만, 방어 비용 지불을 위해 상승장에서는 최대 {cap_pct}%까지만 수익을 공유합니다.")
 
     # =====================================================================
-    # [NEW] 6. AI 기반 ETF 상품 기획서(Proposal) 초안 산출 기능
+    # 6. AI 기반 ETF 상품 기획서(Proposal) 자동 산출 기능
     # =====================================================================
     st.markdown("---")
     st.markdown("#### 6. AI 기반 ETF 상품 기획서(Proposal) 자동 산출 (RAG 연동)")
