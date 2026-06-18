@@ -1020,11 +1020,12 @@ elif main_menu == "2. KODEX 리밸런싱 시뮬레이션":
 
     if uploaded_pdf is not None:
         try:
-            # 1. 파일 읽기 및 파싱 (커서 초기화 로직 보강)
+            # 1. 파일 읽기 및 파싱 (KODEX 가짜 엑셀 HTML 완벽 방어 로직)
             file_bytes = uploaded_pdf.getvalue()
             raw_pdf = pd.DataFrame()
             parsed = False
             
+            # (1) 파일을 텍스트로 먼저 강제 디코딩 시도 (한국어 인코딩 고려)
             text_data = ""
             for enc in ['utf-8', 'cp949', 'euc-kr']:
                 try:
@@ -1033,19 +1034,19 @@ elif main_menu == "2. KODEX 리밸런싱 시뮬레이션":
                 except: pass
             
             if text_data:
-                # HTML 형태의 엑셀 파일일 경우 (KODEX 고질적 포맷)
+                # (2) 텍스트 안에 HTML table 태그가 있는지 확인 (가짜 엑셀 파일인 경우)
                 if '<table' in text_data.lower():
                     try:
                         raw_pdf = pd.read_html(io.StringIO(text_data))[0]
                         parsed = True
                     except: pass
                 
-                # 일반 CSV인 경우 (데이터 구조 불일치 ParserError 방지)
+                # (3) HTML이 아니라면 일반 CSV 파싱 시도 (상단 쓰레기 메타데이터 스킵)
                 if not parsed:
                     lines = text_data.split('\n')
                     skip_idx = 0
                     for i, line in enumerate(lines[:30]): 
-                        if '종목명' in line and '비중' in line:
+                        if '종목명' in line and ('비중' in line or '평가금액' in line):
                             skip_idx = i
                             break
                     try:
@@ -1053,7 +1054,7 @@ elif main_menu == "2. KODEX 리밸런싱 시뮬레이션":
                         parsed = True
                     except: pass
             
-            # 진짜 바이너리 엑셀(.xlsx, .xls)인 경우 대비
+            # (4) 텍스트가 아니거나 파싱 실패 시, 진짜 바이너리 엑셀로 간주하고 시도
             if not parsed:
                 try:
                     raw_pdf = pd.read_excel(io.BytesIO(file_bytes))
@@ -1061,11 +1062,11 @@ elif main_menu == "2. KODEX 리밸런싱 시뮬레이션":
                 except: pass
                 
             if not parsed:
-                st.error("파일을 해독할 수 없습니다. 형식을 확인해주세요.")
+                st.error("파일을 해독할 수 없습니다. 파일이 암호화되어 있거나 지원되지 않는 형식입니다.")
                 st.stop()
 
-            # extract_table 함수로 헤더 자동 탐색 후 데이터프레임 추출
-            df_pdf = extract_table(raw_pdf, ['종목명', '종목코드', '비중'])
+            # extract_table 함수로 헤더 자동 탐색 후 데이터프레임 추출 (키워드 유연화)
+            df_pdf = extract_table(raw_pdf, ['종목명', '종목코드'])
 
             # 빈 컬럼(이름이 nan이거나 빈 문자열) 제거
             df_pdf = df_pdf.loc[:, df_pdf.columns.notnull()]
@@ -1077,7 +1078,7 @@ elif main_menu == "2. KODEX 리밸런싱 시뮬레이션":
             col_weight = next((c for c in df_pdf.columns if '비중' in str(c)), None)
             
             if not (col_name and col_code and col_weight):
-                st.error("엑셀 파일 내에 '종목명', '종목코드', '비중' 열이 존재하지 않습니다. 파일을 확인해주세요.")
+                st.error("엑셀 파일 내에 '종목명', '종목코드', '비중' 열을 찾을 수 없습니다. 원본 파일의 표 형식을 확인해주세요.")
                 st.stop()
                 
             df_pdf = df_pdf.rename(columns={col_name: '종목명', col_code: '종목코드', col_weight: '비중(%)'})
@@ -1086,7 +1087,7 @@ elif main_menu == "2. KODEX 리밸런싱 시뮬레이션":
             df_pdf = df_pdf.dropna(subset=['종목명', '비중(%)']).copy()
             df_pdf['비중(%)'] = pd.to_numeric(df_pdf['비중(%)'], errors='coerce').fillna(0)
             
-            # 종목코드 클렌징: .0 제거 후 6자리 숫자만 추출 (주식 종목만 남기기)
+            # 종목코드 클렌징: .0 제거 후 5~6자리 숫자만 추출 (주식 종목만 남기기 - 원화예금 자동 필터링)
             df_pdf['종목코드'] = df_pdf['종목코드'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
             df_pdf = df_pdf[df_pdf['종목코드'].str.match(r'^\d{5,6}$')]
             df_pdf['종목코드'] = df_pdf['종목코드'].apply(lambda x: str(x).zfill(6))
