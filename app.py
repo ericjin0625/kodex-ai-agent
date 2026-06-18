@@ -1025,58 +1025,48 @@ elif main_menu == "2. KODEX 리밸런싱 시뮬레이션":
             raw_pdf = pd.DataFrame()
             parsed = False
             
-            # (1) 텍스트 강제 디코딩 (에러 발생 시 무시/치환 처리로 무조건 읽어들임)
-            text_data = ""
+            # (1) 진짜 바이너리 엑셀(.xlsx, .xls)부터 시도
             try:
-                text_data = file_bytes.decode('utf-8')
-            except:
-                try:
-                    text_data = file_bytes.decode('cp949')
-                except:
-                    # 여기서 errors='replace'가 핵심입니다. 깨진 문자가 있어도 강제로 읽습니다.
-                    text_data = file_bytes.decode('euc-kr', errors='replace')
+                raw_pdf = pd.read_excel(io.BytesIO(file_bytes))
+                parsed = True
+            except: pass
             
-            if text_data:
-                # (2) HTML 형태의 가짜 엑셀 파일일 경우 (KODEX 고질적 포맷 방어)
-                if '<table' in text_data.lower():
+            # (2) 텍스트/CSV 기반 수동 해독 (Pandas read_csv 행/열 불일치 에러 원천 차단)
+            if not parsed:
+                for enc in ['utf-8', 'cp949', 'euc-kr']:
                     try:
-                        raw_pdf = pd.read_html(io.StringIO(text_data))[0]
-                        if len(raw_pdf.columns) >= 2: parsed = True
+                        text_data = file_bytes.decode(enc, errors='replace')
+                        
+                        # HTML 표 형식 대응
+                        if '<table' in text_data.lower():
+                            try:
+                                raw_pdf = pd.read_html(io.StringIO(text_data))[0]
+                                if not raw_pdf.empty:
+                                    parsed = True
+                                    break
+                            except: pass
+                            
+                        # CSV 수동 쪼개기 (Pandas 의존도 0%)
+                        if not parsed:
+                            lines = text_data.split('\n')
+                            data = []
+                            for line in lines:
+                                clean_line = line.strip()
+                                if not clean_line: continue
+                                if ',' in clean_line:
+                                    data.append(clean_line.split(','))
+                                elif '\t' in clean_line:
+                                    data.append(clean_line.split('\t'))
+                                else:
+                                    data.append([clean_line])
+                            
+                            raw_pdf = pd.DataFrame(data)
+                            if not raw_pdf.empty:
+                                parsed = True
+                                break
                     except: pass
-                
-                # (3) 일반 CSV 또는 TSV인 경우
-                if not parsed:
-                    lines = text_data.split('\n')
-                    skip_idx = 0
-                    for i, line in enumerate(lines[:30]): 
-                        if '종목명' in line.replace(" ", "") and ('비중' in line.replace(" ", "") or '평가금액' in line.replace(" ", "")):
-                            skip_idx = i
-                            break
-                    try:
-                        # 쉼표 구분자 먼저 시도
-                        raw_pdf = pd.read_csv(io.StringIO(text_data), skiprows=skip_idx, sep=',', on_bad_lines='skip')
-                        if len(raw_pdf.columns) >= 3: parsed = True
-                    except: pass
-                    
-                    if not parsed:
-                        try:
-                            # 탭 구분자 시도
-                            raw_pdf = pd.read_csv(io.StringIO(text_data), skiprows=skip_idx, sep='\t', on_bad_lines='skip')
-                            if len(raw_pdf.columns) >= 3: parsed = True
-                        except: pass
             
-            # (4) 진짜 바이너리 엑셀(.xlsx, .xls)인 경우
-            if not parsed:
-                try:
-                    raw_pdf = pd.read_excel(io.BytesIO(file_bytes), engine='openpyxl')
-                    parsed = True
-                except:
-                    try:
-                        raw_pdf = pd.read_excel(io.BytesIO(file_bytes))
-                        parsed = True
-                    except: pass
-                
-            if not parsed:
+            if not parsed or raw_pdf.empty:
                 st.error("파일을 해독할 수 없습니다. KODEX 공식 사이트에서 다운로드한 형식이 맞는지 확인해주세요.")
                 st.stop()
 
