@@ -621,7 +621,7 @@ if main_menu == "1. ETF 시장 모니터링":
     # === Tab 5 ===
     with tabs[5]:
         st.markdown("### 📊 마케팅 촉매(이벤트/영상) 임팩트 분석기")
-        st.caption("수동으로 마케팅 캠페인 기간(시작~종료)을 설정하여, 해당 기간 동안의 수급 변화(펌핑 효과)를 사후적으로 분석합니다.")
+        st.caption("수동으로 마케팅 캠페인 기간(시작~종료)을 설정하여, 해당 기간 동안의 수급 변화(펌핑 효과) 사후적으로 분석합니다.")
         
         if uploaded_excel is not None and len(available_weeks) > 1 and available_weeks[0] != "데이터 없음":
             temp_list_df = load_and_clean_excel(uploaded_excel, available_weeks[0])
@@ -989,7 +989,7 @@ if main_menu == "1. ETF 시장 모니터링":
         news_context_text = "\n".join(news_lines) if news_lines else "최신 뉴스 없음"
         
         try:
-            word_counts, stats = get_media_intelligence(comp_yt_links)
+            word_counts, stats = get_media_intelligence([])
             media_context = f"[유튜브 키워드 Top 5]: {dict(word_counts.most_common(5))}\n[포맷 믹스 구조]: {stats}"
         except Exception as e:
             media_context = f"미디어 데이터 연동 실패 ({e})"
@@ -999,7 +999,7 @@ if main_menu == "1. ETF 시장 모니터링":
 
 
 # =========================================================================
-# ★ 모듈 2: ETF 기초자산(Constituents) 리밸런싱 (파일 업로드 방식으로 전면 교체)
+# ★ 모듈 2: ETF 기초자산(Constituents) 리밸런싱 (파일 업로드 방식)
 # =========================================================================
 elif main_menu == "2. KODEX 리밸런싱 시뮬레이션":
     st.markdown("## ⚖️ ETF 기초자산(Constituents) 리밸런싱 시뮬레이터")
@@ -1026,6 +1026,10 @@ elif main_menu == "2. KODEX 리밸런싱 시뮬레이션":
 
             # extract_table 함수로 헤더 자동 탐색 후 데이터프레임 추출
             df_pdf = extract_table(raw_pdf, ['종목명', '종목코드', '비중(%)'])
+
+            # 빈 컬럼(이름이 nan이거나 빈 문자열) 제거
+            df_pdf = df_pdf.loc[:, df_pdf.columns.notnull()]
+            df_pdf = df_pdf.loc[:, df_pdf.columns != '']
 
             # 2. 데이터 전처리 (현금/예금 제거 및 티커 클렌징)
             df_pdf = df_pdf.dropna(subset=['종목명', '비중(%)']).copy()
@@ -1115,6 +1119,7 @@ elif main_menu == "2. KODEX 리밸런싱 시뮬레이션":
                                 "리밸런싱 완료 ETF": custom_cum.values
                             })
 
+                            # value_name을 지정하여 ValueError 원천 차단
                             df_sim_melt = df_sim.melt(id_vars="Date", var_name="Portfolio", value_name="Value (Base 100)")
 
                             fig_sim = px.line(df_sim_melt, x="Date", y="Value (Base 100)", color="Portfolio", template="plotly_dark", color_discrete_sequence=['#cbd5e1', '#ff4d4d'])
@@ -1345,6 +1350,7 @@ elif main_menu == "3. 글로벌 상품 기획 시뮬레이터":
             stress_rate = st.slider(current_db["stress_name"], min_value=0.0, max_value=15.0, value=2.0, step=0.5, key="stress_slider_app1")
             recovery_rate = st.number_input("예상 회수율/방어율 (Recovery Rate, %)", value=current_db["recovery_default"], step=5.0, key="rec_rate_app1") / 100
             
+            # 위에서 계산된 포트폴리오 Base Yield 연동
             base_st_yield = base_yield 
             loss_impact = stress_rate * (1 - recovery_rate)
             adjusted_yield = base_st_yield - loss_impact
@@ -1361,7 +1367,7 @@ elif main_menu == "3. 글로벌 상품 기획 시뮬레이터":
             st.markdown("#### 4. 자산운용사(AMC) 손익 추정")
             target_aum = st.number_input("초기 목표 AUM (억원)", value=500, step=50, key="t_aum_app1")
             fixed_cost = st.number_input("연간 고정비용 (상장유지비 등 / 억원)", value=2.0, step=0.5, key="f_cost_app1")
-            expected_revenue = target_aum * (ter / 100)
+            expected_revenue = target_aum * (ter / 100) # ter은 % 단위이므로 100으로 나눔
             net_profit = expected_revenue - fixed_cost
             
             st.metric("예상 연간 운용보수 수익", f"{expected_revenue:.2f} 억원")
