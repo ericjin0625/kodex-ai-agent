@@ -17,8 +17,9 @@ import io
 # 1. 페이지 레이아웃 및 기본 테마 설정
 st.set_page_config(page_title="ETF Intelligence & Structuring Agent", layout="wide", initial_sidebar_state="expanded")
 
-# 전역 변수 초기화 (에러 방지용)
-df_scatter = pd.DataFrame()
+# 전역 변수 초기화 (에러 원천 차단 - session_state 활용)
+if 'df_scatter' not in st.session_state:
+    st.session_state.df_scatter = pd.DataFrame()
 comp_yt_links = []
 
 # ==========================================
@@ -362,7 +363,7 @@ st.session_state.setdefault('dl_summary', "DataLab 데이터가 업로드되지 
 
 
 # =========================================================================
-# ★ 모듈 1: ETF 시장 모니터링 (원상 복구 완료)
+# ★ 모듈 1: ETF 시장 모니터링
 # =========================================================================
 if main_menu == "1. ETF 시장 모니터링":
     st.markdown("## 📊 ETF Market Intelligence")
@@ -507,13 +508,14 @@ if main_menu == "1. ETF 시장 모니터링":
                                 df_scatter_filtered = df_merged[df_merged['종목명'].isin(selected_scatter_etfs)].copy()
                                 df_scatter_filtered['주간 수익률(%)'] = df_scatter_filtered['종목명'].map(real_returns)
                                 
-                                global df_scatter
-                                df_scatter = df_scatter_filtered.dropna()
+                                # Global 에러 방지 - 세션 스테이트 활용
+                                st.session_state.df_scatter = df_scatter_filtered.dropna()
+                                df_sc = st.session_state.df_scatter
                                 
-                                fig_scatter = px.scatter(df_scatter, x="주간 수익률(%)", y="순매수 증감률(%)", text="종목명", hover_data=["이번주", "지난주"], title=f"**실제 수익률 vs. {subject_tab2_scatter} 순매수 증감률**")
+                                fig_scatter = px.scatter(df_sc, x="주간 수익률(%)", y="순매수 증감률(%)", text="종목명", hover_data=["이번주", "지난주"], title=f"**실제 수익률 vs. {subject_tab2_scatter} 순매수 증감률**")
                                 
-                                if len(df_scatter) > 1:
-                                    x_data, y_data = df_scatter["주간 수익률(%)"], df_scatter["순매수 증감률(%)"]
+                                if len(df_sc) > 1:
+                                    x_data, y_data = df_sc["주간 수익률(%)"], df_sc["순매수 증감률(%)"]
                                     r_value = np.corrcoef(x_data, y_data)[0, 1]
                                     z = np.polyfit(x_data, y_data, 1)
                                     p = np.poly1d(z)
@@ -617,7 +619,7 @@ if main_menu == "1. ETF 시장 모니터링":
                             df_volume_summary_text = "\n".join(volume_lines)
         else: st.info("👉 좌측 사이드바에 엑셀 데이터를 업로드해주세요.")
 
-    # === Tab 5: 경쟁사 동향 (모든 하우스 복구됨) ===
+    # === Tab 5 ===
     with tabs[5]:
         st.markdown("### 📊 마케팅 촉매(이벤트/영상) 임팩트 분석기")
         st.caption("수동으로 마케팅 캠페인 기간(시작~종료)을 설정하여, 해당 기간 동안의 수급 변화(펌핑 효과)를 사후적으로 분석합니다.")
@@ -858,7 +860,7 @@ if main_menu == "1. ETF 시장 모니터링":
                             st.caption(f"📅 {row['게시일 / 출처']}")
                 else: st.info("검색 범위(최대 1년) 내 포착된 리스크성 기사가 없습니다.")
 
-    # === Tab 7: 운용 현황 및 점유율 (차트까지 완전 복구됨) ===
+    # === Tab 7: 운용 현황 및 점유율 ===
     with tabs[7]:
         st.markdown("### 🏢 국내 ETF 운용사 AUM 시장 점유율 및 테마별 현황 (실시간 기준)")
         col_pie, col_table = st.columns([1, 2])
@@ -883,7 +885,13 @@ if main_menu == "1. ETF 시장 모니터링":
                         fig_market_share.update_layout(height=420, margin=dict(t=20, l=20, r=20, b=20), template="plotly_dark", showlegend=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                         st.plotly_chart(fig_market_share, use_container_width=True)
                     with col_table:
-                        st.markdown("#### 📊 TOP 4 운용사 테마별 AUM 현황")
+                        # 툴바가 사라지는 Styler의 한계를 극복하기 위해 우측 상단에 수동 다운로드 버튼 배치
+                        c_title, c_btn = st.columns([7, 3])
+                        with c_title:
+                            st.markdown("#### 📊 TOP 4 운용사 테마별 AUM 현황")
+                        with c_btn:
+                            st.markdown("<div style='margin-bottom: 5px;'></div>", unsafe_allow_html=True)
+                            
                         target_brands = ['KODEX', 'TIGER', 'ACE', 'RISE']
                         df_top_brands = df_all_etf[df_all_etf['브랜드'].isin(target_brands)].copy()
                         df_top_brands['분류_테마'] = df_top_brands['Name'].apply(assign_auto_theme)
@@ -894,6 +902,10 @@ if main_menu == "1. ETF 시장 모니터링":
                         pivot_df = pivot_df.loc[(pivot_df != 0).any(axis=1)]
                         pivot_df.loc['총 AUM'] = pivot_df.sum(numeric_only=True)
                         
+                        with c_btn:
+                            csv_data = pivot_df.to_csv().encode('utf-8-sig')
+                            st.download_button(label="📥 CSV 다운로드", data=csv_data, file_name='AUM_현황.csv', mime='text/csv', use_container_width=True)
+
                         def style_aum(row):
                             styles = []
                             for col in pivot_df.columns:
@@ -950,6 +962,7 @@ if main_menu == "1. ETF 시장 모니터링":
         
         st.divider()
         selected_trend_label = st.selectbox("🔍 뉴스 검색망 가동할 혁신 구조 선택:", options=raw_keywords, index=2)
+        st.session_state['selected_trend_label'] = selected_trend_label
         st.markdown(f"#### 📡 `[실시간 정책 시그널]` {selected_trend_label} 관련 완화 동향")
         with st.spinner("규제 완화 뉴스 스크랩 중..."):
             df_gap_news = get_realtime_news(selected_trend_label + " 금융위 규제", timeframe="7d")
@@ -967,7 +980,8 @@ if main_menu == "1. ETF 시장 모니터링":
         st.markdown("### 🧠 모듈형 마케팅 리포트 자동 생성기")
         st.caption("대시보드 내 데이터를 융합하여 마크다운 프롬프트를 도출합니다.")
         
-        data_context = df_scatter.sort_values(by='주간 수익률(%)', ascending=False).head(20).to_string(index=False) if not df_scatter.empty else "데이터 부족"
+        df_sc = st.session_state.df_scatter
+        data_context = df_sc.sort_values(by='주간 수익률(%)', ascending=False).head(20).to_string(index=False) if not df_sc.empty else "데이터 부족"
         dl_context = st.session_state.get('dl_summary', "데이터랩 미연동")
         
         news_lines = []
@@ -977,7 +991,7 @@ if main_menu == "1. ETF 시장 모니터링":
         news_context_text = "\n".join(news_lines) if news_lines else "최신 뉴스 없음"
         
         try:
-            word_counts, stats = get_media_intelligence([])
+            word_counts, stats = get_media_intelligence(comp_yt_links)
             media_context = f"[유튜브 키워드 Top 5]: {dict(word_counts.most_common(5))}\n[포맷 믹스 구조]: {stats}"
         except Exception as e:
             media_context = f"미디어 데이터 연동 실패 ({e})"
@@ -1141,26 +1155,107 @@ elif main_menu == "2. KODEX 리밸런싱 시뮬레이션":
 # =========================================================================
 elif main_menu == "3. 글로벌 상품 기획 시뮬레이터":
     st.markdown("## 🌍 Global Alternative ETF Structuring Simulator")
-    st.caption("규제 완화에 대비하여 미국 시장의 메가 트렌드 자산(BDC 등)을 조합하여 가상의 ETF를 사전 기획하고 팩트시트를 도출합니다.")
+    st.caption("규제 완화에 대비하여 미국 시장의 메가 트렌드 자산(BDC, CLO, MLP 등)을 조합하여 가상의 ETF를 사전 기획하고 팩트시트를 도출합니다.")
     
-    st.markdown("#### 1. 해외 BDC(사모신용) 포트폴리오 구성 및 환율 전략 설정")
+    asset_class = st.selectbox(
+        "🌍 탐색할 해외 대체투자 자산군 선택:", 
+        ["사모신용 (BDC)", "대출채권담보부증권 (CLO)", "에너지 인프라 (MLP)"],
+        key="asset_sel_app1"
+    )
+
+    mock_db = {
+        "사모신용 (BDC)": {
+            "tickers": ["ARCC", "OBDC", "FSK", "MAIN", "BXSL", "CSWC", "HTGC", "GBDC", "TSLX", "PNNT", "ARIS", "CGBD", "NMFC", "TCPC", "SLRC", "MFIC", "OCSL", "TRIN", "GLAD", "SAR", "FDUS", "PFLT", "HRZN", "MRCC", "CCAP", "SUNS"],
+            "names": ["Ares Capital", "Blue Owl Capital", "FS KKR Capital", "Main Street", "Blackstone Secured", "Capital Southwest", "Hercules Capital", "Golub Capital", "Sixth Street", "PennantPark", "Aris Water", "Carlyle Secured", "New Mountain", "BlackRock TCP", "SLR Investment", "MidCap Financial", "Oaktree Specialty", "Trinity Capital", "Gladstone Capital", "Saratoga Invest", "Fidus Investment", "PennantPark Float", "Horizon Tech", "Monroe Capital", "Crescent Capital", "SLR Senior"],
+            "base_yields": [9.5, 10.2, 11.8, 6.5, 10.5, 9.8, 8.2, 9.1, 8.9, 11.5, 8.5, 10.8, 10.4, 12.1, 10.9, 10.1, 11.2, 14.5, 9.5, 8.8, 8.4, 10.2, 10.5, 12.5, 11.1, 9.5],
+            "labels": ["예상 배당수익률 (Yield)", "포트폴리오 평균 LTV", "변동금리 대출 비중"],
+            "data": {
+                "ARCC": [9.5, 45.2, 98.0, "고정 금리 대비 변동 금리 대출 비중이 압도적으로 높아, 현행 고금리 기조에서 강력한 이자 수익 방어력을 지니고 있습니다."],
+                "OBDC": [10.2, 41.5, 96.0, "안정적인 IT/소프트웨어 섹터의 선순위 담보 대출 위주로 포트폴리오가 구성되어 있어 하방 경직성이 강하며 펀더멘털이 우수합니다."],
+                "FSK": [11.8, 48.1, 89.0, "상대적으로 높은 레버리지 비율을 통해 고수익을 창출하며, KKR의 강력한 글로벌 딜 소싱 네트워크를 활용합니다."]
+            },
+            "stress_name": "예상 시장 부도율 (Default Rate, %)",
+            "recovery_default": 60.0
+        },
+        "대출채권담보부증권 (CLO)": {
+            "tickers": ["JAAA", "JBBB", "CLOA", "CLOI", "AAA", "BND", "CLOZ", "JCCC", "CRAK", "LQD", "AGG", "VCIT", "VCSH", "IGSB", "FLOT", "SRLN", "HYG", "JNK", "USIG", "SPSB", "SPIB", "VRP", "HYLB", "BSV", "BKLN"],
+            "names": ["Janus AAA CLO", "Janus BBB CLO", "BlackRock AAA CLO", "Invesco AAA CLO", "AXS AAA CLO", "Vanguard Total Bond", "Panagram BBB CLO", "Janus CCC CLO", "VanEck CLO", "iShares iBoxx Inv", "iShares Core Bond", "Vanguard Int-Term", "Vanguard Short-Term", "iShares Short-Term", "iShares Floating", "SPDR Blackstone", "iShares High Yield", "SPDR High Yield", "iShares Broad USD", "SPDR Portfolio Short", "SPDR Portfolio Int", "Invesco Variable", "Xtrackers High Yield", "Vanguard Short-Term", "Invesco Senior Loan"],
+            "base_yields": [6.2, 8.5, 6.1, 6.3, 6.0, 4.5, 8.8, 12.5, 6.5, 5.2, 4.8, 5.5, 5.1, 5.0, 6.1, 8.5, 7.5, 7.8, 5.3, 5.0, 5.2, 6.5, 7.9, 4.9, 8.2],
+            "labels": ["예상 만기수익률 (YTM)", "AAA/AA 등급 비중", "평균 듀레이션 (년)"],
+            "data": {
+                "JAAA": [6.2, 100.0, 0.2, "최상위 AAA 등급 트랜치에만 투자하여 극강의 방어력을 제공합니다. 주식 시장 급락 시 피난처 역할을 수행합니다."],
+                "JBBB": [8.5, 0.0, 0.3, "투자적격등급 하단(BBB) 트랜치를 타겟하여 추가 일드(Yield)를 확보합니다. 하일드 채권 대비 부도율이 낮습니다."],
+                "CLOA": [6.1, 100.0, 0.25, "블랙락의 강력한 크레딧 소싱 능력을 바탕으로 운용되는 우량 CLO ETF로, 풍부한 유동성이 장점입니다."]
+            },
+            "stress_name": "예상 연쇄 부도율 (Systemic Default, %)",
+            "recovery_default": 75.0
+        },
+        "에너지 인프라 (MLP)": {
+            "tickers": ["AMLP", "EPD", "ET", "MMP", "WMB", "PAA", "KMI", "OKE", "TRGP", "ENB", "PBA", "MPLX", "WES", "SHLX", "NS", "SUN", "USAC", "GEL", "HEP", "NGL", "CAPL", "CQP", "TCP", "BKEP", "SRLP"],
+            "names": ["Alerian MLP ETF", "Enterprise Products", "Energy Transfer", "Magellan Midstream", "Williams Companies", "Plains All American", "Kinder Morgan", "ONEOK", "Targa Resources", "Enbridge", "Pembina Pipeline", "MPLX LP", "Western Midstream", "Shell Midstream", "NuStar Energy", "Sunoco LP", "USA Compression", "Genesis Energy", "Holly Energy", "NGL Energy", "CrossAmerica", "Cheniere Energy", "TC PipeLines", "Blueknight Energy", "Sprague Resources"],
+            "base_yields": [7.8, 7.2, 8.5, 6.9, 5.5, 7.5, 6.2, 5.8, 6.1, 7.1, 6.5, 9.2, 8.5, 9.5, 8.8, 7.9, 9.5, 11.2, 8.5, 12.5, 10.5, 7.2, 8.1, 11.5, 10.2],
+            "labels": ["예상 배당수익률 (Yield)", "현금흐름 커버리지 (x)", "수수료 기반 이익 비중"],
+            "data": {
+                "AMLP": [7.8, 1.8, 85.0, "원자재 가격 변동성보다는 파이프라인 통행료(Toll-road) 방식의 수익 비중이 높아 예측 가능한 강력한 현금흐름을 창출합니다."],
+                "EPD": [7.2, 1.9, 90.0, "미국 최대 에너지 인프라 기업으로, 압도적인 규모의 경제를 바탕으로 꾸준히 배당금을 인상해 온 배당 성장 자산입니다."],
+                "ET": [8.5, 1.7, 80.0, "공격적인 파이프라인 확장 및 M&A를 통해 성장성을 확보했으며, 동종 업계 대비 높은 수준의 배당률을 제공합니다."]
+            },
+            "stress_name": "글로벌 유가 폭락 충격률 (Price Shock, %)",
+            "recovery_default": 80.0
+        }
+    }
+
+    current_db = mock_db[asset_class]
+    tkrs = current_db["tickers"]
+    nms = current_db["names"]
+    b_ylds = current_db["base_yields"]
+
+    st.markdown("#### 1. 기초자산 포트폴리오 구성 및 환율 전략 설정")
     
     col_p1, col_p2 = st.columns([1, 1])
     with col_p1:
         with st.container(border=True):
-            st.markdown("**기초자산 타겟 비중 설정**")
-            bdc_w1 = st.slider("Ares Capital (ARCC) - 업계 1위 우량주", 0, 100, 40, key="bdc_w1")
-            bdc_w2 = st.slider("Blue Owl Capital (OBDC) - 안정적 테크기업", 0, 100, 30, key="bdc_w2")
-            bdc_w3 = st.slider("FS KKR Capital (FSK) - 고수익 추구형", 0, 100, 30, key="bdc_w3")
+            st.markdown(f"**[{asset_class}] 기초자산 편입 비중(Weight) 조절**")
+            st.info("💡 **인터랙티브 표:** '목표비중(%)' 열의 숫자를 자유롭게 수정하세요. 하단의 시뮬레이션 적용 시 합계가 100%로 자동 정규화됩니다.")
             
-            tot_bdc = bdc_w1 + bdc_w2 + bdc_w3
+            # 초기 비중 100%를 N등분
+            num_assets = len(tkrs)
+            init_w = [100.0 / num_assets] * num_assets
+            
+            df_bdc_setup = pd.DataFrame({
+                "티커": tkrs,
+                "종목명": nms,
+                "예상 배당률(%)": b_ylds,
+                "목표비중(%)": init_w
+            })
+            
+            edited_bdc_df = st.data_editor(
+                df_bdc_setup,
+                column_config={
+                    "티커": st.column_config.TextColumn("티커", disabled=True),
+                    "종목명": st.column_config.TextColumn("종목명", disabled=True),
+                    "예상 배당률(%)": st.column_config.NumberColumn("예상 배당률(%)", format="%.2f%%", disabled=True),
+                    "목표비중(%)": st.column_config.NumberColumn("목표비중(%)", min_value=0.0, max_value=100.0, step=0.5, format="%.2f%%")
+                },
+                hide_index=True,
+                use_container_width=True,
+                height=250 # 스크롤 가능하도록 높이 고정
+            )
+            
+            # 목표 비중 정규화 계산
+            target_weights_bdc = edited_bdc_df['목표비중(%)'].values
+            tot_bdc = np.sum(target_weights_bdc)
             if tot_bdc == 0: tot_bdc = 1 
-            nw1, nw2, nw3 = bdc_w1/tot_bdc, bdc_w2/tot_bdc, bdc_w3/tot_bdc
+            normalized_weights_bdc = target_weights_bdc / tot_bdc
             
-            df_bdc_pie = pd.DataFrame({"Asset": ["ARCC", "OBDC", "FSK"], "Weight": [nw1, nw2, nw3]})
-            fig_bdc_pie = px.pie(df_bdc_pie, names="Asset", values="Weight", hole=0.5, color_discrete_sequence=['#4da6ff', '#cbd5e1', '#ffb04d'])
-            fig_bdc_pie.update_layout(height=250, margin=dict(t=10, b=10, l=10, r=10), template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-            st.plotly_chart(fig_bdc_pie, use_container_width=True)
+            # 파이차트 시각화 (비중이 0 이상인 상위 10개만 표시하여 깔끔하게)
+            df_pie_show = pd.DataFrame({"Asset": tkrs, "Weight": normalized_weights_bdc})
+            df_pie_show = df_pie_show[df_pie_show['Weight'] > 0].sort_values(by='Weight', ascending=False).head(10)
+            
+            if not df_pie_show.empty:
+                fig_bdc_pie = px.pie(df_pie_show, names="Asset", values="Weight", hole=0.5, color_discrete_sequence=px.colors.sequential.Blues_r)
+                fig_bdc_pie.update_layout(height=250, margin=dict(t=10, b=10, l=10, r=10), template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                st.plotly_chart(fig_bdc_pie, use_container_width=True)
 
     with col_p2:
         with st.container(border=True):
@@ -1171,13 +1266,14 @@ elif main_menu == "3. 글로벌 상품 기획 시뮬레이터":
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("##### 📄 Simulated Product Factsheet")
             
-            base_yield = (9.5 * nw1) + (10.2 * nw2) + (11.8 * nw3)
+            # 가중 평균 기대 수익률 계산
+            base_yield = np.dot(np.array(b_ylds), normalized_weights_bdc)
             
             if "환헤지" in fx_strategy:
                 net_yield = base_yield - 1.5 - ter 
                 risk_rating = "보통 위험 (Medium Risk)"
                 mdd = "-12.5%"
-                fx_desc = "달러 변동성을 제거하여 순수 BDC 배당 수익에 집중"
+                fx_desc = "달러 변동성을 제거하여 순수 기초자산 배당/이자 수익에 집중"
             else:
                 net_yield = base_yield - ter
                 risk_rating = "높은 위험 (High Risk)"
@@ -1189,19 +1285,81 @@ elif main_menu == "3. 글로벌 상품 기획 시뮬레이터":
             st.write(f"- **최대 손실폭(MDD) 추정:** {mdd}")
             st.write(f"- **FX 전략:** {fx_desc}")
 
+    st.markdown("---")
+    
+    # ---------------------------------------------------------
+    # 가로 3분할: Credit Teaser / Stress Test / AMC Feasibility
+    # ---------------------------------------------------------
+    col_app1_1, col_app1_2, col_app1_3 = st.columns(3)
+
+    # [컬럼 1] Credit Teaser
+    with col_app1_1:
+        with st.container(border=True):
+            st.markdown(f"#### 2. 대표자산 크레딧 요약")
+            # 대표 종목 3개에 대해서만 상세 코멘트 제공 (위의 mock_db["data"]에 정의됨)
+            top_3_tkrs = current_db["tickers"][:3]
+            selected_ticker = st.selectbox("분석할 대표 종목 선택:", top_3_tkrs, key="ticker_sel_app1")
+            
+            t_val1, t_val2, t_val3, t_comment = current_db["data"][selected_ticker]
+            l_val1, l_val2, l_val3 = current_db["labels"]
+
+            def format_metric(label, value):
+                if "Yield" in label or "비중" in label or "YTM" in label or "LTV" in label: return f"{value:.1f}%"
+                elif "듀레이션" in label: return f"{value:.2f}년"
+                elif "커버리지" in label: return f"{value:.1f}x"
+                return str(value)
+
+            st.metric(l_val1, format_metric(l_val1, t_val1))
+            st.metric(l_val2, format_metric(l_val2, t_val2))
+            st.metric(l_val3, format_metric(l_val3, t_val3))
+            st.markdown(f"> **[코멘트]** {t_comment}")
+
+    # [컬럼 2] Stress Test
+    with col_app1_2:
+        with st.container(border=True):
+            st.markdown(f"#### 3. 매크로 스트레스 테스트")
+            stress_rate = st.slider(current_db["stress_name"], min_value=0.0, max_value=15.0, value=2.0, step=0.5, key="stress_slider_app1")
+            recovery_rate = st.number_input("예상 회수율/방어율 (Recovery Rate, %)", value=current_db["recovery_default"], step=5.0, key="rec_rate_app1") / 100
+            
+            # 위에서 계산된 포트폴리오 Base Yield 연동
+            base_st_yield = base_yield 
+            loss_impact = stress_rate * (1 - recovery_rate)
+            adjusted_yield = base_st_yield - loss_impact
+            
+            st.metric("시나리오 적용 후 실질 수익률", f"{adjusted_yield:.2f}%", f"-{loss_impact:.2f}% (손실분)", delta_color="inverse")
+            if adjusted_yield < 5.0: 
+                st.error("⚠️ **경고:** 실질 수익률 5% 미만 하락 (BEP 이탈 위험 진입)")
+            else: 
+                st.success("✅ **안정:** 타겟 인컴 방어 가능 (펀드 펀더멘털 유지)")
+
+    # [컬럼 3] AMC Feasibility
+    with col_app1_3:
+        with st.container(border=True):
+            st.markdown("#### 4. 자산운용사(AMC) 손익 추정")
+            target_aum = st.number_input("초기 목표 AUM (억원)", value=500, step=50, key="t_aum_app1")
+            fixed_cost = st.number_input("연간 고정비용 (상장유지비 등 / 억원)", value=2.0, step=0.5, key="f_cost_app1")
+            expected_revenue = target_aum * (ter / 100) # ter은 % 단위이므로 100으로 나눔
+            net_profit = expected_revenue - fixed_cost
+            
+            st.metric("예상 연간 운용보수 수익", f"{expected_revenue:.2f} 억원")
+            st.metric("예상 영업이익 (Net Profit)", f"{net_profit:.2f} 억원")
+            if ter > 0:
+                bep_aum = fixed_cost / (ter / 100)
+                st.info(f"💡 흑자 전환을 위한 최소 손익분기점(BEP) AUM: 약 **{bep_aum:.0f}억원**")
+
     # =====================================================================
-    # [파생상품(옵션) 기반 ETF 수익 시뮬레이터] 
+    # [Appendix 2] 파생상품(옵션) 기반 ETF 페이오프 시뮬레이터
     # =====================================================================
     st.markdown("---")
-    st.markdown("#### 2. 파생상품(옵션) 결합 수익률 시뮬레이터 (Payoff Modeling)")
-    st.caption("해외에서 유행 중인 초단기(0DTE) 커버드콜 및 하방 100% 방어형(Buffer) 구조를 가상으로 프라이싱하여 보여줍니다.")
+    st.markdown("#### 5. 파생상품(옵션) 결합 수익률 시뮬레이터 (Payoff Modeling)")
+    st.caption("초단기 커버드콜(0DTE) 및 하방 방어형(Buffer) ETF 등 파생상품이 결합된 ETF의 만기 시점 페이오프(Payoff) 구조를 시각화합니다.")
 
     opt_strategy = st.radio("시뮬레이션 전략 선택:", ["초단기 커버드콜 (Covered Call)", "하방 방어형 (Buffer ETF)"], horizontal=True, key="opt_strat_sel")
 
     c_opt1, c_opt2 = st.columns([1, 2])
     
     with c_opt1:
-        st.markdown("**⚙️ 옵션 파라미터 튜닝**")
+        st.markdown("**⚙️ 파라미터(옵션 조건) 설정**")
         if "Covered Call" in opt_strategy:
             strike_pct = st.slider("콜옵션 행사가격 (Strike, % OTM)", min_value=0.0, max_value=10.0, value=2.0, step=0.5, key="strike_pct_app2")
             premium = st.slider("수취 프리미엄 (Premium, %)", min_value=0.5, max_value=5.0, value=1.5, step=0.1, key="prem_app2")
@@ -1216,19 +1374,28 @@ elif main_menu == "3. 글로벌 상품 기획 시뮬레이터":
         if "Covered Call" in opt_strategy:
             y_vals = np.where(x_vals < strike_pct, x_vals + premium, strike_pct + premium)
             max_return = strike_pct + premium
+            
             fig_opt = go.Figure()
-            fig_opt.add_trace(go.Scatter(x=x_vals, y=x_vals, mode='lines', name='기초지수 (S&P 500)', line=dict(dash='dash', color='gray')))
+            fig_opt.add_trace(go.Scatter(x=x_vals, y=x_vals, mode='lines', name='기초지수 (S&P 500 등)', line=dict(dash='dash', color='gray')))
             fig_opt.add_trace(go.Scatter(x=x_vals, y=y_vals, mode='lines', name='커버드콜 ETF 수익률', line=dict(color='#4da6ff', width=3)))
-            fig_opt.update_layout(height=350, margin=dict(t=10, b=10), template="plotly_dark", xaxis_title="기초자산 가격 변동 (%)", yaxis_title="ETF 만기 수익률 (%)", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+            
+            fig_opt.update_layout(height=400, template="plotly_dark", xaxis_title="기초자산 가격 변동 (%)", yaxis_title="ETF 만기 수익률 (%)", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
             st.plotly_chart(fig_opt, use_container_width=True)
-            st.caption(f"💡 기초자산이 {strike_pct}% 이상 급등 시 수익은 {max_return}%로 캡(Cap)이 씌워집니다.")
+            
+            st.metric("최대 기대 수익률 (상방 캡)", f"{max_return:.2f}%")
+            st.caption(f"💡 프리미엄 {premium}%를 수취하여 하락장에서는 그만큼 손실을 방어하지만, 기초자산이 {strike_pct}% 이상 급등할 경우 수익은 {max_return}%로 제한됩니다.")
 
         else:
             y_vals = np.where(x_vals > 0, np.minimum(x_vals, cap_pct), np.where(x_vals >= -buffer_pct, 0, x_vals + buffer_pct))
+            
             fig_opt = go.Figure()
-            fig_opt.add_trace(go.Scatter(x=x_vals, y=x_vals, mode='lines', name='기초지수 (S&P 500)', line=dict(dash='dash', color='gray')))
+            fig_opt.add_trace(go.Scatter(x=x_vals, y=x_vals, mode='lines', name='기초지수 (S&P 500 등)', line=dict(dash='dash', color='gray')))
             fig_opt.add_trace(go.Scatter(x=x_vals, y=y_vals, mode='lines', name='버퍼 ETF 수익률', line=dict(color='#ffb04d', width=3)))
-            fig_opt.add_vrect(x0=-buffer_pct, x1=0, fillcolor="#ffb04d", opacity=0.1, layer="below", line_width=0, annotation_text="방어 구간")
-            fig_opt.update_layout(height=350, margin=dict(t=10, b=10), template="plotly_dark", xaxis_title="기초자산 가격 변동 (%)", yaxis_title="ETF 만기 수익률 (%)", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+            
+            fig_opt.add_vrect(x0=-buffer_pct, x1=0, fillcolor="#ffb04d", opacity=0.1, layer="below", line_width=0, annotation_text="100% 방어 구간", annotation_position="bottom right")
+            
+            fig_opt.update_layout(height=400, template="plotly_dark", xaxis_title="기초자산 가격 변동 (%)", yaxis_title="ETF 만기 수익률 (%)", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
             st.plotly_chart(fig_opt, use_container_width=True)
-            st.caption(f"💡 기초자산이 최대 -{buffer_pct}%까지 하락해도 원금을 보존하며, 상승장에서는 최대 {cap_pct}%까지만 수익을 공유합니다.")
+            
+            st.metric("하방 100% 방어 임계점", f"-{buffer_pct:.1f}%")
+            st.caption(f"💡 기초자산이 최대 -{buffer_pct}%까지 하락해도 원금을 100% 보존하지만, 방어 비용 지불을 위해 상승장에서는 최대 {cap_pct}%까지만 수익을 공유합니다.")
