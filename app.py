@@ -1011,25 +1011,62 @@ elif main_menu == "2. KODEX 리밸런싱 시뮬레이션":
     if uploaded_pdf is not None:
         try:
             # 1. 파일 읽기 및 파싱 (커서 초기화 로직 보강)
-            if uploaded_pdf.name.endswith('.csv'):
+            file_bytes = uploaded_pdf.getvalue()
+            raw_pdf = pd.DataFrame()
+            parsed = False
+            
+            # HTML 형태의 엑셀 파일일 경우 (KODEX 고질적 포맷)
+            try:
+                text_data = file_bytes.decode('utf-8')
+            except:
                 try:
-                    raw_pdf = pd.read_csv(uploaded_pdf, encoding='utf-8')
-                except Exception:
-                    uploaded_pdf.seek(0)
+                    text_data = file_bytes.decode('cp949')
+                except:
+                    text_data = ""
+            
+            if '<table' in text_data.lower():
+                try:
+                    raw_pdf = pd.read_html(io.StringIO(text_data))[0]
+                    parsed = True
+                except: pass
+            
+            # 일반 CSV인 경우 (업로드하신 파일 형태)
+            if not parsed and uploaded_pdf.name.lower().endswith('.csv'):
+                for enc in ['utf-8', 'cp949', 'euc-kr']:
                     try:
-                        raw_pdf = pd.read_csv(uploaded_pdf, encoding='cp949')
-                    except Exception:
-                        uploaded_pdf.seek(0)
-                        raw_pdf = pd.read_csv(uploaded_pdf, encoding='euc-kr')
-            else:
-                raw_pdf = pd.read_excel(uploaded_pdf)
+                        raw_pdf = pd.read_csv(io.BytesIO(file_bytes), encoding=enc)
+                        parsed = True
+                        break
+                    except: pass
+            
+            # 진짜 Excel인 경우
+            if not parsed:
+                try:
+                    raw_pdf = pd.read_excel(io.BytesIO(file_bytes))
+                    parsed = True
+                except: pass
+                
+            if not parsed:
+                st.error("파일을 해독할 수 없습니다. 형식을 확인해주세요.")
+                st.stop()
 
-            # extract_table 함수로 헤더 자동 탐색 후 데이터프레임 추출
-            df_pdf = extract_table(raw_pdf, ['종목명', '종목코드', '비중(%)'])
+            # extract_table 함수로 헤더 자동 탐색 후 데이터프레임 추출 (키워드 유연화)
+            df_pdf = extract_table(raw_pdf, ['종목명', '종목코드', '비중'])
 
             # 빈 컬럼(이름이 nan이거나 빈 문자열) 제거
             df_pdf = df_pdf.loc[:, df_pdf.columns.notnull()]
             df_pdf = df_pdf.loc[:, df_pdf.columns != '']
+
+            # 동적 컬럼명 매핑 (비중(%) 등 미세한 차이 방어)
+            col_name = next((c for c in df_pdf.columns if '종목명' in str(c)), None)
+            col_code = next((c for c in df_pdf.columns if '종목코드' in str(c)), None)
+            col_weight = next((c for c in df_pdf.columns if '비중' in str(c)), None)
+            
+            if not (col_name and col_code and col_weight):
+                st.error("엑셀 파일 내에 '종목명', '종목코드', '비중' 열이 존재하지 않습니다. 파일을 확인해주세요.")
+                st.stop()
+                
+            df_pdf = df_pdf.rename(columns={col_name: '종목명', col_code: '종목코드', col_weight: '비중(%)'})
 
             # 2. 데이터 전처리 (현금/예금 제거 및 티커 클렌징)
             df_pdf = df_pdf.dropna(subset=['종목명', '비중(%)']).copy()
@@ -1350,7 +1387,6 @@ elif main_menu == "3. 글로벌 상품 기획 시뮬레이터":
             stress_rate = st.slider(current_db["stress_name"], min_value=0.0, max_value=15.0, value=2.0, step=0.5, key="stress_slider_app1")
             recovery_rate = st.number_input("예상 회수율/방어율 (Recovery Rate, %)", value=current_db["recovery_default"], step=5.0, key="rec_rate_app1") / 100
             
-            # 위에서 계산된 포트폴리오 Base Yield 연동
             base_st_yield = base_yield 
             loss_impact = stress_rate * (1 - recovery_rate)
             adjusted_yield = base_st_yield - loss_impact
