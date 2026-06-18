@@ -19,7 +19,7 @@ st.set_page_config(page_title="ETF Monitoring AI Agent", layout="wide", initial_
 df_scatter = pd.DataFrame()
 
 # ==========================================
-# ★ Glassmorphism 커스텀 CSS
+# ★ Glassmorphism 커스텀 CSS 및 토글(Expander) 폰트 확대
 # ==========================================
 glassmorphism_css = """
 <style>
@@ -58,10 +58,11 @@ glassmorphism_css = """
     box-shadow: 0 0 12px rgba(77, 166, 255, 0.25) !important;
     font-weight: 600 !important;
 }
-.streamlit-expanderHeader {
-    font-size: 16px !important;
-    font-weight: 600 !important;
-    color: #cbd5e1 !important;
+/* Expander 글씨 크기 키우기 및 강조 */
+.streamlit-expanderHeader, [data-testid="stExpander"] summary p {
+    font-size: 18px !important;
+    font-weight: 700 !important;
+    color: #ffb04d !important;
 }
 #MainMenu {visibility: hidden;}
 header {visibility: hidden;}
@@ -435,7 +436,9 @@ with col_right:
             st.image("20220927092603_1800954_640_640.png", use_container_width=True)
             st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
             st.image("커리어하이 로고(하양).png", use_container_width=True)
-        except: st.markdown("<p style='text-align:right; color:#94a3b8; font-size:12px;'>삼성자산운용 x 커리어하이</p>", unsafe_allow_html=True)
+        except: 
+            # 삼성자산운용 x 커리어하이 텍스트 줄바꿈 처리
+            st.markdown("<p style='text-align:right; color:#94a3b8; font-size:12px; line-height:1.5; margin:0;'>삼성자산운용<br>커리어하이</p>", unsafe_allow_html=True)
 
 with col_main:
     st.session_state.setdefault('dl_summary', "DataLab 데이터가 업로드되지 않았습니다.")
@@ -929,15 +932,8 @@ with col_main:
                 st.divider()
 
                 st.markdown("##### 🗣️ 딥다이브 인사이트 & 날것의 목소리 (Raw VOC)")
-                
-                with st.expander("💡 AI Sub-Agent 분석 요약 (클릭하여 펼치기)", expanded=False):
-                    if 'insight' in voc_data and voc_data['insight'].strip():
-                        insight_html = voc_data['insight'].replace(chr(10), '<br>').replace('【', '<br><b style="color:#4da6ff; font-size:16px;">【').replace('】', '】</b><br>')
-                        st.markdown(f"<div style='padding:15px; background:rgba(255,255,255,0.02); border-radius:10px; border:1px solid rgba(255,255,255,0.05);'>{insight_html}</div>", unsafe_allow_html=True)
-                    else: st.caption("인사이트 리포트 시트/데이터가 없습니다.")
-                
-                st.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
 
+                # 순서 변경: 당일 조회수 폭발 Top 3 먼저 렌더링
                 with st.container(border=True):
                     st.markdown("**🔥 당일 조회수 폭발 Top 3 게시물**")
                     if 'posts' in voc_data and not voc_data['posts'].empty:
@@ -958,6 +954,16 @@ with col_main:
                                 st.markdown("</div>", unsafe_allow_html=True)
                         except: st.caption("원문 게시글을 파싱할 수 없는 데이터 규격입니다.")
                     else: st.caption("게시물 전체 시트/데이터가 없습니다.")
+
+                st.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
+
+                # 순서 변경: AI Sub-Agent 분석 요약 토글 (폰트 크기 업)
+                with st.expander("💡 AI Sub-Agent 분석 요약 (클릭하여 펼치기)", expanded=False):
+                    if 'insight' in voc_data and voc_data['insight'].strip():
+                        insight_html = voc_data['insight'].replace(chr(10), '<br>').replace('【', '<br><b style="color:#4da6ff; font-size:16px;">【').replace('】', '】</b><br>')
+                        st.markdown(f"<div style='padding:15px; background:rgba(255,255,255,0.02); border-radius:10px; border:1px solid rgba(255,255,255,0.05);'>{insight_html}</div>", unsafe_allow_html=True)
+                    else: st.caption("인사이트 리포트 시트/데이터가 없습니다.")
+
             else:
                 st.info("👉 우측 패널에 코랩에서 추출한 '종목토론방 엑셀 파일'을 업로드해주세요.")
 
@@ -1020,7 +1026,24 @@ with col_main:
                         if '📦 기타 섹터/테마' in pivot_df.index: pivot_df = pivot_df.reindex([i for i in pivot_df.index if i != '📦 기타 섹터/테마'] + ['📦 기타 섹터/테마'])
                         
                         pivot_df = pivot_df.loc[(pivot_df != 0).any(axis=1)]
-                        st.dataframe(pivot_df.style.format("{:,}"), use_container_width=True)
+                        
+                        # [추가] 총 AUM 행 추가
+                        pivot_df.loc['총 AUM'] = pivot_df.sum(numeric_only=True)
+                        
+                        # [추가] 스타일링 함수 적용 (KODEX 굵게, 총 AUM 색상 붉은색)
+                        def style_aum(row):
+                            styles = []
+                            for col in pivot_df.columns:
+                                s = ""
+                                if row.name == '총 AUM':
+                                    s += "color: #ff4d4d; font-weight: bold; "
+                                if col == 'KODEX':
+                                    s += "font-weight: bold; "
+                                styles.append(s)
+                            return styles
+                            
+                        styled_df = pivot_df.style.format("{:,}").apply(style_aum, axis=1)
+                        st.dataframe(styled_df, use_container_width=True)
                         
                         aum_context_text = pivot_df.to_string()
             except Exception as e: st.error(f"오류: {e}")
@@ -1088,7 +1111,7 @@ with col_main:
         # =====================================================================
         st.markdown("---")
         st.subheader("📊 [Appendix 1] 글로벌 대체투자 ETF 상품 기획 및 리스크 시뮬레이터")
-        st.info("국내 시장에 부재한 해외 메가 트렌드 실물 자산(BDC, CLO, MLP 등)의 하방 리스크 분석 및 수익성을 검토합니다.")
+        st.info("국내 시장에 부재한 해외 메가 트렌 실물 자산(BDC, CLO, MLP 등)의 하방 리스크 분석 및 수익성을 검토합니다.")
 
         asset_class = st.selectbox(
             "🌍 탐색할 해외 대체투자 자산군 선택:", 
