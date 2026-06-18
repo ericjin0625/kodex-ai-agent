@@ -17,7 +17,7 @@ import io
 # 1. 페이지 레이아웃 및 기본 테마 설정
 st.set_page_config(page_title="ETF Intelligence & Structuring Agent", layout="wide", initial_sidebar_state="collapsed")
 
-# 전역 변수 초기화
+# 전역 변수 초기화 (에러 원천 차단 - session_state 활용)
 if 'df_scatter' not in st.session_state: st.session_state.df_scatter = pd.DataFrame()
 if 'dl_summary' not in st.session_state: st.session_state.dl_summary = "DataLab 데이터가 업로드되지 않았습니다."
 if 'df_real_news' not in st.session_state: st.session_state.df_real_news = pd.DataFrame()
@@ -26,7 +26,7 @@ if 'aum_context_text' not in st.session_state: st.session_state.aum_context_text
 if 'media_context' not in st.session_state: st.session_state.media_context = "데이터 없음"
 
 # ==========================================
-# ★ Glassmorphism 커스텀 CSS & Big 탭(Pill 모양) UI
+# ★ Glassmorphism 커스텀 CSS & Big 탭(Pill 모양) 완벽 UI 개편
 # ==========================================
 glassmorphism_css = """
 <style>
@@ -60,7 +60,7 @@ label, label p, [data-testid="stWidgetLabel"] p { color: #f8fafc !important; }
 /* 텍스트 입력창 CSS */
 div[data-baseweb="textarea"] textarea, .stTextArea textarea { background-color: #0f172a !important; color: #ffffff !important; -webkit-text-fill-color: #ffffff !important; border: 1px solid rgba(77, 166, 255, 0.5) !important; }
 
-/* Big 탭 (Pill 형태의 큰 네모-반원형 버튼) 디자인 */
+/* 🔴 Big 탭 (Pill 형태) - 텍스트 한 줄 정렬 및 세로 슬림화 완벽 적용 */
 div[data-testid="stRadio"] > div[role="radiogroup"] {
     display: flex;
     flex-direction: row;
@@ -69,12 +69,15 @@ div[data-testid="stRadio"] > div[role="radiogroup"] {
 }
 div[data-testid="stRadio"] > div[role="radiogroup"] > label {
     background: rgba(255, 255, 255, 0.05) !important;
-    padding: 15px 30px !important;
-    border-radius: 50px !important;
+    padding: 8px 15px !important; /* 상하 여백을 대폭 줄여서 날렵하게 만듦 */
+    border-radius: 50px !important; /* 양옆 완벽한 반원형 */
     border: 1px solid rgba(255, 255, 255, 0.1) !important;
     cursor: pointer !important;
     text-align: center !important;
     flex: 1 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
     transition: all 0.3s ease !important;
 }
 div[data-testid="stRadio"] > div[role="radiogroup"] > label:hover {
@@ -86,11 +89,14 @@ div[data-testid="stRadio"] > div[role="radiogroup"] > label[data-checked="true"]
     box-shadow: 0 0 20px rgba(77, 166, 255, 0.4) !important;
 }
 div[data-testid="stRadio"] > div[role="radiogroup"] > label p {
-    font-size: 18px !important;
+    font-size: 16px !important;
     font-weight: 800 !important;
     margin: 0 !important;
     color: #ffffff !important;
+    white-space: nowrap !important; /* 글씨가 무조건 한 줄로 옆으로 나열되도록 강제 */
+    text-align: center !important;
 }
+/* 기존 라디오 버튼의 동그라미 숨기기 */
 div[data-testid="stRadio"] > div[role="radiogroup"] > label > div:first-child {
     display: none !important;
 }
@@ -101,7 +107,7 @@ div[data-testid="stRadio"] > div[role="radiogroup"] > label > div:first-child {
 st.markdown(glassmorphism_css, unsafe_allow_html=True)
 
 # ==========================================
-# ★ 파싱 및 연산 함수 모음 (원본 100% 복구)
+# ★ 파싱 및 연산 함수 모음 (원본 100% 유지)
 # ==========================================
 def assign_auto_theme(etf_name):
     try:
@@ -347,17 +353,15 @@ def get_media_intelligence(links):
     return Counter({"월배당": 15, "연금": 12, "안전마진": 8, "인컴": 5}), "Shorts 65%, Long-form 35%"
 
 # =========================================================================
-# ★ 화면 2분할 (메인 탭 : 우측 컨트롤 타워)
+# ★ 화면 분할 (메인 패널 9.0 : 우측 컨트롤 타워 1.0)
 # =========================================================================
-col_main, col_right = st.columns([7.5, 2.5])
+col_main, col_right = st.columns([9.0, 1.0])
 
 # -------------------------------------------------------------------------
 # 우측 패널 (Data Upload Center & Logo)
 # -------------------------------------------------------------------------
 with col_right:
-    st.markdown("""<div style='text-align: right; margin-bottom: 20px;'><h2 style='font-weight: 800; font-size: 24px; line-height: 1.1; letter-spacing: -1px; background: linear-gradient(to right, #ffffff, #93c5fd); -webkit-background-clip: text; -webkit-text-fill-color: transparent;'>SAMSUNG AMC<br>Intelligence</h2><p style='color:#94a3b8; font-size:11px; margin-top:5px; line-height:1.4;'>삼성자산운용<br>커리어하이</p></div>""", unsafe_allow_html=True)
-    st.markdown("### 🎛️ Data Upload Center")
-    st.caption("업로드된 데이터는 전역으로 활용됩니다.")
+    st.markdown("""<div style='text-align: right; margin-bottom: 20px;'><h2 style='font-weight: 800; font-size: 16px; line-height: 1.1; letter-spacing: -1px; background: linear-gradient(to right, #ffffff, #93c5fd); -webkit-background-clip: text; -webkit-text-fill-color: transparent;'>SAMSUNG AMC<br>Intelligence</h2></div>""", unsafe_allow_html=True)
     
     # Placeholder를 이용하여 드롭다운이 파일 업로더 위에 위치하도록 순서 역전
     placeholder_week_dropdown = st.empty()
@@ -369,8 +373,7 @@ with col_right:
         if uploaded_excel is not None:
             try:
                 xls = pd.ExcelFile(uploaded_excel)
-                sheet_names = [sheet for sheet in xls.sheet_names if sheet != "참고사항"]
-                if sheet_names: available_weeks = sheet_names[::-1] 
+                available_weeks = [sheet for sheet in xls.sheet_names if sheet != "참고사항"][::-1] 
             except: pass
             
     with placeholder_week_dropdown.container():
@@ -380,10 +383,10 @@ with col_right:
     uploaded_voc = st.file_uploader("💬 3. 종토방 VOC 엑셀", type=["xlsx", "xls"], key="voc_global")
 
 # -------------------------------------------------------------------------
-# 좌측 메인 패널 (Big 탭 - Small 탭 구조)
+# 좌측 메인 패널 (Big 탭 구조)
 # -------------------------------------------------------------------------
 with col_main:
-    # 🔴 Big 탭 (Pill 형태)
+    # 🔴 Big 탭 (Pill 형태 적용 완료)
     big_tab = st.radio(
         "메인 메뉴",
         ["1. ETF 시장 모니터링", "2. 글로벌 상품 기획 시뮬레이터", "🤖 AI 프롬프트"],
@@ -394,14 +397,14 @@ with col_main:
     st.markdown("<br>", unsafe_allow_html=True)
 
     # =========================================================================
-    # Big 탭 1: ETF 시장 모니터링 (원본 완벽 복원)
+    # Big 탭 1: ETF 시장 모니터링 (100% 원본 복원 완료)
     # =========================================================================
     if big_tab == "1. ETF 시장 모니터링":
         st.markdown("## 📊 ETF Market Intelligence")
         st.caption("국내외 거시 경제, 경쟁사 수급, 마케팅 액션 및 리테일 투자자 심리를 종합적으로 모니터링합니다.")
         
-        # 8개 Small 탭 완벽 복원
-        sub_tabs = st.tabs(["🏠 Home", "📊 Weekly Info", "📈 순매수 & 수익률", "📰 뉴스 & 트렌드", "💸 거래량 추이", "📺 경쟁사 이벤트/동향", "🗣️ 고객 UX", "🥧 ETF/AUM 현황"])
+        # 날아갔던 9개 탭 완벽히 100% 복원
+        sub_tabs = st.tabs(["🏠 Home", "📊 Weekly Info", "📈 순매수 & 수익률", "📰 뉴스 & 트렌드", "💸 거래량 추이", "📺 경쟁사 이벤트/동향", "🗣️ 고객 UX", "🥧 ETF/AUM 현황", "🧠 AI 프롬프트"])
 
         # === Small Tab 0 ===
         with sub_tabs[0]:
@@ -1004,8 +1007,26 @@ with col_main:
                                 st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:14px; font-weight:bold; color:#ffb04d; text-decoration:none;'>[규제] {row['원본제목']} 🔗</a>", unsafe_allow_html=True)
                 else: st.info("관련된 최신 정책 뉴스 피드가 존재하지 않습니다.")
 
+        # === Small Tab 8: AI 프롬프트 원본 복구 (내부 탑재용) ===
+        with sub_tabs[8]:
+            st.markdown("### 🧠 모듈형 마케팅 리포트 자동 생성기")
+            st.caption("대시보드 내 데이터를 융합하여 마크다운 프롬프트를 도출합니다.")
+            
+            df_sc = st.session_state.df_scatter
+            data_context = df_sc.sort_values(by='주간 수익률(%)', ascending=False).head(20).to_string(index=False) if not df_sc.empty else "데이터 부족"
+            dl_context = st.session_state.get('dl_summary', "데이터랩 미연동")
+            
+            news_lines = []
+            if not st.session_state.df_real_news.empty and st.session_state.df_real_news.iloc[0]["원본제목"] != "오류":
+                for _, row in st.session_state.df_real_news.iterrows():
+                    news_lines.append(f"- [{row['게시일 / 출처']}] {row['원본제목']} (링크: {row['링크']})")
+            news_context_text = "\n".join(news_lines) if news_lines else "최신 뉴스 없음"
+
+            prompt_1 = f"너는 KODEX 마케팅 총괄 최고책임자를 보좌하는 AI 에이전트야. 제공하는 대시보드 연동 데이터를 숙지해줘.\n\n[1. 실시간 뉴스 리스트]\n{news_context_text}\n\n[2. 자산 흐름]\n{data_context}\n\n[3. 거래량 추이]\n{st.session_state.df_volume_summary_text}\n\n[4. 검색량]\n{dl_context}\n\n[5. AUM 현황]\n{st.session_state.aum_context_text}\n\n[6. 경쟁사 동향]\n{st.session_state.media_context}"
+            st.code(prompt_1, language="text")
+
     # =========================================================================
-    # Big 탭 2: 글로벌 상품 기획 시뮬레이터 (4대 심화 기능 완벽 탑재)
+    # Big 탭 2: 글로벌 상품 기획 시뮬레이터 (4대 심화 기능 100% 탑재)
     # =========================================================================
     elif big_tab == "2. 글로벌 상품 기획 시뮬레이터":
         st.markdown("## 🌍 Global Alternative ETF Structuring Simulator")
@@ -1035,6 +1056,14 @@ with col_main:
                 norm_weights = edited_df['목표비중(%)'].values / np.sum(edited_df['목표비중(%)'].values)
                 base_yield = np.dot(np.array(b_ylds), norm_weights)
 
+                # 복구된 파이 차트
+                df_pie_show = pd.DataFrame({"Asset": tkrs, "Weight": norm_weights})
+                df_pie_show = df_pie_show[df_pie_show['Weight'] > 0].sort_values(by='Weight', ascending=False)
+                if not df_pie_show.empty:
+                    fig_bdc_pie = px.pie(df_pie_show, names="Asset", values="Weight", hole=0.5, color_discrete_sequence=px.colors.sequential.Blues_r)
+                    fig_bdc_pie.update_layout(height=250, margin=dict(t=10, b=10, l=10, r=10), template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                    st.plotly_chart(fig_bdc_pie, use_container_width=True)
+
         with col_p2:
             with st.container(border=True):
                 st.markdown("**[심화] ETF 운용 구조 및 FX/Tax 최적화**")
@@ -1046,13 +1075,19 @@ with col_main:
                 if "환헤지" in fx_strategy:
                     fx_cost = 2.0 
                     net_yield = base_yield - fx_cost - ter
-                    st.info(f"💡 **환헤지 비용 반영:** 현재 한미 금리 역전 현상으로 인해 연 환산 약 {fx_cost}%의 헤지 프리미엄 비용이 차감됩니다.")
+                    risk_rating = "보통 위험 (Medium Risk)"
+                    fx_desc = f"달러 변동성 제거 (한미 금리차로 인한 헤지 프리미엄 약 {fx_cost}% 차감 반영)"
                 else:
                     net_yield = base_yield - ter
-                    st.info("💡 **환노출 반영:** 달러 강세 국면 시 환차익을 추가로 향유할 수 있으나, 변동성에 노출됩니다.")
+                    risk_rating = "높은 위험 (High Risk)"
+                    fx_desc = "달러 강세 시 환차익 향유 가능 (단, 변동성 증가)"
                 
-                # Tax Logic
+                st.markdown("<br>", unsafe_allow_html=True)
+                st.markdown("##### 📄 Simulated Product Factsheet")
                 st.metric("최종 타겟 배당수익률 (Net Yield)", f"{net_yield:.2f}%")
+                st.write(f"- **위험 등급:** {risk_rating}")
+                st.write(f"- **FX 전략:** {fx_desc}")
+                
                 if net_yield >= 5.0:
                     st.success("💰 **세금 최적화(Tax) 분석:** 배당소득세(15.4%) 및 종합과세 부담 방어를 위해 **ISA 및 IRP(퇴직연금) 계좌 편입용**으로 타겟팅하는 것이 절대적으로 유리합니다.")
 
@@ -1098,10 +1133,10 @@ with col_main:
                 seeding_cap = st.number_input("초기 설정액 (Seeding, 억원)", min_value=50, value=200, step=50)
                 target_aum = st.number_input("1년 차 타겟 AUM (억원)", min_value=100, value=1000, step=100)
                 mkt_cost = st.number_input("연간 런칭 마케팅 예산 (억원)", value=1.5, step=0.5)
+                fixed_cost = st.number_input("연간 상장유지 고정비용 (억원)", value=2.0, step=0.5)
                 
                 amc_margin = ter - 0.05 # 사무/신탁보수 5bp 제외 가정
                 amc_rev = target_aum * (amc_margin / 100)
-                fixed_cost = 2.0 # 상장유지비 등 고정비
                 net_profit = amc_rev - fixed_cost - mkt_cost
                 
                 bep_aum = (fixed_cost + mkt_cost) / (amc_margin / 100) if amc_margin > 0 else 0
