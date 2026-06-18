@@ -104,7 +104,17 @@ def extract_table(df, expected_cols):
         row_str = " ".join([str(val) for val in row.values if pd.notna(val)])
         if all(ec in row_str for ec in expected_cols):
             new_df = df.iloc[i+1:].copy()
-            new_df.columns = [str(c) for c in row.values]
+            # 중복 컬럼명 방어 로직 추가
+            raw_cols = [str(c).strip() for c in row.values]
+            seen = set()
+            final_cols = []
+            for c in raw_cols:
+                new_c = c if c not in ['nan', 'None', ''] else 'Unnamed'
+                while new_c in seen:
+                    new_c += "_"
+                seen.add(new_c)
+                final_cols.append(new_c)
+            new_df.columns = final_cols
             return new_df.dropna(how='all').reset_index(drop=True)
     return df
 
@@ -1015,31 +1025,35 @@ elif main_menu == "2. KODEX 리밸런싱 시뮬레이션":
             raw_pdf = pd.DataFrame()
             parsed = False
             
-            # HTML 형태의 엑셀 파일일 경우 (KODEX 고질적 포맷)
-            try:
-                text_data = file_bytes.decode('utf-8')
-            except:
+            text_data = ""
+            for enc in ['utf-8', 'cp949', 'euc-kr']:
                 try:
-                    text_data = file_bytes.decode('cp949')
-                except:
-                    text_data = ""
-            
-            if '<table' in text_data.lower():
-                try:
-                    raw_pdf = pd.read_html(io.StringIO(text_data))[0]
-                    parsed = True
+                    text_data = file_bytes.decode(enc)
+                    break
                 except: pass
             
-            # 일반 CSV인 경우 (업로드하신 파일 형태)
-            if not parsed and uploaded_pdf.name.lower().endswith('.csv'):
-                for enc in ['utf-8', 'cp949', 'euc-kr']:
+            if text_data:
+                # HTML 형태의 엑셀 파일일 경우 (KODEX 고질적 포맷)
+                if '<table' in text_data.lower():
                     try:
-                        raw_pdf = pd.read_csv(io.BytesIO(file_bytes), encoding=enc)
+                        raw_pdf = pd.read_html(io.StringIO(text_data))[0]
                         parsed = True
-                        break
+                    except: pass
+                
+                # 일반 CSV인 경우 (데이터 구조 불일치 ParserError 방지)
+                if not parsed:
+                    lines = text_data.split('\n')
+                    skip_idx = 0
+                    for i, line in enumerate(lines[:30]): 
+                        if '종목명' in line and '비중' in line:
+                            skip_idx = i
+                            break
+                    try:
+                        raw_pdf = pd.read_csv(io.StringIO(text_data), skiprows=skip_idx, on_bad_lines='skip')
+                        parsed = True
                     except: pass
             
-            # 진짜 Excel인 경우
+            # 진짜 바이너리 엑셀(.xlsx, .xls)인 경우 대비
             if not parsed:
                 try:
                     raw_pdf = pd.read_excel(io.BytesIO(file_bytes))
@@ -1050,7 +1064,7 @@ elif main_menu == "2. KODEX 리밸런싱 시뮬레이션":
                 st.error("파일을 해독할 수 없습니다. 형식을 확인해주세요.")
                 st.stop()
 
-            # extract_table 함수로 헤더 자동 탐색 후 데이터프레임 추출 (키워드 유연화)
+            # extract_table 함수로 헤더 자동 탐색 후 데이터프레임 추출
             df_pdf = extract_table(raw_pdf, ['종목명', '종목코드', '비중'])
 
             # 빈 컬럼(이름이 nan이거나 빈 문자열) 제거
@@ -1342,10 +1356,10 @@ elif main_menu == "3. 글로벌 상품 기획 시뮬레이터":
         with st.container(border=True):
             st.markdown(f"#### 2. 대표자산 크레딧 요약")
             
-            # 드롭다운에 모든 구성 종목(25~30개)을 띄우도록 확장
+            # 25~30개 전체 종목 100% 드롭다운 반영 완료
             selected_ticker = st.selectbox("분석할 대표 종목 선택:", tkrs, key="ticker_sel_app1")
             
-            # 선택된 종목이 mock 데이터에 있으면 가져오고, 없으면 동적으로 가상 데이터(Fallback) 생성
+            # 하드코딩된 3개 외의 종목을 클릭하더라도 배당률 기반으로 동적 AI 코멘트 및 재무지표 자동 생성
             if selected_ticker in current_db["data"]:
                 t_val1, t_val2, t_val3, t_comment = current_db["data"][selected_ticker]
             else:
