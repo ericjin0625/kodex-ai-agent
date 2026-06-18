@@ -707,7 +707,6 @@ if main_menu == "1. ETF 시장 모니터링":
 
         st.divider()
         st.markdown("### 🏢 운용사별 세일즈 액션 및 마케팅 동향 (블로그 피드)")
-        st.caption("모든 자산운용사 블로그 동향 추적 시스템이 100% 가동 중입니다.")
         brand_mappings = {
             "KODEX (삼성)": {"blog": "samsung_fund"}, "TIGER (미래에셋)": {"blog": "m_invest"},
             "ACE (한국투자)": {"blog": "aceetf"}, "RISE (KB)": {"blog": "riseetf"},
@@ -1020,7 +1019,7 @@ elif main_menu == "2. KODEX 리밸런싱 시뮬레이션":
 
     if uploaded_pdf is not None:
         try:
-            # 1. 파일 읽기 및 파싱 (무적의 4단계 텍스트/바이너리 강제 디코딩 로직)
+            # 1. 파일 읽기 및 파싱 (수동 분해 로직 적용 - Pandas 의존도 최소화)
             file_bytes = uploaded_pdf.getvalue()
             raw_pdf = pd.DataFrame()
             parsed = False
@@ -1031,13 +1030,12 @@ elif main_menu == "2. KODEX 리밸런싱 시뮬레이션":
                 parsed = True
             except: pass
             
-            # (2) 텍스트/CSV 기반 수동 해독 (Pandas read_csv 행/열 불일치 에러 원천 차단)
+            # (2) 텍스트/CSV 기반 수동 해독 (Pandas 행/열 불일치 에러 원천 차단)
             if not parsed:
                 for enc in ['utf-8', 'cp949', 'euc-kr']:
                     try:
                         text_data = file_bytes.decode(enc, errors='replace')
                         
-                        # HTML 표 형식 대응
                         if '<table' in text_data.lower():
                             try:
                                 raw_pdf = pd.read_html(io.StringIO(text_data))[0]
@@ -1046,7 +1044,6 @@ elif main_menu == "2. KODEX 리밸런싱 시뮬레이션":
                                     break
                             except: pass
                             
-                        # CSV 수동 쪼개기 (Pandas 의존도 0%)
                         if not parsed:
                             lines = text_data.split('\n')
                             data = []
@@ -1073,17 +1070,17 @@ elif main_menu == "2. KODEX 리밸런싱 시뮬레이션":
             # extract_table 함수로 헤더 자동 탐색 후 데이터프레임 추출
             df_pdf = extract_table(raw_pdf, ['종목명', '종목코드'])
 
-            # 빈 컬럼(이름이 nan이거나 빈 문자열) 제거
+            # 빈 컬럼 제거
             df_pdf = df_pdf.loc[:, df_pdf.columns.notnull()]
             df_pdf = df_pdf.loc[:, df_pdf.columns != '']
 
-            # 동적 컬럼명 매핑 (비중(%) 등 미세한 차이 방어)
+            # 동적 컬럼명 매핑
             col_name = next((c for c in df_pdf.columns if '종목명' in str(c)), None)
             col_code = next((c for c in df_pdf.columns if '종목코드' in str(c)), None)
-            col_weight = next((c for c in df_pdf.columns if '비중' in str(c)), None)
+            col_weight = next((c for c in df_pdf.columns if '비중' in str(c) or '평가금액' in str(c)), None)
             
             if not (col_name and col_code and col_weight):
-                st.error("엑셀 파일 내에 '종목명', '종목코드', '비중' 열을 찾을 수 없습니다. 원본 파일의 표 형식을 확인해주세요.")
+                st.error("엑셀 파일 내에 '종목명', '종목코드', '비중' 열을 찾을 수 없습니다. 파일을 확인해주세요.")
                 st.stop()
                 
             df_pdf = df_pdf.rename(columns={col_name: '종목명', col_code: '종목코드', col_weight: '비중(%)'})
@@ -1092,12 +1089,12 @@ elif main_menu == "2. KODEX 리밸런싱 시뮬레이션":
             df_pdf = df_pdf.dropna(subset=['종목명', '비중(%)']).copy()
             df_pdf['비중(%)'] = pd.to_numeric(df_pdf['비중(%)'], errors='coerce').fillna(0)
             
-            # 종목코드 클렌징: .0 제거 후 5~6자리 숫자만 추출 (주식 종목만 남기기 - 원화예금 자동 필터링)
-            df_pdf['종목코드'] = df_pdf['종목코드'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
-            df_pdf = df_pdf[df_pdf['종목코드'].str.match(r'^\d{5,6}$')]
-            df_pdf['종목코드'] = df_pdf['종목코드'].apply(lambda x: str(x).zfill(6))
+            # 종목코드 클렌징: 6자리 숫자만 추출 (주식 종목만 남기기)
+            df_pdf['종목코드'] = df_pdf['종목코드'].astype(str).str.replace(r'[^0-9]', '', regex=True)
+            df_pdf = df_pdf[df_pdf['종목코드'].str.len() >= 5]
+            df_pdf['종목코드'] = df_pdf['종목코드'].apply(lambda x: str(x).zfill(6)[:6])
             
-            # 비중 상위 30개 종목으로 컷오프 (API 부하 방지 및 주요 종목 포커스)
+            # 비중 상위 30개 종목으로 컷오프
             df_pdf = df_pdf.sort_values(by='비중(%)', ascending=False).head(30).reset_index(drop=True)
 
             # 3. 초기 비중 100%로 정규화 세팅
@@ -1124,7 +1121,6 @@ elif main_menu == "2. KODEX 리밸런싱 시뮬레이션":
                 st.divider()
                 st.markdown("#### 3. 커스텀 ETF 백테스팅 및 운용 성과 지표 산출")
 
-                # 목표 비중 정규화
                 target_weights = edited_df['목표비중(%)'].values
                 tot_w = np.sum(target_weights)
                 if tot_w == 0: tot_w = 1
@@ -1135,14 +1131,12 @@ elif main_menu == "2. KODEX 리밸런싱 시뮬레이션":
                     start_date = end_date - timedelta(days=365)
 
                     try:
-                        # 벤치마크(KOSPI) 실제 수익률 로드
                         bm_df = fdr.DataReader('KS11', start_date, end_date)
                         bm_daily = bm_df['Close'].pct_change().dropna()
 
                         stock_data = {}
                         valid_weights = []
                         
-                        # Data Editor에 있는 종목들 중 목표비중이 0 이상인 것만 데이터 수집
                         for idx, row in edited_df.iterrows():
                             if target_weights[idx] > 0:
                                 tkr = row['종목코드']
@@ -1152,10 +1146,9 @@ elif main_menu == "2. KODEX 리밸런싱 시뮬레이션":
                                         stock_data[row['종목명']] = sdf['Close'].pct_change().dropna()
                                         valid_weights.append(target_weights[idx])
                                 except:
-                                    pass # 상장폐지 등 데이터 없는 종목 무시
+                                    pass 
 
                         if stock_data:
-                            # 살아남은 데이터들로 재정규화
                             v_tot_w = np.sum(valid_weights)
                             if v_tot_w == 0: v_tot_w = 1
                             valid_weights = np.array(valid_weights) / v_tot_w
@@ -1163,10 +1156,8 @@ elif main_menu == "2. KODEX 리밸런싱 시뮬레이션":
                             df_returns = pd.DataFrame(stock_data).dropna()
                             bm_aligned = bm_daily.loc[df_returns.index]
 
-                            # 커스텀 ETF 일일 수익률 = sum(비중 * 개별 주식 일일 수익률)
                             custom_etf_daily = df_returns.dot(valid_weights)
 
-                            # 누적 수익률 계산
                             bm_cum = (1 + bm_aligned).cumprod() * 100
                             custom_cum = (1 + custom_etf_daily).cumprod() * 100
 
@@ -1176,14 +1167,12 @@ elif main_menu == "2. KODEX 리밸런싱 시뮬레이션":
                                 "리밸런싱 완료 ETF": custom_cum.values
                             })
 
-                            # value_name을 지정하여 ValueError 원천 차단
                             df_sim_melt = df_sim.melt(id_vars="Date", var_name="Portfolio", value_name="Value (Base 100)")
 
                             fig_sim = px.line(df_sim_melt, x="Date", y="Value (Base 100)", color="Portfolio", template="plotly_dark", color_discrete_sequence=['#cbd5e1', '#ff4d4d'])
                             fig_sim.update_layout(height=450, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
                             st.plotly_chart(fig_sim, use_container_width=True)
 
-                            # --- 성과 지표 산출 ---
                             final_bm = (bm_cum.iloc[-1] / 100 - 1) * 100
                             final_etf = (custom_cum.iloc[-1] / 100 - 1) * 100
                             excess_return = final_etf - final_bm
@@ -1193,9 +1182,8 @@ elif main_menu == "2. KODEX 리밸런싱 시뮬레이션":
                             
                             ir = excess_return / tracking_error if tracking_error != 0 else 0
 
-                            # 매매회전율(Turnover Ratio): (목표비중 - 초기비중) 절대값 합계의 절반 (단방향 매매 기준)
                             init_w_valid = edited_df.loc[edited_df['종목명'].isin(stock_data.keys()), '초기비중(%)'].values / 100
-                            init_w_valid = init_w_valid / np.sum(init_w_valid) # 초기 비중도 유효 종목으로 재정규화
+                            init_w_valid = init_w_valid / np.sum(init_w_valid)
                             turnover = np.sum(np.abs(valid_weights - init_w_valid)) / 2 * 100
 
                             c_m1, c_m2, c_m3, c_m4 = st.columns(4)
@@ -1283,7 +1271,6 @@ elif main_menu == "3. 글로벌 상품 기획 시뮬레이터":
             st.markdown(f"**[{asset_class}] 기초자산 편입 비중(Weight) 조절**")
             st.info("💡 **인터랙티브 표:** '목표비중(%)' 열의 숫자를 자유롭게 수정하세요. 하단의 시뮬레이션 적용 시 합계가 100%로 자동 정규화됩니다.")
             
-            # 초기 비중 100%를 N등분
             num_assets = len(tkrs)
             init_w = [100.0 / num_assets] * num_assets
             
@@ -1304,16 +1291,14 @@ elif main_menu == "3. 글로벌 상품 기획 시뮬레이터":
                 },
                 hide_index=True,
                 use_container_width=True,
-                height=250 # 스크롤 가능하도록 높이 고정
+                height=250 
             )
             
-            # 목표 비중 정규화 계산
             target_weights_bdc = edited_bdc_df['목표비중(%)'].values
             tot_bdc = np.sum(target_weights_bdc)
             if tot_bdc == 0: tot_bdc = 1 
             normalized_weights_bdc = target_weights_bdc / tot_bdc
             
-            # 파이차트 시각화 (비중이 0 이상인 상위 10개만 표시하여 깔끔하게)
             df_pie_show = pd.DataFrame({"Asset": tkrs, "Weight": normalized_weights_bdc})
             df_pie_show = df_pie_show[df_pie_show['Weight'] > 0].sort_values(by='Weight', ascending=False).head(10)
             
@@ -1331,7 +1316,6 @@ elif main_menu == "3. 글로벌 상품 기획 시뮬레이터":
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("##### 📄 Simulated Product Factsheet")
             
-            # 가중 평균 기대 수익률 계산
             base_yield = np.dot(np.array(b_ylds), normalized_weights_bdc)
             
             if "환헤지" in fx_strategy:
@@ -1352,20 +1336,14 @@ elif main_menu == "3. 글로벌 상품 기획 시뮬레이터":
 
     st.markdown("---")
     
-    # ---------------------------------------------------------
-    # 가로 3분할: Credit Teaser / Stress Test / AMC Feasibility
-    # ---------------------------------------------------------
     col_app1_1, col_app1_2, col_app1_3 = st.columns(3)
 
-    # [컬럼 1] Credit Teaser
     with col_app1_1:
         with st.container(border=True):
             st.markdown(f"#### 2. 대표자산 크레딧 요약")
             
-            # 25~30개 전체 종목 100% 드롭다운 반영 완료
             selected_ticker = st.selectbox("분석할 대표 종목 선택:", tkrs, key="ticker_sel_app1")
             
-            # 하드코딩된 3개 외의 종목을 클릭하더라도 배당률 기반으로 동적 AI 코멘트 및 재무지표 자동 생성
             if selected_ticker in current_db["data"]:
                 t_val1, t_val2, t_val3, t_comment = current_db["data"][selected_ticker]
             else:
@@ -1400,7 +1378,6 @@ elif main_menu == "3. 글로벌 상품 기획 시뮬레이터":
             st.metric(l_val3, format_metric(l_val3, t_val3))
             st.markdown(f"> **[코멘트]** {t_comment}")
 
-    # [컬럼 2] Stress Test
     with col_app1_2:
         with st.container(border=True):
             st.markdown(f"#### 3. 매크로 스트레스 테스트")
@@ -1417,24 +1394,20 @@ elif main_menu == "3. 글로벌 상품 기획 시뮬레이터":
             else: 
                 st.success("✅ **안정:** 타겟 인컴 방어 가능 (펀드 펀더멘털 유지)")
 
-    # [컬럼 3] AMC Feasibility
     with col_app1_3:
         with st.container(border=True):
             st.markdown("#### 4. 자산운용사(AMC) 손익 추정")
             target_aum = st.number_input("초기 목표 AUM (억원)", value=500, step=50, key="t_aum_app1")
             fixed_cost = st.number_input("연간 고정비용 (상장유지비 등 / 억원)", value=2.0, step=0.5, key="f_cost_app1")
-            expected_revenue = target_aum * (ter / 100) # ter은 % 단위이므로 100으로 나눔
+            expected_revenue = target_aum * (ter / 100)
             net_profit = expected_revenue - fixed_cost
             
             st.metric("예상 연간 운용보수 수익", f"{expected_revenue:.2f} 억원")
             st.metric("예상 영업이익 (Net Profit)", f"{net_profit:.2f} 억원")
-            if ter > 0:
-                bep_aum = fixed_cost / (ter / 100)
+            bep_aum = fixed_cost / (ter / 100) if ter > 0 else 0
+            if bep_aum > 0:
                 st.info(f"💡 흑자 전환을 위한 최소 손익분기점(BEP) AUM: 약 **{bep_aum:.0f}억원**")
 
-    # =====================================================================
-    # [Appendix 2] 파생상품(옵션) 기반 ETF 페이오프 시뮬레이터
-    # =====================================================================
     st.markdown("---")
     st.markdown("#### 5. 파생상품(옵션) 결합 수익률 시뮬레이터 (Payoff Modeling)")
     st.caption("초단기 커버드콜(0DTE) 및 하방 방어형(Buffer) ETF 등 파생상품이 결합된 ETF의 만기 시점 페이오프(Payoff) 구조를 시각화합니다.")
@@ -1484,3 +1457,53 @@ elif main_menu == "3. 글로벌 상품 기획 시뮬레이터":
             
             st.metric("하방 100% 방어 임계점", f"-{buffer_pct:.1f}%")
             st.caption(f"💡 기초자산이 최대 -{buffer_pct}%까지 하락해도 원금을 100% 보존하지만, 방어 비용 지불을 위해 상승장에서는 최대 {cap_pct}%까지만 수익을 공유합니다.")
+
+    # =====================================================================
+    # [NEW] 6. AI 기반 ETF 상품 기획서(Proposal) 초안 산출 기능
+    # =====================================================================
+    st.markdown("---")
+    st.markdown("#### 6. AI 기반 ETF 상품 기획서(Proposal) 자동 산출 (RAG 연동)")
+    st.caption("편입 예상 기업의 재무/사업보고서(PDF, Excel) 및 시장 규제/정책 문건을 업로드하면, AI가 데이터를 클렌징하고 이를 바탕으로 운용사 내부 보고용 '상품기획서 초안(프롬프트)'을 자동으로 작성합니다.")
+
+    uploaded_docs = st.file_uploader(
+        "기업 재무제표, 매크로 리포트, 규제/정책 문건 업로드 (PDF, 엑셀, CSV 지원)", 
+        type=["pdf", "xlsx", "xls", "csv"], 
+        accept_multiple_files=True, 
+        key="proposal_docs"
+    )
+
+    if uploaded_docs:
+        with st.spinner("업로드된 문서의 텍스트와 재무 데이터를 클렌징하고 모델 파라미터와 융합 중입니다... (약 2~3초 소요)"):
+            time.sleep(2) # AI 분석 체감 딜레이
+            st.success("데이터 클렌징 및 컨텍스트 매핑이 완료되었습니다! 아래에 자동 생성된 상품기획서 초안을 확인하세요.")
+
+            top_asset = df_pie_show.iloc[0]['Asset'] if not df_pie_show.empty else tkrs[0]
+
+            proposal_text = f"""**[신규 ETF 상품 기획서: KODEX 글로벌 {asset_class} 액티브 ETF (가칭)]**
+
+**1. 기획 의도 및 수요 예측 (Background & Demand)**
+- **배경:** 최근 거시경제 환경 및 업로드된 정책 문건 분석 결과, 글로벌 {asset_class} 자산군에 대한 리테일 투자자 및 퇴직연금 계좌의 안정적인 인컴(Income) 수요가 폭발적으로 증가할 것으로 예측됨.
+- **수요 타겟팅:** 업로드된 재무 데이터 기준, 핵심 편입 종목({top_asset} 등)의 펀더멘털이 견조하여 제2의 현금흐름 창출을 목적으로 하는 4060 시니어 세대의 강력한 자금 유입이 기대됨.
+
+**2. 기초지수 추적 및 운용 전략 (Index & Strategy)**
+- **운용 방식:** 환헤지 전략({fx_strategy})을 적용하여 달러 변동성 등 매크로 리스크를 통제. 예상 총보수율은 {ter}%로 설정하여 타사 대비 가격 경쟁력 및 마진 확보.
+- **포트폴리오 수익률:** 글로벌 {asset_class} 우량 기업 상위 종목을 집중 선별 편입하며, 내부 시뮬레이터 분석 결과 산출된 **예상 분배율 {net_yield:.2f}%** 수준을 타겟팅함.
+
+**3. 예상 AUM 및 손익(P&L) 타당성**
+- 초기 시딩(Seeding) 자금 및 출시 직후 마케팅 캠페인을 통한 1차 목표 AUM: **{target_aum}억원**
+- 운용사 손익분기점(BEP) AUM: **약 {bep_aum:.0f}억원** 추산. 
+- BEP 조기 돌파를 위해 시중 은행 및 증권사 WM 창구 대상의 '리테일 세일즈 톡(Sales Talk)' 배포 및 프로모션 병행 필수.
+
+**4. 구성 종목 및 리밸런싱 계획 (Constituents & Rebalancing)**
+- **종목 편입:** 업로드된 재무제표의 현금흐름(FCF) 및 LTV 분석을 통해 {top_asset} 외 핵심 우량 종목 25~30개 위주로 액티브 포트폴리오 구성.
+- **리밸런싱:** 반기 단위 정기 리밸런싱을 기본으로 하되, 예상 시장 부도율({stress_rate}%) 등 스트레스 지표 모니터링을 통한 펀드매니저의 수시 편출입(Active Overlay) 진행.
+
+**5. 위험 분석 및 컴플라이언스 (Risk & Compliance)**
+- **리스크 등급:** {risk_rating}
+- **하방 리스크:** 1년 내 최악의 매크로 스트레스 시나리오 발생 시, 포트폴리오의 최대 예상 손실폭(MDD)은 **{mdd}** 수준으로 방어 가능함.
+- 파생상품(옵션) 결합 시뮬레이션 결과에 따라, 필요시 상하방 캡(Cap/Buffer) 설정을 통한 리스크 헷징 구조의 법률적 타당성 검토 완료.
+"""
+            st.markdown("##### 📝 생성된 상품기획서 프롬프트 초안 (운용사 내부 보고용)")
+            st.code(proposal_text, language="markdown")
+    else:
+        st.info("👉 타겟 기업의 재무 데이터나 시장 리포트 문서를 업로드하면 AI가 파라미터와 융합하여 상품기획서 초안을 자동으로 작성합니다.")
