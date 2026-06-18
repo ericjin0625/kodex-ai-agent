@@ -508,7 +508,6 @@ if main_menu == "1. ETF 시장 모니터링":
                                 df_scatter_filtered = df_merged[df_merged['종목명'].isin(selected_scatter_etfs)].copy()
                                 df_scatter_filtered['주간 수익률(%)'] = df_scatter_filtered['종목명'].map(real_returns)
                                 
-                                # Global 에러 방지 - 세션 스테이트 활용
                                 st.session_state.df_scatter = df_scatter_filtered.dropna()
                                 df_sc = st.session_state.df_scatter
                                 
@@ -885,7 +884,6 @@ if main_menu == "1. ETF 시장 모니터링":
                         fig_market_share.update_layout(height=420, margin=dict(t=20, l=20, r=20, b=20), template="plotly_dark", showlegend=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                         st.plotly_chart(fig_market_share, use_container_width=True)
                     with col_table:
-                        # 툴바가 사라지는 Styler의 한계를 극복하기 위해 우측 상단에 수동 다운로드 버튼 배치
                         c_title, c_btn = st.columns([7, 3])
                         with c_title:
                             st.markdown("#### 📊 TOP 4 운용사 테마별 AUM 현황")
@@ -1012,12 +1010,17 @@ elif main_menu == "2. KODEX 리밸런싱 시뮬레이션":
 
     if uploaded_pdf is not None:
         try:
-            # 1. 파일 읽기 및 파싱
+            # 1. 파일 읽기 및 파싱 (커서 초기화 로직 보강)
             if uploaded_pdf.name.endswith('.csv'):
                 try:
                     raw_pdf = pd.read_csv(uploaded_pdf, encoding='utf-8')
-                except:
-                    raw_pdf = pd.read_csv(uploaded_pdf, encoding='cp949')
+                except Exception:
+                    uploaded_pdf.seek(0)
+                    try:
+                        raw_pdf = pd.read_csv(uploaded_pdf, encoding='cp949')
+                    except Exception:
+                        uploaded_pdf.seek(0)
+                        raw_pdf = pd.read_csv(uploaded_pdf, encoding='euc-kr')
             else:
                 raw_pdf = pd.read_excel(uploaded_pdf)
 
@@ -1296,11 +1299,32 @@ elif main_menu == "3. 글로벌 상품 기획 시뮬레이터":
     with col_app1_1:
         with st.container(border=True):
             st.markdown(f"#### 2. 대표자산 크레딧 요약")
-            # 대표 종목 3개에 대해서만 상세 코멘트 제공 (위의 mock_db["data"]에 정의됨)
-            top_3_tkrs = current_db["tickers"][:3]
-            selected_ticker = st.selectbox("분석할 대표 종목 선택:", top_3_tkrs, key="ticker_sel_app1")
             
-            t_val1, t_val2, t_val3, t_comment = current_db["data"][selected_ticker]
+            # 드롭다운에 모든 구성 종목(25~30개)을 띄우도록 확장
+            selected_ticker = st.selectbox("분석할 대표 종목 선택:", tkrs, key="ticker_sel_app1")
+            
+            # 선택된 종목이 mock 데이터에 있으면 가져오고, 없으면 동적으로 가상 데이터(Fallback) 생성
+            if selected_ticker in current_db["data"]:
+                t_val1, t_val2, t_val3, t_comment = current_db["data"][selected_ticker]
+            else:
+                idx = tkrs.index(selected_ticker)
+                b_y = b_ylds[idx]
+                if asset_class == "사모신용 (BDC)":
+                    t_val1 = b_y
+                    t_val2 = round(40.0 + (b_y - 6.0) * 1.5, 1) 
+                    t_val3 = round(80.0 + (b_y / 15.0) * 15.0, 1) 
+                    t_comment = f"{nms[idx]}는 우수한 자산 건전성을 바탕으로 배당 안정성을 추구하며, 당사 포트폴리오의 리스크 조정 수익률을 제고하는 핵심 편입 자산입니다."
+                elif asset_class == "대출채권담보부증권 (CLO)":
+                    t_val1 = b_y
+                    t_val2 = max(0.0, min(100.0, 100.0 - (b_y - 5.0) * 20.0))
+                    t_val3 = round(0.2 + (b_y / 20.0), 2)
+                    t_comment = f"{nms[idx]}는 정교한 트랜치(Tranche) 분석을 통해 선정되었으며, 금리 민감도를 통제함과 동시에 목표 인컴을 달성하는 데 기여합니다."
+                else: 
+                    t_val1 = b_y
+                    t_val2 = round(1.5 + (10.0 - b_y) * 0.1, 1)
+                    t_val3 = round(75.0 + (b_y / 10.0) * 5.0, 1)
+                    t_comment = f"{nms[idx]}는 필수 에너지 인프라 자산을 기반으로 안정적인 장기 현금흐름(Toll-road)을 창출하여 강력한 배당 커버리지를 제공합니다."
+
             l_val1, l_val2, l_val3 = current_db["labels"]
 
             def format_metric(label, value):
@@ -1321,7 +1345,6 @@ elif main_menu == "3. 글로벌 상품 기획 시뮬레이터":
             stress_rate = st.slider(current_db["stress_name"], min_value=0.0, max_value=15.0, value=2.0, step=0.5, key="stress_slider_app1")
             recovery_rate = st.number_input("예상 회수율/방어율 (Recovery Rate, %)", value=current_db["recovery_default"], step=5.0, key="rec_rate_app1") / 100
             
-            # 위에서 계산된 포트폴리오 Base Yield 연동
             base_st_yield = base_yield 
             loss_impact = stress_rate * (1 - recovery_rate)
             adjusted_yield = base_st_yield - loss_impact
@@ -1338,7 +1361,7 @@ elif main_menu == "3. 글로벌 상품 기획 시뮬레이터":
             st.markdown("#### 4. 자산운용사(AMC) 손익 추정")
             target_aum = st.number_input("초기 목표 AUM (억원)", value=500, step=50, key="t_aum_app1")
             fixed_cost = st.number_input("연간 고정비용 (상장유지비 등 / 억원)", value=2.0, step=0.5, key="f_cost_app1")
-            expected_revenue = target_aum * (ter / 100) # ter은 % 단위이므로 100으로 나눔
+            expected_revenue = target_aum * (ter / 100)
             net_profit = expected_revenue - fixed_cost
             
             st.metric("예상 연간 운용보수 수익", f"{expected_revenue:.2f} 억원")
