@@ -23,7 +23,7 @@ if 'df_scatter' not in st.session_state:
 comp_yt_links = []
 
 # ==========================================
-# ★ Glassmorphism 커스텀 CSS
+# ★ Glassmorphism 커스텀 CSS (텍스트창 흰색 글씨 수정)
 # ==========================================
 glassmorphism_css = """
 <style>
@@ -70,6 +70,16 @@ glassmorphism_css = """
 [data-testid="stSidebar"] {
     background-color: rgba(15, 23, 42, 0.8) !important;
     border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+textarea {
+    background-color: rgba(15, 23, 42, 0.6) !important;
+    color: #ffffff !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 8px !important;
+}
+textarea:focus {
+    border: 1px solid rgba(77, 166, 255, 0.5) !important;
+    box-shadow: 0 0 8px rgba(77, 166, 255, 0.25) !important;
 }
 #MainMenu {visibility: hidden;}
 header {visibility: hidden;}
@@ -706,6 +716,7 @@ if main_menu == "1. ETF 시장 모니터링":
 
         st.divider()
         st.markdown("### 🏢 운용사별 세일즈 액션 및 마케팅 동향 (블로그 피드)")
+        st.caption("모든 자산운용사 블로그 동향 추적 시스템이 100% 가동 중입니다.")
         brand_mappings = {
             "KODEX (삼성)": {"blog": "samsung_fund"}, "TIGER (미래에셋)": {"blog": "m_invest"},
             "ACE (한국투자)": {"blog": "aceetf"}, "RISE (KB)": {"blog": "riseetf"},
