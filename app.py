@@ -23,7 +23,7 @@ if 'df_scatter' not in st.session_state:
 comp_yt_links = []
 
 # ==========================================
-# ★ Glassmorphism 커스텀 CSS (텍스트창 흰색 글씨 수정)
+# ★ Glassmorphism 커스텀 CSS (라이트 모드 충돌 완벽 방어)
 # ==========================================
 glassmorphism_css = """
 <style>
@@ -71,15 +71,17 @@ glassmorphism_css = """
     background-color: rgba(15, 23, 42, 0.8) !important;
     border-right: 1px solid rgba(255, 255, 255, 0.1);
 }
-textarea {
-    background-color: rgba(15, 23, 42, 0.6) !important;
-    color: #ffffff !important;
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
-    border-radius: 8px !important;
-}
-textarea:focus {
+/* 라이트 모드에서도 텍스트 박스 글씨가 무조건 흰색으로 보이도록 강제 고정 */
+div[data-baseweb="textarea"] textarea {
+    background-color: #0f172a !important; /* 짙은 네이비 배경 */
+    color: #ffffff !important;           /* 텍스트 흰색 */
+    -webkit-text-fill-color: #ffffff !important;
     border: 1px solid rgba(77, 166, 255, 0.5) !important;
-    box-shadow: 0 0 8px rgba(77, 166, 255, 0.25) !important;
+}
+.stTextArea textarea {
+    background-color: #0f172a !important;
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
 }
 #MainMenu {visibility: hidden;}
 header {visibility: hidden;}
@@ -1082,15 +1084,21 @@ elif main_menu == "2. KODEX 리밸런싱 시뮬레이션":
                 else:
                     df_pdf = df_pdf.rename(columns={col_name: '종목명', col_code: '종목코드', col_weight: '비중(%)'})
                     
-                    # 데이터 전처리
-                    df_pdf = df_pdf.dropna(subset=['종목명', '비중(%)']).copy()
+                    # 🚀 [핵심 에러 방어 로직] 텍스트 내 '%' 또는 ',' 콤마 등 숫자 방해물 완벽 제거
+                    df_pdf['비중(%)'] = df_pdf['비중(%)'].astype(str).str.replace('%', '', regex=False).str.replace(',', '', regex=False).str.strip()
+                    # 오직 순수한 숫자(소수점 포함)만 남김
                     df_pdf['비중(%)'] = pd.to_numeric(df_pdf['비중(%)'], errors='coerce').fillna(0)
+                    
+                    df_pdf = df_pdf.dropna(subset=['종목명']).copy()
                     
                     # 종목코드 클렌징: 텍스트로 강제 변환 후 .0 제거, 숫자만 남기기
                     df_pdf['종목코드'] = df_pdf['종목코드'].astype(str).str.replace('.0', '', regex=False).str.replace(r'[^0-9]', '', regex=True)
                     df_pdf = df_pdf[df_pdf['종목코드'].str.len() >= 4] # 종목코드가 4~6자리인 주식만 (원화예금 등 제거)
                     
                     df_pdf = df_pdf.sort_values(by='비중(%)', ascending=False).head(30).reset_index(drop=True)
+                    
+                    # 비중이 아예 없는 껍데기 종목 필터링
+                    df_pdf = df_pdf[df_pdf['비중(%)'] > 0].reset_index(drop=True)
 
                     total_init_w = df_pdf['비중(%)'].sum()
                     if total_init_w == 0: total_init_w = 1
