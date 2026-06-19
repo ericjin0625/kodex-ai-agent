@@ -26,7 +26,7 @@ if 'aum_context_text' not in st.session_state: st.session_state.aum_context_text
 if 'media_context' not in st.session_state: st.session_state.media_context = "데이터 없음"
 
 # ==========================================
-# ★ Glassmorphism 커스텀 CSS (Big 탭 슬림화 & 1줄 정렬 완벽 적용)
+# ★ Glassmorphism 커스텀 CSS
 # ==========================================
 glassmorphism_css = """
 <style>
@@ -242,7 +242,7 @@ def get_app_reviews():
             for r in result:
                 all_reviews.append({"app": app_name, "os": "🤖 AOS", "score": r['score'], "date": r['at'].strftime("%Y-%m-%d"), "title": "구글플레이 리뷰", "content": r['content']})
     except:
-        all_reviews.append({"app": "System", "os": "⚠️ Error", "score": 0, "date": "-", "title": "AOS 수집 록 누락", "content": "로컬 환경 터미널에서 'pip install google-play-scraper'를 실행하시면 안드로이드 리뷰가 정상 수집됩니다."})
+        all_reviews.append({"app": "System", "os": "⚠️ Error", "score": 0, "date": "-", "title": "AOS 수집 라이브러리 누락", "content": "로컬 환경 터미널에서 'pip install google-play-scraper'를 실행하시면 안드로이드 리뷰가 정상 수집됩니다."})
 
     all_reviews.sort(key=lambda x: x['date'], reverse=True)
     return all_reviews[:40]
@@ -310,21 +310,17 @@ def scrape_youtube_search_real(keyword):
 
 @st.cache_data(ttl=3600)
 def get_instagram_data():
-    """ Option A(RapidAPI) -> Option B(RSS.app) Fallback 리얼 로직 (더미 데이터 완전 삭제) """
+    """ Option A(RapidAPI) -> Option B(RSS.app) Fallback 로직 """
     insta_feed = []
-    
-    # [Option A] 외부 API 연동 시도
     api_key = st.secrets.get("RAPIDAPI_KEY", "") 
     if api_key:
         try:
             url = "https://instagram-scraper-api2.p.rapidapi.com/v1/info"
             headers = {"X-RapidAPI-Key": api_key, "X-RapidAPI-Host": "instagram-scraper-api2.p.rapidapi.com"}
             res = requests.get(url, headers=headers, timeout=3)
-            if res.status_code == 200:
-                pass # 실제 파싱 로직 
+            if res.status_code == 200: pass
         except: pass
     
-    # [Option B] API 실패 시 RSS.app 피드 우회 시도
     if not insta_feed:
         rss_urls = {
             "KODEX (삼성)": "https://rss.app/feeds/v1.1/kodex_placeholder.xml",
@@ -732,11 +728,9 @@ with col_main:
                         st.dataframe(df_yt_sorted[["운용사", "영상 제목", "조회수", "업로드"]], use_container_width=True, height=350, hide_index=True)
 
             st.divider()
-            # 🔴 100% 융합: 세대 대통합 vs 갈등 vs 소외 키워드 매트릭스 교차 비교
             st.markdown("### 🎯 타겟 세대별 미디어 인텔리전스 (유튜브 핫 키워드 교차 분석)")
             st.caption("ETF 마케팅 핵심 키워드 풀(Pool)을 2030과 4060 세대에 동시 적용하여 언급량을 교차 비교합니다.")
             
-            # 하드코딩된 완성형 매트릭스 데이터 (기획 시연용)
             kw_data = {
                 "키워드": ["절세", "복리", "월배당", "퇴직연금", "빅테크", "파이어족", "소액적립", "레버리지", "안전마진", "스마트베타"],
                 "4060 시니어": [85, 50, 95, 88, 45, 5, 20, 15, 75, 2],
@@ -761,7 +755,6 @@ with col_main:
                 st.info("**💥 세대 분리 키워드:**\n- 4060 타겟: '월배당', '퇴직연금', '안전마진'\n- 2030 타겟: '빅테크', '파이어족', '레버리지'\n각 타겟 매체별로 철저히 분리된 카피라이팅이 필요합니다.")
                 st.error("**📉 소외 키워드 (De-marketing):** '스마트베타'\n공급자 중심의 어려운 용어로, 양쪽 세대 모두에서 외면받고 있으므로 마케팅 용어에서 배제해야 합니다.")
 
-            # AI 프롬프트용 Context 실시간 연동
             st.session_state.media_context = f"[세대 대통합 키워드]: 절세, 복리\n[4060 특화]: 월배당, 퇴직연금, 안전마진\n[2030 특화]: 파이어족, 레버리지, 소액적립\n[배제 권장]: 스마트베타"
 
             st.divider()
@@ -987,7 +980,8 @@ with col_main:
                             styled_df = pivot_df.style.format("{:,}").apply(style_aum, axis=1)
                             st.dataframe(styled_df, use_container_width=True)
                             st.session_state.aum_context_text = pivot_df.to_string()
-            except: pass
+                except:
+                    pass
 
         st.divider()
         st.markdown("### 📈 테마별 운용사 전체 순매수 트렌드 (과거 추이)")
@@ -1432,7 +1426,7 @@ with col_main:
                     st.plotly_chart(fig_sens, use_container_width=True)
 
     # =========================================================================
-    # Big 탭 3: 🤖 AI 프롬프트 
+    # Big 탭 3: 🤖 AI 프롬프트
     # =========================================================================
     elif big_tab == "🤖 AI 프롬프트":
         st.markdown("### 🧠 모듈형 AI 프롬프트 컨트롤 타워")
