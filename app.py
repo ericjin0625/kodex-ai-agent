@@ -382,18 +382,19 @@ with col_right:
 # 5. 메인 패널 (Tab 1: 모니터링 / Tab 2: 상품 시뮬레이터 / Tab 3: AI 프롬프트)
 # =========================================================================
 with col_main:
+    # [수정 2] 메인 탭 텍스트 정리 (숫자 제거)
     big_tab = st.radio(
         "메인 메뉴",
-        ["1. ETF 시장 모니터링", "2. 글로벌 상품 기획 시뮬레이터", "🤖 AI 프롬프트"],
+        ["ETF 시장 모니터링", "글로벌 상품 기획 시뮬레이터", "🤖 AI 프롬프트"],
         horizontal=True,
         label_visibility="collapsed"
     )
     st.markdown("<br>", unsafe_allow_html=True)
 
     # -------------------------------------------------------------------------
-    # Big 탭 1: ETF 시장 모니터링 (기존 100% 유지)
+    # Big 탭 1: ETF 시장 모니터링 
     # -------------------------------------------------------------------------
-    if big_tab == "1. ETF 시장 모니터링":
+    if big_tab == "ETF 시장 모니터링":
         st.markdown("## 📊 ETF Market Intelligence")
         st.caption("국내외 거시 경제, 경쟁사 수급, 마케팅 액션 및 리테일 투자자 심리를 종합적으로 모니터링합니다.")
         
@@ -953,72 +954,73 @@ with col_main:
                 except:
                     pass
 
-        st.divider()
-        st.markdown("### 📈 테마별 운용사 전체 순매수 트렌드 (과거 추이)")
-        if uploaded_excel is not None and available_weeks[0] != "데이터 없음":
-            col_theme, col_weeks = st.columns(2)
-            with col_theme: selected_theme = st.selectbox("분석할 테마 선택:", list(pivot_df.index) if not pivot_df.empty else ['🤖 AI & 반도체'])
-            with col_weeks: n_weeks = st.slider("조회할 과거 주차 (N주):", min_value=1, max_value=len(available_weeks), value=min(4, len(available_weeks)))
-            trend_data = []
-            for w in available_weeks[:n_weeks][::-1]:
-                try:
-                    temp_df = load_and_clean_excel(uploaded_excel, w)
-                    if not temp_df.empty and '종목명' in temp_df.columns:
-                        temp_df = temp_df[temp_df['종목명'] != '전체'].copy()
-                        temp_df['브랜드'] = temp_df['종목명'].apply(lambda x: str(x).split(' ')[0]).replace('KBSTAR', 'RISE')
-                        temp_df['분류_테마'] = temp_df['종목명'].apply(assign_auto_theme)
-                        theme_df = temp_df[(temp_df['분류_테마'] == selected_theme) & (temp_df['브랜드'].isin(['KODEX', 'TIGER', 'ACE', 'RISE']))].copy()
-                        theme_df['순매수합계'] = theme_df.get('개인', 0) + theme_df.get('기관', 0) + theme_df.get('외국인', 0)
-                        brand_sum = theme_df.groupby('브랜드')['순매수합계'].sum().reset_index()
-                        brand_sum['주차'] = w
-                        trend_data.append(brand_sum)
-                except: pass
-            if trend_data:
-                df_trend = pd.concat(trend_data)
-                fig_trend = px.line(df_trend, x='주차', y='순매수합계', color='브랜드', markers=True, template="plotly_dark", color_discrete_sequence=px.colors.qualitative.Set2)
-                fig_trend.update_layout(height=400, yaxis_title="전체 순매수 합계", xaxis_title=None, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                st.plotly_chart(fig_trend, use_container_width=True)
-        else: st.info("👉 우측 패널에 엑셀 데이터를 업로드하시면 트렌드 그래프가 활성화됩니다.")
+            # [수정 3] 하위 탭 출혈(Bleeding) 현상 해결: '🥧 ETF/AUM 현황' 탭 내부로 종속
+            st.divider()
+            st.markdown("### 📈 테마별 운용사 전체 순매수 트렌드 (과거 추이)")
+            if uploaded_excel is not None and available_weeks[0] != "데이터 없음":
+                col_theme, col_weeks = st.columns(2)
+                with col_theme: selected_theme = st.selectbox("분석할 테마 선택:", list(pivot_df.index) if not pivot_df.empty else ['🤖 AI & 반도체'])
+                with col_weeks: n_weeks = st.slider("조회할 과거 주차 (N주):", min_value=1, max_value=len(available_weeks), value=min(4, len(available_weeks)))
+                trend_data = []
+                for w in available_weeks[:n_weeks][::-1]:
+                    try:
+                        temp_df = load_and_clean_excel(uploaded_excel, w)
+                        if not temp_df.empty and '종목명' in temp_df.columns:
+                            temp_df = temp_df[temp_df['종목명'] != '전체'].copy()
+                            temp_df['브랜드'] = temp_df['종목명'].apply(lambda x: str(x).split(' ')[0]).replace('KBSTAR', 'RISE')
+                            temp_df['분류_테마'] = temp_df['종목명'].apply(assign_auto_theme)
+                            theme_df = temp_df[(temp_df['분류_테마'] == selected_theme) & (temp_df['브랜드'].isin(['KODEX', 'TIGER', 'ACE', 'RISE']))].copy()
+                            theme_df['순매수합계'] = theme_df.get('개인', 0) + theme_df.get('기관', 0) + theme_df.get('외국인', 0)
+                            brand_sum = theme_df.groupby('브랜드')['순매수합계'].sum().reset_index()
+                            brand_sum['주차'] = w
+                            trend_data.append(brand_sum)
+                    except: pass
+                if trend_data:
+                    df_trend = pd.concat(trend_data)
+                    fig_trend = px.line(df_trend, x='주차', y='순매수합계', color='브랜드', markers=True, template="plotly_dark", color_discrete_sequence=px.colors.qualitative.Set2)
+                    fig_trend.update_layout(height=400, yaxis_title="전체 순매수 합계", xaxis_title=None, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                    st.plotly_chart(fig_trend, use_container_width=True)
+            else: st.info("👉 우측 패널에 엑셀 데이터를 업로드하시면 트렌드 그래프가 활성화됩니다.")
 
-        st.markdown("<br><br>", unsafe_allow_html=True)
-        st.markdown("---")
-        
-        st.markdown("### 🇺🇸 글로벌 혁신 구조 공백 분석 (US Mega Trends vs KODEX)")
-        raw_keywords = ["타겟 인컴 ETF 버퍼형", "0DTE 초단기 옵션 커버드콜 ETF", "가상자산 비트코인 현물 ETF", "BDC 기업성장집합투자기구 대체투자", "하방 방어형 100% 버퍼 ETF"]
-        trend_strengths = []
-        with st.spinner("미국 혁신 테마 트렌드를 스캔 중입니다..."):
-            for kw in raw_keywords:
-                temp_news = get_realtime_news(kw, timeframe="7d", max_items=10)
-                c = len(temp_news) if not temp_news.empty and temp_news.iloc[0]["게시일 / 출처"] != "-" else 0
-                trend_strengths.append("🔥🔥🔥 최고조" if c >= 5 else ("🔥🔥 강세" if c >= 2 else "🔥 꾸준함"))
-        st.dataframe(pd.DataFrame({"혁신 상품 구조 (미국 메가 트렌드)": raw_keywords, "최근 뉴스 기반 유입 강도": trend_strengths, "KODEX 라인업 현황": ["공백 (0개)", "일부 유사 (1개)", "규제 한계 (0개)", "규제 한계 (0개)", "공백 (0개)"], "전략적 제언 (Action Plan)": ["즉시 벤치마킹 기획 가동", "분배율 메시지 고도화", "정책 완화 시그널 추적", "법안 통과 즉시 선점", "하락장 방어 포트폴리오 설계"]}), use_container_width=True, hide_index=True)
-        
-        st.divider()
-        selected_trend_label = st.selectbox("🔍 뉴스 검색망 가동할 혁신 구조 선택:", options=raw_keywords, index=2)
-        st.session_state['selected_trend_label'] = selected_trend_label
-        st.markdown(f"#### 📡 `[실시간 정책 시그널]` {selected_trend_label} 관련 완화 동향")
-        with st.spinner("규제 완화 뉴스 스크랩 중..."):
-            df_gap_news = get_realtime_news(selected_trend_label + " 금융위 규제", timeframe="7d")
-            if "링크" in df_gap_news.columns and df_gap_news["링크"].iloc[0] != "":
-                cols_grid = st.columns(2)
-                for idx, row in df_gap_news.iterrows():
-                    with cols_grid[idx % 2]:
-                        with st.container(border=True):
-                            st.caption(f"📅 {row['게시일 / 출처']}")
-                            st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:14px; font-weight:bold; color:#ffb04d; text-decoration:none;'>[규제] {row['원본제목']} 🔗</a>", unsafe_allow_html=True)
-            else: st.info("관련된 최신 정책 뉴스 피드가 존재하지 않습니다.")
+            st.markdown("<br><br>", unsafe_allow_html=True)
+            st.markdown("---")
+            
+            st.markdown("### 🇺🇸 글로벌 혁신 구조 공백 분석 (US Mega Trends vs KODEX)")
+            raw_keywords = ["타겟 인컴 ETF 버퍼형", "0DTE 초단기 옵션 커버드콜 ETF", "가상자산 비트코인 현물 ETF", "BDC 기업성장집합투자기구 대체투자", "하방 방어형 100% 버퍼 ETF"]
+            trend_strengths = []
+            with st.spinner("미국 혁신 테마 트렌드를 스캔 중입니다..."):
+                for kw in raw_keywords:
+                    temp_news = get_realtime_news(kw, timeframe="7d", max_items=10)
+                    c = len(temp_news) if not temp_news.empty and temp_news.iloc[0]["게시일 / 출처"] != "-" else 0
+                    trend_strengths.append("🔥🔥🔥 최고조" if c >= 5 else ("🔥🔥 강세" if c >= 2 else "🔥 꾸준함"))
+            st.dataframe(pd.DataFrame({"혁신 상품 구조 (미국 메가 트렌드)": raw_keywords, "최근 뉴스 기반 유입 강도": trend_strengths, "KODEX 라인업 현황": ["공백 (0개)", "일부 유사 (1개)", "규제 한계 (0개)", "규제 한계 (0개)", "공백 (0개)"], "전략적 제언 (Action Plan)": ["즉시 벤치마킹 기획 가동", "분배율 메시지 고도화", "정책 완화 시그널 추적", "법안 통과 즉시 선점", "하락장 방어 포트폴리오 설계"]}), use_container_width=True, hide_index=True)
+            
+            st.divider()
+            selected_trend_label = st.selectbox("🔍 뉴스 검색망 가동할 혁신 구조 선택:", options=raw_keywords, index=2)
+            st.session_state['selected_trend_label'] = selected_trend_label
+            st.markdown(f"#### 📡 `[실시간 정책 시그널]` {selected_trend_label} 관련 완화 동향")
+            with st.spinner("규제 완화 뉴스 스크랩 중..."):
+                df_gap_news = get_realtime_news(selected_trend_label + " 금융위 규제", timeframe="7d")
+                if "링크" in df_gap_news.columns and df_gap_news["링크"].iloc[0] != "":
+                    cols_grid = st.columns(2)
+                    for idx, row in df_gap_news.iterrows():
+                        with cols_grid[idx % 2]:
+                            with st.container(border=True):
+                                st.caption(f"📅 {row['게시일 / 출처']}")
+                                st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:14px; font-weight:bold; color:#ffb04d; text-decoration:none;'>[규제] {row['원본제목']} 🔗</a>", unsafe_allow_html=True)
+                else: st.info("관련된 최신 정책 뉴스 피드가 존재하지 않습니다.")
 
     # =========================================================================
-    # [NEW] Big 탭 2: 글로벌 상품 기획 시뮬레이터 (전면 업그레이드)
+    # Big 탭 2: 글로벌 상품 기획 시뮬레이터 
     # =========================================================================
-    elif big_tab == "2. 글로벌 상품 기획 시뮬레이터":
+    elif big_tab == "글로벌 상품 기획 시뮬레이터":
         st.markdown("## 🌍 Global Alternative ETF Structuring Simulator")
-        st.caption("해외 대체 자산을 융합하여 실제 주가 기반 백테스트 및 수지 분석(P&L)을 수행하고, 최종적으로 **'🤖 AI 프롬프트' 탭으로 마스터 템플릿 변수를 실시간 전달**합니다.")
+        st.caption("사모신용(BDC), CLO, 상장 실물자산 등 해외 대체 자산을 융합하여 실제 주가 기반 백테스트 및 수지 분석(P&L)을 거친 실무형 팩트시트를 도출합니다.")
         
         # 1. 자산군 선택
         asset_class = st.selectbox("🌍 탐색할 해외 대체투자 자산군 선택:", ["사모신용 (BDC)", "대출채권담보부증권 (CLO)", "에너지 인프라 (MLP)", "상장 실물자산 (Listed Real Assets)"], key="asset_sel_app1")
 
-        # 2. [NEW] 프록시 ETF 선택 로직 (드롭다운 & Reasoning 매핑)
+        # 2. 프록시 ETF 선택 로직 (드롭다운 & Reasoning 매핑)
         proxy_options = []
         if asset_class == "사모신용 (BDC)": proxy_options = ["ARCC", "BIZD", "OBDC", "HTGC"]
         elif asset_class == "대출채권담보부증권 (CLO)": proxy_options = ["JAAA", "JBBB", "CLOA"]
@@ -1074,7 +1076,8 @@ with col_main:
             with col_p2:
                 with st.container(border=True):
                     st.markdown("**⚖️ 포트폴리오 가중치(Weighting) 룰**")
-                    weight_opt = st.radio("비중 배분 방식 선택:", [
+                    # [수정 1] 비중 배분 방식 라디오버튼 -> 드롭다운 변경
+                    weight_opt = st.selectbox("비중 배분 방식 선택:", [
                         "시가총액 가중 방식 (Cap-weighted)",
                         "Top 3 핵심종목 75% 편중 (Akros Core-Satellite)",
                         "Log-Market Cap 기반 비선형 가중 (대형주 쏠림 방지)"
@@ -1085,18 +1088,17 @@ with col_main:
                     cap_limit = st.slider("단일 종목 최대 편입 상한선 (Cap, %)", 10, 30, 20, step=1)
                     st.session_state.p_cap = cap_limit
 
-        # === Step 2: 퀀트 기반 백테스팅 및 리스크 (상관관계 히트맵 부활) ===
+        # === Step 2: 퀀트 기반 백테스팅 및 리스크 (상관관계 히트맵 및 수익원천 분해) ===
         with sub_tabs_plan[1]:
             st.markdown("#### 2. 프록시 ETF 기반 성과 검증 및 스트레스 테스트")
             
-            # [NEW] 3x3 상관관계 매트릭스 (다각화 증명)
+            # 상관관계 매트릭스 (다각화 증명)
             st.markdown("##### 🔗 핵심 자산군 상관관계 (다각화 증명)")
             c_corr_desc, c_corr_map = st.columns([1, 1.5])
             with c_corr_desc:
                 st.write(f"기존 전통 자산(주식, 채권) 포트폴리오에 **{selected_proxy}**를 편입했을 때 발생하는 다각화 효과를 직관적으로 증명합니다.")
                 st.info("💡 대체투자 자산은 주식(S&P 500) 및 채권(US Aggregate)과 상관계수가 낮아 포트폴리오 전체의 변동성을 낮추는 핵심 역할을 합니다.")
             with c_corr_map:
-                # 프록시별 가상의 현실적 상관계수 매핑
                 sp500_corr = 0.55 if "BDC" in asset_class else (0.25 if "CLO" in asset_class else 0.40)
                 agg_corr = 0.15 if "BDC" in asset_class else (0.45 if "CLO" in asset_class else 0.30)
                 
@@ -1141,7 +1143,7 @@ with col_main:
                             
                         st.session_state.p_sharpe = round(sharpe, 2)
                         st.session_state.p_mdd = round(mdd, 1)
-                        st.session_state.p_corr = round(sp500_corr, 2) # 히트맵 데이터 연동
+                        st.session_state.p_corr = round(sp500_corr, 2)
 
                         daily_yield = annual_yield / 252
                         income_return = (np.cumprod(1 + np.full(len(port_cum), daily_yield)) * 100) - 100
@@ -1184,7 +1186,6 @@ with col_main:
         with sub_tabs_plan[2]:
             st.markdown("#### 3. 상품 구조화, 세일즈 타겟팅 및 P&L")
             
-            # [NEW] 파생상품 (옵션/버퍼) 시각화 부활
             with st.container(border=True):
                 st.markdown("**📈 파생상품(옵션) 결합 수익률 시뮬레이터 (Payoff Modeling)**")
                 opt_strategy = st.radio("시뮬레이션 전략 선택:", ["적용 안 함 (순수 대체자산)", "초단기 커버드콜 (Covered Call)", "하방 방어형 (Buffer ETF)"], horizontal=True)
@@ -1230,15 +1231,15 @@ with col_main:
                     annual_yield = 8.0 if "BDC" in asset_class else 6.0
                     net_yield = annual_yield - ter - fx_hedge_cost
 
-                    # [NEW] 환헤지 vs 환노출 궤적 시각화 (가상 USD/KRW 궤적 반영)
+                    # 환헤지 vs 환노출 궤적 시각화
                     st.markdown("<br>**📉 환율 전략별 성과 차이 (Mock)**", unsafe_allow_html=True)
                     np.random.seed(77)
                     x_idx = np.arange(100)
-                    base_asset = np.linspace(100, 120, 100) + np.random.normal(0, 1, 100) # 기초자산 우상향
-                    usd_krw = np.linspace(1, 1.15, 100) + np.random.normal(0, 0.02, 100) # 달러 강세
+                    base_asset = np.linspace(100, 120, 100) + np.random.normal(0, 1, 100)
+                    usd_krw = np.linspace(1, 1.15, 100) + np.random.normal(0, 0.02, 100)
                     
-                    hedged_perf = base_asset - (x_idx * (fx_hedge_cost/100)) # 헤지: 기초자산 - 롤오버비용
-                    unhedged_perf = base_asset * usd_krw # 노출: 기초자산 * 환율
+                    hedged_perf = base_asset - (x_idx * (fx_hedge_cost/100))
+                    unhedged_perf = base_asset * usd_krw
                     
                     df_fx = pd.DataFrame({"기간": x_idx, "환헤지(H)": hedged_perf, "환노출(UH)": unhedged_perf}).melt(id_vars="기간")
                     fig_fx = px.line(df_fx, x="기간", y="value", color="variable", template="plotly_dark", color_discrete_map={"환헤지(H)": "#4da6ff", "환노출(UH)": "#ff4d4d"})
@@ -1247,7 +1248,7 @@ with col_main:
 
             with c_pl2:
                 with st.container(border=True):
-                    # [NEW] Factsheet 부활
+                    # Factsheet (팩트시트) 유지
                     st.markdown("##### 📄 Simulated Product Factsheet")
                     st.metric("최종 타겟 배당수익률 (Net Yield)", f"{net_yield:.2f}%")
                     
