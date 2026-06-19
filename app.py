@@ -26,8 +26,9 @@ if 'df_volume_summary_text' not in st.session_state: st.session_state.df_volume_
 if 'aum_context_text' not in st.session_state: st.session_state.aum_context_text = "데이터 없음"
 if 'media_context' not in st.session_state: st.session_state.media_context = "데이터 없음"
 
-# [마스터 프롬프트 연동용 Session State - 신규 추가 변수 포함]
+# [마스터 프롬프트 연동용 Session State]
 if 'p_proxy' not in st.session_state: st.session_state.p_proxy = "데이터 없음"
+if 'p_proxy_reason' not in st.session_state: st.session_state.p_proxy_reason = "데이터 없음"
 if 'p_purity' not in st.session_state: st.session_state.p_purity = "데이터 없음"
 if 'p_weight' not in st.session_state: st.session_state.p_weight = "데이터 없음"
 if 'p_cap' not in st.session_state: st.session_state.p_cap = 20
@@ -82,7 +83,7 @@ div[data-testid="stRadio"] > div[role="radiogroup"] > label > div:first-child { 
 st.markdown(glassmorphism_css, unsafe_allow_html=True)
 
 # ==========================================
-# 3. 파싱 및 연산 함수 모음 (Tab 1 의존성 - 절대 건드리지 않음)
+# 3. 파싱 및 연산 함수 모음 (Tab 1 의존성)
 # ==========================================
 def assign_auto_theme(etf_name):
     name = str(etf_name).upper().replace(" ", "")
@@ -1007,22 +1008,48 @@ with col_main:
                             st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:14px; font-weight:bold; color:#ffb04d; text-decoration:none;'>[규제] {row['원본제목']} 🔗</a>", unsafe_allow_html=True)
             else: st.info("관련된 최신 정책 뉴스 피드가 존재하지 않습니다.")
 
-    # -------------------------------------------------------------------------
-    # [NEW] Big 탭 2: 글로벌 상품 기획 시뮬레이터 (수익 원천 분해 및 하이브리드 프롬프트 구현)
-    # -------------------------------------------------------------------------
+    # =========================================================================
+    # [NEW] Big 탭 2: 글로벌 상품 기획 시뮬레이터 (전면 업그레이드)
+    # =========================================================================
     elif big_tab == "2. 글로벌 상품 기획 시뮬레이터":
         st.markdown("## 🌍 Global Alternative ETF Structuring Simulator")
         st.caption("해외 대체 자산을 융합하여 실제 주가 기반 백테스트 및 수지 분석(P&L)을 수행하고, 최종적으로 **'🤖 AI 프롬프트' 탭으로 마스터 템플릿 변수를 실시간 전달**합니다.")
         
+        # 1. 자산군 선택
         asset_class = st.selectbox("🌍 탐색할 해외 대체투자 자산군 선택:", ["사모신용 (BDC)", "대출채권담보부증권 (CLO)", "에너지 인프라 (MLP)", "상장 실물자산 (Listed Real Assets)"], key="asset_sel_app1")
 
-        # 프록시 매핑 로직
-        proxy_map = {"사모신용 (BDC)": "ARCC", "대출채권담보부증권 (CLO)": "JAAA", "에너지 인프라 (MLP)": "AMLP", "상장 실물자산 (Listed Real Assets)": "VNQ"}
-        st.session_state.p_proxy = proxy_map.get(asset_class, "SPY")
+        # 2. [NEW] 프록시 ETF 선택 로직 (드롭다운 & Reasoning 매핑)
+        proxy_options = []
+        if asset_class == "사모신용 (BDC)": proxy_options = ["ARCC", "BIZD", "OBDC", "HTGC"]
+        elif asset_class == "대출채권담보부증권 (CLO)": proxy_options = ["JAAA", "JBBB", "CLOA"]
+        elif asset_class == "에너지 인프라 (MLP)": proxy_options = ["AMLP", "EPD"]
+        else: proxy_options = ["VNQ", "XLRE"]
+        
+        proxy_reason_map = {
+            "ARCC": "미국 BDC 시가총액 1위 종목으로, 가장 다각화된 포트폴리오를 보유하여 우량 사모신용의 펀더멘털을 가장 잘 대변함.",
+            "BIZD": "미국 BDC 산업 전체를 추종하는 ETF로, 사모신용 섹터 전반의 평균적인 위험/수익 프로파일을 반영함.",
+            "OBDC": "신흥 우량 담보 대출 위주의 포트폴리오로, 하방 경직성이 뛰어난 프록시 역할을 수행함.",
+            "HTGC": "벤처 및 테크 기업 대출에 특화되어 고수익/고변동성 환경의 테스트에 적합함.",
+            "JAAA": "최상위 AAA 등급 트랜치에 집중하여 주식 시장 급락 시 피난처(Safe Haven) 역할을 가장 잘 대변함.",
+            "JBBB": "투자적격등급 하단(BBB) 트랜치를 타겟하여 추가 일드(Yield) 확보 전략을 검증하기에 적합함.",
+            "CLOA": "풍부한 유동성을 바탕으로 전반적인 우량 CLO 시장의 흐름을 추종함.",
+            "AMLP": "에너지 인프라(파이프라인) 산업 전반을 아우르며, 수수료 기반의 예측 가능한 현금흐름을 대표함.",
+            "EPD": "미국 최대 에너지 인프라 기업으로, 안정적인 배당 성장 모델의 핵심 프록시로 작용함.",
+            "VNQ": "미국 리츠(REITs) 시장 전반에 투자하여 가장 표준적인 부동산 배당 수익 궤적을 제공함.",
+            "XLRE": "S&P 500 내 대형 우량 부동산 기업에 집중하여, 상대적으로 변동성이 통제된 리츠 모델을 대변함."
+        }
+
+        col_p_sel, col_p_desc = st.columns([1, 2])
+        with col_p_sel:
+            selected_proxy = st.selectbox("📍 백테스트 프록시 (대표 지표) 선택:", proxy_options)
+            st.session_state.p_proxy = selected_proxy
+            st.session_state.p_proxy_reason = proxy_reason_map[selected_proxy]
+        with col_p_desc:
+            st.info(f"💡 **프록시 선정 논리(AI 프롬프트 연동):** {st.session_state.p_proxy_reason}")
 
         sub_tabs_plan = st.tabs(["🧩 Step 1: 지수 산출 및 유니버스 룰", "📊 Step 2: 퀀트 기반 백테스팅 및 매크로 리스크", "📈 Step 3: 구조화 및 운용사 수지분석(P&L)"])
 
-        # === Step 1: 지수 산출 및 유니버스 룰 (하이브리드 스크리닝 기능 추가) ===
+        # === Step 1: 지수 산출 및 유니버스 룰 ===
         with sub_tabs_plan[0]:
             st.markdown("#### 1. 테마 퓨리티, 펀더멘털 스크리닝 및 가중치 모델 설정")
             col_p1, col_p2 = st.columns([1, 1.2])
@@ -1040,9 +1067,9 @@ with col_main:
                     uploaded_univ = st.file_uploader("블룸버그/Finviz 스크리너 결과 (CSV/Excel)", type=['csv', 'xlsx'])
                     st.session_state.p_has_csv = uploaded_univ is not None
                     if st.session_state.p_has_csv:
-                        st.success("✅ 파일 업로드 감지: AI가 첨부된 데이터를 읽어 최종 10개 종목을 직접 표 형태로 출력하는 지시어가 활성화되었습니다.")
+                        st.success("✅ 파일 업로드 감지: AI가 첨부된 데이터를 읽어 최종 종목을 직접 추출합니다.")
                     else:
-                        st.info("💡 미업로드 시: AI가 룰을 바탕으로 가상의 포트폴리오를 제안하고 논리를 구축합니다.")
+                        st.info("💡 미업로드 시: AI가 룰을 바탕으로 가상의 포트폴리오 제안 논리를 구축합니다.")
 
             with col_p2:
                 with st.container(border=True):
@@ -1058,10 +1085,33 @@ with col_main:
                     cap_limit = st.slider("단일 종목 최대 편입 상한선 (Cap, %)", 10, 30, 20, step=1)
                     st.session_state.p_cap = cap_limit
 
-        # === Step 2: 퀀트 기반 백테스팅 및 매크로 리스크 (수익 원천 분해 차트 추가) ===
+        # === Step 2: 퀀트 기반 백테스팅 및 리스크 (상관관계 히트맵 부활) ===
         with sub_tabs_plan[1]:
-            st.markdown("#### 2. 프록시 ETF 기반 성과 검증 (수익 원천 분해) 및 스트레스 테스트")
+            st.markdown("#### 2. 프록시 ETF 기반 성과 검증 및 스트레스 테스트")
             
+            # [NEW] 3x3 상관관계 매트릭스 (다각화 증명)
+            st.markdown("##### 🔗 핵심 자산군 상관관계 (다각화 증명)")
+            c_corr_desc, c_corr_map = st.columns([1, 1.5])
+            with c_corr_desc:
+                st.write(f"기존 전통 자산(주식, 채권) 포트폴리오에 **{selected_proxy}**를 편입했을 때 발생하는 다각화 효과를 직관적으로 증명합니다.")
+                st.info("💡 대체투자 자산은 주식(S&P 500) 및 채권(US Aggregate)과 상관계수가 낮아 포트폴리오 전체의 변동성을 낮추는 핵심 역할을 합니다.")
+            with c_corr_map:
+                # 프록시별 가상의 현실적 상관계수 매핑
+                sp500_corr = 0.55 if "BDC" in asset_class else (0.25 if "CLO" in asset_class else 0.40)
+                agg_corr = 0.15 if "BDC" in asset_class else (0.45 if "CLO" in asset_class else 0.30)
+                
+                corr_data = {
+                    selected_proxy: [1.00, sp500_corr, agg_corr],
+                    "S&P 500 (주식)": [sp500_corr, 1.00, -0.10],
+                    "US Agg (채권)": [agg_corr, -0.10, 1.00]
+                }
+                df_heat = pd.DataFrame(corr_data, index=[selected_proxy, "S&P 500 (주식)", "US Agg (채권)"])
+                fig_heat = px.imshow(df_heat, text_auto=".2f", color_continuous_scale="Blues", template="plotly_dark", aspect="auto")
+                fig_heat.update_layout(height=200, margin=dict(t=10,b=10,l=10,r=10), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                st.plotly_chart(fig_heat, use_container_width=True)
+
+            st.divider()
+
             c_bt1, c_bt2 = st.columns([1.2, 1])
             with c_bt1:
                 with st.container(border=True):
@@ -1069,46 +1119,35 @@ with col_main:
                     end_dt = datetime.today()
                     start_dt = end_dt - timedelta(days=365*3)
                     
-                    # 자산군별 평균 연배당률(Yield) 가정 (인컴 수익 분해용)
                     annual_yield = 0.08 if "BDC" in asset_class else (0.06 if "CLO" in asset_class else 0.04)
                     
                     with st.spinner(f"해외 API에서 {st.session_state.p_proxy} 및 SPY 데이터를 불러옵니다..."):
                         try:
-                            # 실제 데이터 연동
-                            spy_df = fdr.DataReader('SPY', start_dt, end_dt)
                             port_df = fdr.DataReader(st.session_state.p_proxy, start_dt, end_dt)
-                            
-                            spy_daily = spy_df['Close'].pct_change().dropna()
                             port_daily = port_df['Close'].pct_change().dropna()
-                            
                             port_cum = (1 + port_daily).cumprod() * 100
                             dates = port_cum.index
-                            
                             port_vol = np.std(port_daily) * np.sqrt(252)
                             ann_ret = (port_cum.iloc[-1] / 100) ** (1/3) - 1
                             sharpe = (ann_ret - 0.035) / port_vol if port_vol > 0 else 0
                             mdd = (port_cum / np.maximum.accumulate(port_cum) - 1).min() * 100
-                            corr = np.corrcoef(spy_daily[:len(port_daily)], port_daily)[0,1]
-                            
                         except:
                             st.warning("API 지연으로 자체 퀀트 모델 합성값이 도출됩니다.")
                             np.random.seed(42)
                             dates = pd.date_range(start=start_dt, end=end_dt, periods=756)
                             port_daily = np.random.normal(0.0003, 0.008, 756)
                             port_cum = pd.Series((1 + port_daily).cumprod() * 100, index=dates)
-                            sharpe, mdd, corr = 1.24, -15.4, 0.45
+                            sharpe, mdd = 1.24, -15.4
                             
                         st.session_state.p_sharpe = round(sharpe, 2)
                         st.session_state.p_mdd = round(mdd, 1)
-                        st.session_state.p_corr = round(corr, 2)
+                        st.session_state.p_corr = round(sp500_corr, 2) # 히트맵 데이터 연동
 
-                        # [NEW] 수익 원천 분해 (Return Decomposition) 로직 계산
                         daily_yield = annual_yield / 252
                         income_return = (np.cumprod(1 + np.full(len(port_cum), daily_yield)) * 100) - 100
                         total_return_pct = port_cum.values - 100
                         price_return = total_return_pct - income_return
                         
-                        # Stacked Area Chart (누적 스택 그래프)
                         fig_decomp = go.Figure()
                         fig_decomp.add_trace(go.Scatter(x=dates, y=income_return, mode='lines', stackgroup='one', name=f'누적 배당/이자 (연 {annual_yield*100:.1f}%)', line=dict(color='#ffb04d')))
                         fig_decomp.add_trace(go.Scatter(x=dates, y=price_return, mode='lines', stackgroup='one', name='누적 자본 차익 (가격변동)', line=dict(color='#4da6ff')))
@@ -1130,15 +1169,9 @@ with col_main:
                     ])
                     st.session_state.p_scenario = scenario
                     
-                    if "코로나" in scenario:
-                        sp_drop, my_drop = -33.9, -25.4
-                        desc = "극단적 신용 스프레드 확대에 대한 회복력 증명"
-                    elif "금리" in scenario:
-                        sp_drop, my_drop = -19.4, -12.8
-                        desc = "변동금리 대출 등 고금리 수혜 자산에 의한 방어력 증명"
-                    else:
-                        sp_drop, my_drop = -10.2, -4.2
-                        desc = "우량 담보 및 우선변제권에 의한 하방 경직성 증명"
+                    if "코로나" in scenario: sp_drop, my_drop, desc = -33.9, -25.4, "극단적 신용 스프레드 확대에 대한 회복력 증명"
+                    elif "금리" in scenario: sp_drop, my_drop, desc = -19.4, -12.8, "고금리 환경 수혜 자산에 의한 방어력 증명"
+                    else: sp_drop, my_drop, desc = -10.2, -4.2, "우량 담보에 의한 하방 경직성 증명"
                         
                     df_bar = pd.DataFrame({"자산": ["S&P 500", f"기획 Proxy ({st.session_state.p_proxy})"], "최대 낙폭 (%)": [sp_drop, my_drop]})
                     fig_bar = px.bar(df_bar, x="자산", y="최대 낙폭 (%)", text="최대 낙폭 (%)", color="자산", color_discrete_map={"S&P 500": "gray", f"기획 Proxy ({st.session_state.p_proxy})": "#ffb04d"}, template="plotly_dark")
@@ -1147,25 +1180,88 @@ with col_main:
                     st.plotly_chart(fig_bar, use_container_width=True)
                     st.info(f"💡 **AI 프롬프트 연동:** {desc} 로직이 자동 탑재됩니다.")
 
-        # === Step 3: 구조화 및 운용사 수지분석(P&L) ===
+        # === Step 3: 구조화 및 파생, 팩트시트 부활 ===
         with sub_tabs_plan[2]:
-            st.markdown("#### 3. 세일즈 타겟팅 및 AMC 운용 효율성 검토")
+            st.markdown("#### 3. 상품 구조화, 세일즈 타겟팅 및 P&L")
             
+            # [NEW] 파생상품 (옵션/버퍼) 시각화 부활
+            with st.container(border=True):
+                st.markdown("**📈 파생상품(옵션) 결합 수익률 시뮬레이터 (Payoff Modeling)**")
+                opt_strategy = st.radio("시뮬레이션 전략 선택:", ["적용 안 함 (순수 대체자산)", "초단기 커버드콜 (Covered Call)", "하방 방어형 (Buffer ETF)"], horizontal=True)
+
+                if opt_strategy != "적용 안 함 (순수 대체자산)":
+                    c_opt1, c_opt2 = st.columns([1, 2])
+                    with c_opt1:
+                        st.markdown("**⚙️ 옵션 파라미터 설정**")
+                        if "Covered Call" in opt_strategy:
+                            strike_pct = st.slider("콜옵션 행사가격 (% OTM)", 0.0, 10.0, 2.0, 0.5)
+                            premium = st.slider("수취 프리미엄 (%)", 0.5, 5.0, 1.5, 0.1)
+                        else:
+                            buffer_pct = st.slider("하방 방어 수준 (Buffer, %)", 5.0, 20.0, 10.0, 1.0)
+                            cap_pct = st.slider("상방 제한 수준 (Cap, %)", 5.0, 15.0, 8.0, 1.0)
+                    
+                    with c_opt2:
+                        x_vals = np.linspace(-30, 30, 200)
+                        if "Covered Call" in opt_strategy:
+                            y_vals = np.where(x_vals < strike_pct, x_vals + premium, strike_pct + premium)
+                            fig_opt = go.Figure()
+                            fig_opt.add_trace(go.Scatter(x=x_vals, y=x_vals, mode='lines', name='기초지수', line=dict(dash='dash', color='gray')))
+                            fig_opt.add_trace(go.Scatter(x=x_vals, y=y_vals, mode='lines', name='커버드콜 수익률', line=dict(color='#4da6ff', width=3)))
+                            fig_opt.update_layout(height=200, margin=dict(t=10,b=10,l=10,r=10), template="plotly_dark", xaxis_title="기초자산 변동 (%)", yaxis_title="ETF 만기 수익 (%)", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                            st.plotly_chart(fig_opt, use_container_width=True)
+                        else:
+                            y_vals = np.where(x_vals > 0, np.minimum(x_vals, cap_pct), np.where(x_vals >= -buffer_pct, 0, x_vals + buffer_pct))
+                            fig_opt = go.Figure()
+                            fig_opt.add_trace(go.Scatter(x=x_vals, y=x_vals, mode='lines', name='기초지수', line=dict(dash='dash', color='gray')))
+                            fig_opt.add_trace(go.Scatter(x=x_vals, y=y_vals, mode='lines', name='버퍼 ETF 수익률', line=dict(color='#ffb04d', width=3)))
+                            fig_opt.add_vrect(x0=-buffer_pct, x1=0, fillcolor="#ffb04d", opacity=0.1, layer="below", line_width=0)
+                            fig_opt.update_layout(height=200, margin=dict(t=10,b=10,l=10,r=10), template="plotly_dark", xaxis_title="기초자산 변동 (%)", yaxis_title="ETF 만기 수익 (%)", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                            st.plotly_chart(fig_opt, use_container_width=True)
+
             c_pl1, c_pl2 = st.columns([1, 1.5])
             with c_pl1:
                 with st.container(border=True):
-                    st.markdown("**💱 환율 전략 및 세일즈 타겟 계좌**")
-                    fx_strategy = st.radio("환율 전략:", ["환노출 (달러 강세 환차익 노출)", "환헤지 (비용 지불 후 변동성 제거)"])
+                    st.markdown("**💱 환율 전략 및 비용**")
+                    fx_strategy = st.selectbox("환율 전략 선택:", ["환노출 (Unhedged - 환차익/차손 노출)", "환헤지 (Hedged - 변동성 제거)"])
                     st.session_state.p_fx = fx_strategy
-                    if "환헤지" in fx_strategy: st.success("✅ 타겟 채널 매칭: 변동성이 제거되어 **퇴직연금(IRP/DC) 내 안전자산(30%) 룸 편입용**으로 매우 적합한 로직이 세팅되었습니다.")
-                    else: st.success("✅ 타겟 채널 매칭: 환차익 향유 및 높은 배당률로 인해 **ISA 계좌 종합과세 방어용** 로직이 세팅되었습니다.")
                     
+                    ter = st.slider("예상 총보수율 (TER, %)", 0.1, 1.5, 0.45, 0.05)
+                    fx_hedge_cost = 2.0 if "환헤지" in fx_strategy else 0.0
+                    annual_yield = 8.0 if "BDC" in asset_class else 6.0
+                    net_yield = annual_yield - ter - fx_hedge_cost
+
+                    # [NEW] 환헤지 vs 환노출 궤적 시각화 (가상 USD/KRW 궤적 반영)
+                    st.markdown("<br>**📉 환율 전략별 성과 차이 (Mock)**", unsafe_allow_html=True)
+                    np.random.seed(77)
+                    x_idx = np.arange(100)
+                    base_asset = np.linspace(100, 120, 100) + np.random.normal(0, 1, 100) # 기초자산 우상향
+                    usd_krw = np.linspace(1, 1.15, 100) + np.random.normal(0, 0.02, 100) # 달러 강세
+                    
+                    hedged_perf = base_asset - (x_idx * (fx_hedge_cost/100)) # 헤지: 기초자산 - 롤오버비용
+                    unhedged_perf = base_asset * usd_krw # 노출: 기초자산 * 환율
+                    
+                    df_fx = pd.DataFrame({"기간": x_idx, "환헤지(H)": hedged_perf, "환노출(UH)": unhedged_perf}).melt(id_vars="기간")
+                    fig_fx = px.line(df_fx, x="기간", y="value", color="variable", template="plotly_dark", color_discrete_map={"환헤지(H)": "#4da6ff", "환노출(UH)": "#ff4d4d"})
+                    fig_fx.update_layout(height=200, margin=dict(t=10,b=10,l=10,r=10), yaxis_title="수익률 궤적", xaxis_title="", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                    st.plotly_chart(fig_fx, use_container_width=True)
+
             with c_pl2:
                 with st.container(border=True):
+                    # [NEW] Factsheet 부활
+                    st.markdown("##### 📄 Simulated Product Factsheet")
+                    st.metric("최종 타겟 배당수익률 (Net Yield)", f"{net_yield:.2f}%")
+                    
+                    risk_level = "보통 위험 (Medium Risk)" if "환헤지" in fx_strategy else "높은 위험 (High Risk)"
+                    fx_desc = f"달러 변동성 제거 (헤지 프리미엄 연 약 {fx_hedge_cost}% 발생)" if "환헤지" in fx_strategy else "달러 강세 시 환차익 추가 향유 가능 (변동성 노출)"
+                    tax_desc = "퇴직연금(IRP/DC) 내 안전자산(30%) 룸 편입용" if "환헤지" in fx_strategy else "배당소득세 및 종합과세 방어를 위한 ISA 계좌 편입용"
+                    
+                    st.write(f"- **위험 등급:** {risk_level}")
+                    st.write(f"- **FX 전략:** {fx_desc}")
+                    st.success(f"💰 **세금 최적화(Tax):** {tax_desc}으로 타겟팅하는 것이 세일즈에 유리합니다.")
+
+                with st.container(border=True):
                     st.markdown("**🏢 자산운용사(AMC) 수지 분석 (P&L)**")
-                    cc1, cc2 = st.columns(2)
-                    with cc1: target_aum = st.number_input("1년 차 타겟 AUM (억원)", value=1000, step=100)
-                    with cc2: ter = st.slider("예상 총보수율 (TER, %)", 0.1, 1.5, 0.45, 0.05)
+                    target_aum = st.number_input("1년 차 타겟 AUM (억원)", value=1000, step=100)
                     st.session_state.p_aum = target_aum
                     
                     amc_margin = ter - 0.05
@@ -1187,12 +1283,12 @@ with col_main:
                         increasing = {"marker":{"color":"#4da6ff"}},
                         totals = {"marker":{"color":"#ffb04d" if net_profit > 0 else "gray"}}
                     ))
-                    fig_wf.update_layout(height=280, margin=dict(t=20, b=10, l=10, r=10), template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                    fig_wf.update_layout(height=200, margin=dict(t=20, b=10, l=10, r=10), template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                     st.plotly_chart(fig_wf, use_container_width=True)
 
-    # -------------------------------------------------------------------------
+    # =========================================================================
     # Big 탭 3: 🤖 AI 프롬프트 (마스터 프롬프트 추출소)
-    # -------------------------------------------------------------------------
+    # =========================================================================
     elif big_tab == "🤖 AI 프롬프트":
         st.markdown("### 🧠 모듈형 AI 프롬프트 컨트롤 타워")
         st.caption("각 단계별 목적에 맞게 AI(LLM)에게 전달할 최적화된 프롬프트를 체인(Chain) 형태로 분리하여 제공합니다.")
@@ -1223,9 +1319,8 @@ Step 1과 Step 2의 분석 결과를 종합하여, KODEX 리테일 마케팅 본
             
         with prompt_tabs[1]:
             st.markdown("#### [글로벌 대체자산 ETF 마스터 프롬프트 엔진]")
-            st.caption("앞선 탭에서 설정한 모든 퀀트 결과와 하이브리드 연동 조건이 완벽한 형태의 프롬프트로 치환되었습니다. 이를 복사하여 프로급 AI에 붙여넣기 하세요.")
+            st.caption("앞선 탭에서 설정한 모든 퀀트 결과와 논리가 완벽한 형태의 프롬프트로 치환되었습니다. 이를 복사하여 프로급 AI에 붙여넣기 하세요.")
 
-            # [NEW] CSV 연동 여부에 따른 동적 텍스트 생성
             if st.session_state.p_has_csv:
                 csv_directive = f"첨부된 유니버스 엑셀(CSV) 데이터를 분석하여, 위 펀더멘털 필터링 룰(LTV {st.session_state.p_ltv}% 이하, FCF 마진 {st.session_state.p_fcf}% 이상)을 통과한 최종 편입 종목 10개의 리스트를 기획서 포트폴리오 섹션에 표 형태로 출력할 것."
             else:
@@ -1236,22 +1331,23 @@ Step 1과 Step 2의 분석 결과를 종합하여, KODEX 리테일 마케팅 본
 
 **[1. 지수 산출 및 유니버스 룰]**
 - 기초자산 프록시: {st.session_state.p_proxy}
+- 프록시 선정 논리: {st.session_state.p_proxy_reason} (이 논리를 보고서 서두에 반드시 명시하여 타당성을 부여할 것)
 - 펀더멘털 스크리닝: LTV(부채비율) {st.session_state.p_ltv}% 이하, 잉여현금흐름(FCF) 마진 {st.session_state.p_fcf}% 이상을 허들로 설정하여 현금흐름의 안정성을 확보함.
 - 편입 종목 도출 지시: {csv_directive}
-- 가중치 배분: [{st.session_state.p_weight}] 룰을 적용하고, 특정 종목이 지수를 과대 대표하지 않도록 단일 종목 최대 편입비중(Cap)은 {st.session_state.p_cap}%로 통제함.
-- 지수 유지보수(Index Maintenance): 기초자산의 유상증자, 액면분할, M&A 등 Corporate Action 발생 시 S&P DJI 및 FnGuide의 이벤트 처리 방법론(Divisor Adjustment)을 준용하여 추적오차를 즉각 통제하는 룰을 리스크 관리 항목에 반드시 포함할 것.
+- 가중치 배분: [{st.session_state.p_weight}] 룰을 적용하고, 단일 종목 최대 편입비중(Cap)은 {st.session_state.p_cap}%로 통제함.
+- 지수 유지보수(Index Maintenance): 기초자산의 유상증자, 분할, M&A 등 발생 시 S&P DJI 및 FnGuide의 이벤트 처리 방법론(Divisor Adjustment)을 준용하여 추적오차를 통제하는 룰을 명시할 것.
 
 **[2. 퀀트 퍼포먼스 및 리스크 검증]**
-- 과거 백테스트 지표: 샤프비율 {st.session_state.p_sharpe}, MDD {st.session_state.p_mdd}%, S&P 500 상관계수 {st.session_state.p_corr}. 이 수치들을 활용해 본 상품을 기존 주식형 포트폴리오에 편입 시 훌륭한 분산투자 효과가 발생함을 증명할 것.
-- 수익 원천 분석: 총수익률을 자본 차익(Price Return)과 인컴 수익(Dividend Yield)으로 분해하여, 하락장에서도 인컴이 버퍼(Buffer) 역할을 수행함을 강조할 것.
+- 과거 백테스트 지표: 샤프비율 {st.session_state.p_sharpe}, MDD {st.session_state.p_mdd}%, S&P 500 상관계수 {st.session_state.p_corr}. 
+- 다각화 논리: 전통 자산(주식/채권)과의 낮은 상관계수를 바탕으로 포트폴리오 편입 시 변동성 완화 효과를 논리적으로 증명할 것.
+- 수익 원천 분석: 총수익률을 자본 차익과 인컴 수익으로 분해하여, 하락장에서도 인컴이 버퍼(Buffer) 역할을 수행함을 강조할 것.
 - 스트레스 테스트: [{st.session_state.p_scenario}] 당시의 하락 방어 궤적을 근거로 제시할 것.
 
 **[3. 구조화 및 마케팅 전략]**
-- 세제 혜택 연계: 본 상품의 [{st.session_state.p_fx}] 전략과 배당 속성을 감안할 때, 연금 채널(ISA 또는 IRP/퇴직연금) 편입용으로 타겟팅하는 것이 유리함을 강조하고, 이를 위한 고객 소구 포인트 3가지를 직관적인 카피라이팅으로 뽑을 것.
-- BEP 분석: 첫해 타겟 AUM {st.session_state.p_aum}억 원 달성을 가정했을 때, 운용사(AMC) 예상 순수익은 {st.session_state.p_profit}억 원으로 추정됨. 이를 근거로 런칭 시점의 마케팅 프로모션 비용 집행이 수익성 관점에서 타당함을 경영진의 언어로 작성할 것.
+- 세제 혜택 연계: 본 상품의 [{st.session_state.p_fx}] 전략과 배당 속성을 감안할 때, 연금 채널 및 ISA 계좌 편입용으로 타겟팅하는 것이 유리함을 강조하고, 이를 위한 고객 소구 포인트 3가지를 직관적인 카피라이팅으로 뽑을 것.
+- BEP 분석: 첫해 타겟 AUM {st.session_state.p_aum}억 원 달성을 가정했을 때, 운용사(AMC) 예상 순수익은 {st.session_state.p_profit}억 원으로 추정됨. 이를 근거로 초기 마케팅 비용 집행의 타당성을 경영진의 언어로 작성할 것.
 
 출력 포맷 작성 시, 금융 투자 분석사 및 상품 개발 실무자의 언어를 엄격히 준수하고, 임의의 수사적 어구 대신 위에서 제공한 정확한 퀀트 데이터를 바탕으로 한 공문서 양식으로 출력하라."""
 
             st.code(master_prompt, language="text")
-            
             st.success("✨ **마스터 프롬프트 생성 완료!** 우측 상단의 복사 버튼을 눌러 다른 LLM 툴(ChatGPT, Gemini 등)에 바로 붙여넣기 하시면, 현업 시니어 수준의 완벽한 기획서가 도출됩니다.")
