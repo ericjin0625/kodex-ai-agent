@@ -1288,7 +1288,7 @@ with col_main:
                     st.plotly_chart(fig_wf, use_container_width=True)
 
     # =========================================================================
-    # Big 탭 3: 🤖 AI 프롬프트 (마스터 프롬프트 추출소)
+# Big 탭 3: 🤖 AI 프롬프트 (마스터 프롬프트 추출소)
     # =========================================================================
     elif big_tab == "🤖 AI 프롬프트":
         st.markdown("### 🧠 모듈형 AI 프롬프트 컨트롤 타워")
@@ -1319,36 +1319,39 @@ Step 1과 Step 2의 분석 결과를 종합하여, KODEX 리테일 마케팅 본
             st.code(p1_step3, language="text")
             
         with prompt_tabs[1]:
-            st.markdown("#### [글로벌 대체자산 ETF 마스터 프롬프트 엔진]")
-            st.caption("앞선 탭에서 설정한 모든 퀀트 결과와 논리가 완벽한 형태의 프롬프트로 치환되었습니다. 이를 복사하여 프로급 AI에 붙여넣기 하세요.")
+            st.markdown("#### [글로벌 대체자산 ETF 상품기획 프롬프트 - 3-Step 체인]")
+            st.caption("고품질의 상세한 상품 기획서(4~6페이지 분량)를 도출하기 위해, 분석/구조화/최종보고서 3단계로 분리된 체인 프롬프트입니다. 한 번에 하나씩 복사하여 프로급 AI(ChatGPT, Gemini 등)에 순서대로 입력하세요.")
 
             if st.session_state.p_has_csv:
                 csv_directive = f"첨부된 유니버스 엑셀(CSV) 데이터를 분석하여, 위 펀더멘털 필터링 룰(LTV {st.session_state.p_ltv}% 이하, FCF 마진 {st.session_state.p_fcf}% 이상)을 통과한 최종 편입 종목 10개의 리스트를 기획서 포트폴리오 섹션에 표 형태로 출력할 것."
             else:
                 csv_directive = f"구체적인 개별 종목 데이터가 없으므로, 위 펀더멘털 필터링 룰(LTV {st.session_state.p_ltv}% 이하, FCF 마진 {st.session_state.p_fcf}% 이상)을 적용했을 때 편입될 수 있는 대표적인 우량 기초자산들의 예시와 해당 필터링 방식의 논리적 타당성을 서술할 것."
 
-            master_prompt = f"""너는 최고 수준의 자산운용사 ETF 상품개발(PD) 시니어 수석 매니저야. 
-아래 제공된 퀀트 및 구조화 시뮬레이터 데이터를 바탕으로, 본부장 보고용 **[신상품 기획 및 타당성 검토 보고서]**와 리테일 세일즈 채널 배포용 **[마케팅 팩트시트]**를 각각 작성해 줘.
+            st.markdown("**📌 [Step 1: 지수 산출 및 퀀트 검증]**")
+            p2_step1 = f"""너는 최고 수준의 자산운용사 ETF 상품개발(PD) 시니어 수석 매니저야. 첫 번째 작업으로 아래 데이터를 바탕으로 **[1. 지수 산출 룰 및 퀀트 퍼포먼스 검증]** 파트를 아주 상세하게(약 1.5페이지 분량) 작성해 줘.
 
-**[1. 지수 산출 및 유니버스 룰]**
 - 기초자산 프록시: {st.session_state.p_proxy}
-- 프록시 선정 논리: {st.session_state.p_proxy_reason} (이 논리를 보고서 서두에 반드시 명시하여 타당성을 부여할 것)
-- 펀더멘털 스크리닝: LTV(부채비율) {st.session_state.p_ltv}% 이하, 잉여현금흐름(FCF) 마진 {st.session_state.p_fcf}% 이상을 허들로 설정하여 현금흐름의 안정성을 확보함.
+- 프록시 선정 논리: {st.session_state.p_proxy_reason} (이 논리로 타당성을 부여할 것)
+- 펀더멘털 스크리닝: LTV(부채비율) {st.session_state.p_ltv}% 이하, 잉여현금흐름(FCF) 마진 {st.session_state.p_fcf}% 이상을 허들로 설정.
 - 편입 종목 도출 지시: {csv_directive}
-- 가중치 배분: [{st.session_state.p_weight}] 룰을 적용하고, 단일 종목 최대 편입비중(Cap)은 {st.session_state.p_cap}%로 통제함.
-- 지수 유지보수(Index Maintenance): 기초자산의 유상증자, 분할, M&A 등 발생 시 S&P DJI 및 FnGuide의 이벤트 처리 방법론(Divisor Adjustment)을 준용하여 추적오차를 통제하는 룰을 명시할 것.
+- 가중치 배분 및 리스크 통제: [{st.session_state.p_weight}] 룰을 적용하고, 단일 종목 최대 편입비중(Cap)은 {st.session_state.p_cap}%로 통제. 지수 유지보수를 위해 유상증자/M&A 발생 시 S&P DJI 및 FnGuide의 이벤트 처리 방법론(Divisor Adjustment)을 준용.
+- 퀀트 백테스트 지표: 샤프비율 {st.session_state.p_sharpe}, MDD {st.session_state.p_mdd}%, S&P 500 상관계수 {st.session_state.p_corr}.
+- 분석 지시: 총수익률을 자본차익과 인컴으로 분해하여 하락장 버퍼 역할을 강조하고, 전통 자산과의 낮은 상관계수로 다각화 효과를 증명할 것. [{st.session_state.p_scenario}] 당시의 궤적을 매크로 스트레스 테스트 결과로 제시할 것."""
+            st.code(p2_step1, language="text")
 
-**[2. 퀀트 퍼포먼스 및 리스크 검증]**
-- 과거 백테스트 지표: 샤프비율 {st.session_state.p_sharpe}, MDD {st.session_state.p_mdd}%, S&P 500 상관계수 {st.session_state.p_corr}. 
-- 다각화 논리: 전통 자산(주식/채권)과의 낮은 상관계수를 바탕으로 포트폴리오 편입 시 변동성 완화 효과를 논리적으로 증명할 것.
-- 수익 원천 분석: 총수익률을 자본 차익과 인컴 수익으로 분해하여, 하락장에서도 인컴이 버퍼(Buffer) 역할을 수행함을 강조할 것.
-- 스트레스 테스트: [{st.session_state.p_scenario}] 당시의 하락 방어 궤적을 근거로 제시할 것.
+            st.markdown("**📌 [Step 2: 상품 구조화 및 비즈니스 타당성(P&L) 분석]**")
+            p2_step2 = f"""훌륭해. 이제 앞서 도출한 지수와 퀀트 검증 결과를 바탕으로, 두 번째 작업인 **[2. 상품 구조화 및 운용사 비즈니스 타당성 분석]** 파트를 상세히(약 1.5페이지 분량) 작성해 줘.
 
-**[3. 구조화 및 마케팅 전략]**
-- 세제 혜택 연계: 본 상품의 [{st.session_state.p_fx}] 전략과 배당 속성을 감안할 때, 연금 채널 및 ISA 계좌 편입용으로 타겟팅하는 것이 유리함을 강조하고, 이를 위한 고객 소구 포인트 3가지를 직관적인 카피라이팅으로 뽑을 것.
-- BEP 분석: 첫해 타겟 AUM {st.session_state.p_aum}억 원 달성을 가정했을 때, 운용사(AMC) 예상 순수익은 {st.session_state.p_profit}억 원으로 추정됨. 이를 근거로 초기 마케팅 비용 집행의 타당성을 경영진의 언어로 작성할 것.
+- 세제 혜택 연계 및 채널 타겟팅: 본 상품의 환율 전략은 [{st.session_state.p_fx}]임. 이 환율 전략의 특성과 대체자산의 배당 속성을 감안하여, 연금 채널(IRP/퇴직연금) 또는 ISA 계좌 중 어디에 편입하는 것이 유리한지 논리적으로 구조화할 것.
+- 운용사(AMC) BEP 분석: 첫해 타겟 AUM {st.session_state.p_aum}억 원 달성을 가정했을 때, 예상되는 운용사 순수익은 {st.session_state.p_profit}억 원으로 추정됨. 
+- 분석 지시: 위 P&L 데이터를 근거로, 상품 런칭 시점의 초기 시딩(Seeding) 및 마케팅 프로모션 비용 집행이 수익성 관점에서 왜 타당한 투자인지를 경영진(C-Level)이 납득할 수 있는 재무적 언어로 작성할 것."""
+            st.code(p2_step2, language="text")
 
-출력 포맷 작성 시, 금융 투자 분석사 및 상품 개발 실무자의 언어를 엄격히 준수하고, 임의의 수사적 어구 대신 위에서 제공한 정확한 퀀트 데이터를 바탕으로 한 공문서 양식으로 출력하라."""
+            st.markdown("**📌 [Step 3: 최종 요약 보고서 및 리테일 팩트시트 산출]**")
+            p2_step3 = """마지막 작업이야. Step 1과 Step 2의 모든 논리와 수치 데이터를 총망라하여, 다음 두 가지 산출물을 각각 분리해서 최종 완성해 줘.
 
-            st.code(master_prompt, language="text")
-            st.success("✨ **마스터 프롬프트 생성 완료!** 우측 상단의 복사 버튼을 눌러 다른 LLM 툴(ChatGPT, Gemini 등)에 바로 붙여넣기 하시면, 현업 시니어 수준의 완벽한 기획서가 도출됩니다.")
+1. **[신상품 기획 및 타당성 검토 최종 보고서 (Executive Summary)]**: 본부장 및 임원진에게 보고하기 위한 1페이지 분량의 요약 공문서. 도입부(기획 의도), 핵심 퀀트 성과, 마케팅/수익성 기대효과가 일목요연하게 정리되어야 함.
+2. **[리테일 세일즈 채널 배포용 마케팅 팩트시트]**: PB(프라이빗 뱅커) 및 일반 리테일 고객이 읽을 1페이지 분량의 팩트시트. 직관적인 카피라이팅으로 고객 소구 포인트 3가지를 도출하고, 투자 위험도 및 세금(Tax) 혜택 활용법을 알기 쉽게 풀어쓸 것.
+
+모든 출력물은 금융 투자 분석사 및 상품 개발 실무자의 전문적인 톤앤매너를 엄격히 준수하라."""
+            st.code(p2_step3, language="text")
