@@ -1010,8 +1010,8 @@ with col_main:
                                 st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:14px; font-weight:bold; color:#ffb04d; text-decoration:none;'>[규제] {row['원본제목']} 🔗</a>", unsafe_allow_html=True)
                 else: st.info("관련된 최신 정책 뉴스 피드가 존재하지 않습니다.")
 
-    # =========================================================================
-    # Big 탭 2: 글로벌 상품 기획 시뮬레이터 
+# =========================================================================
+    # Big 탭 2: 글로벌 상품 기획 시뮬레이터 (전면 업그레이드)
     # =========================================================================
     elif big_tab == "글로벌 상품 기획 시뮬레이터":
         st.markdown("## 🌍 Global Alternative ETF Structuring Simulator")
@@ -1076,7 +1076,6 @@ with col_main:
             with col_p2:
                 with st.container(border=True):
                     st.markdown("**⚖️ 포트폴리오 가중치(Weighting) 룰**")
-                    # [수정 1] 비중 배분 방식 라디오버튼 -> 드롭다운 변경
                     weight_opt = st.selectbox("비중 배분 방식 선택:", [
                         "시가총액 가중 방식 (Cap-weighted)",
                         "Top 3 핵심종목 75% 편중 (Akros Core-Satellite)",
@@ -1088,7 +1087,7 @@ with col_main:
                     cap_limit = st.slider("단일 종목 최대 편입 상한선 (Cap, %)", 10, 30, 20, step=1)
                     st.session_state.p_cap = cap_limit
 
-        # === Step 2: 퀀트 기반 백테스팅 및 리스크 (상관관계 히트맵 및 수익원천 분해) ===
+        # === Step 2: 퀀트 기반 백테스팅 및 리스크 ===
         with sub_tabs_plan[1]:
             st.markdown("#### 2. 프록시 ETF 기반 성과 검증 및 스트레스 테스트")
             
@@ -1118,16 +1117,25 @@ with col_main:
             with c_bt1:
                 with st.container(border=True):
                     st.markdown(f"**📈 {st.session_state.p_proxy} 과거 3년 백테스트 (자본차익 vs 배당수익 분해)**")
+                    
+                    lp_cost = st.slider("예상 LP 호가 스프레드 및 마찰비용 (연 %)", 0.0, 1.0, 0.2, 0.1)
+                    st.session_state.p_lp_cost = lp_cost
+                    
                     end_dt = datetime.today()
                     start_dt = end_dt - timedelta(days=365*3)
                     
                     annual_yield = 0.08 if "BDC" in asset_class else (0.06 if "CLO" in asset_class else 0.04)
                     
-                    with st.spinner(f"해외 API에서 {st.session_state.p_proxy} 및 SPY 데이터를 불러옵니다..."):
+                    with st.spinner(f"해외 API에서 {st.session_state.p_proxy} 데이터를 불러옵니다..."):
                         try:
                             port_df = fdr.DataReader(st.session_state.p_proxy, start_dt, end_dt)
                             port_daily = port_df['Close'].pct_change().dropna()
                             port_cum = (1 + port_daily).cumprod() * 100
+                            
+                            # 마찰 비용 일할 차감 적용
+                            discount_array = (1 - lp_cost/100) ** (np.arange(len(port_cum)) / 252)
+                            port_cum = port_cum * discount_array
+                            
                             dates = port_cum.index
                             port_vol = np.std(port_daily) * np.sqrt(252)
                             ann_ret = (port_cum.iloc[-1] / 100) ** (1/3) - 1
@@ -1139,7 +1147,10 @@ with col_main:
                             dates = pd.date_range(start=start_dt, end=end_dt, periods=756)
                             port_daily = np.random.normal(0.0003, 0.008, 756)
                             port_cum = pd.Series((1 + port_daily).cumprod() * 100, index=dates)
-                            sharpe, mdd = 1.24, -15.4
+                            
+                            discount_array = (1 - lp_cost/100) ** (np.arange(len(port_cum)) / 252)
+                            port_cum = port_cum * discount_array
+                            sharpe, mdd = 1.24 - (lp_cost*0.5), -15.4 - lp_cost
                             
                         st.session_state.p_sharpe = round(sharpe, 2)
                         st.session_state.p_mdd = round(mdd, 1)
@@ -1248,7 +1259,7 @@ with col_main:
 
             with c_pl2:
                 with st.container(border=True):
-                    # Factsheet (팩트시트) 유지
+                    # Factsheet
                     st.markdown("##### 📄 Simulated Product Factsheet")
                     st.metric("최종 타겟 배당수익률 (Net Yield)", f"{net_yield:.2f}%")
                     
@@ -1261,9 +1272,24 @@ with col_main:
                     st.success(f"💰 **세금 최적화(Tax):** {tax_desc}으로 타겟팅하는 것이 세일즈에 유리합니다.")
 
                 with st.container(border=True):
-                    st.markdown("**🏢 자산운용사(AMC) 수지 분석 (P&L)**")
-                    target_aum = st.number_input("1년 차 타겟 AUM (억원)", value=1000, step=100)
+                    st.markdown("**🏢 자산운용사(AMC) 수지 분석 및 피어(Peer) 타겟팅**")
+                    
+                    col_tgt1, col_tgt2 = st.columns(2)
+                    with col_tgt1:
+                        comp_ticker = st.text_input("타겟 경쟁사 ETF 티커", value="TIGER 유사ETF")
+                        st.session_state.p_comp_ticker = comp_ticker
+                    with col_tgt2:
+                        comp_ter = st.number_input("경쟁사 보수율 (%)", value=0.50, step=0.01)
+                        st.session_state.p_comp_ter = comp_ter
+                        
+                    target_aum = st.number_input("1년 차 당사 타겟 AUM (억원)", value=1000, step=100)
                     st.session_state.p_aum = target_aum
+                    
+                    ter_diff = comp_ter - ter
+                    if ter_diff > 0:
+                        st.success(f"🔥 가격 경쟁력 확보: 경쟁사({comp_ticker}) 대비 보수율이 {ter_diff:.2f}% 저렴하여 훌륭한 스위칭(Switching) 무기가 됩니다.")
+                    else:
+                        st.warning(f"⚠️ 보수율 열위: 경쟁사 대비 보수율이 높거나 같으므로 강력한 차별화 구조화(버퍼 등) 포인트가 필요합니다.")
                     
                     amc_margin = ter - 0.05
                     expected_revenue = target_aum * (amc_margin / 100)
@@ -1288,7 +1314,7 @@ with col_main:
                     st.plotly_chart(fig_wf, use_container_width=True)
 
     # =========================================================================
-# Big 탭 3: 🤖 AI 프롬프트 (마스터 프롬프트 추출소)
+    # Big 탭 3: 🤖 AI 프롬프트 (마스터 프롬프트 추출소)
     # =========================================================================
     elif big_tab == "🤖 AI 프롬프트":
         st.markdown("### 🧠 모듈형 AI 프롬프트 컨트롤 타워")
@@ -1342,6 +1368,7 @@ Step 1과 Step 2의 분석 결과를 종합하여, KODEX 리테일 마케팅 본
             p2_step2 = f"""훌륭해. 두 번째 작업으로 앞서 설정한 지수의 **[2. 퀀트 퍼포먼스 및 리스크 검증]** 파트를 상세히(약 1페이지 분량) 작성해 줘.
 
 - 퀀트 백테스트 지표: 샤프비율 {st.session_state.p_sharpe}, MDD {st.session_state.p_mdd}%, S&P 500 상관계수 {st.session_state.p_corr}.
+- 마찰 비용(Friction Cost) 할인: 위 백테스트 수치는 LP 호가 스프레드 및 리밸런싱 슬리피지를 감안하여 [연 {st.session_state.get('p_lp_cost', 0.2)}%]의 보수적인 할인율이 차감된 실전적 수치임을 강조할 것.
 - 다각화 증명 지시: 전통 자산(주식/채권)과의 상관계수 데이터를 바탕으로, 기관 및 리테일 투자자의 핵심 포트폴리오에 본 ETF 편입 시 발생하는 꼬리 위험(Tail Risk) 헷지 효과를 수학적으로 증명할 것.
 - 수익 원천 분석: 총수익률을 자본 차익(Price Return)과 인컴 수익(Income Return)으로 철저히 분해하여, 자산 가격 하락장에서도 누적된 인컴이 훌륭한 하방 버퍼(Buffer) 역할을 수행함을 강조할 것.
 - 스트레스 테스트: [{st.session_state.p_scenario}] 당시의 매크로 위기 국면을 예시로 들어, 해당 자산군의 회복력(Resilience)을 증명할 것."""
@@ -1355,18 +1382,18 @@ Step 1과 Step 2의 분석 결과를 종합하여, KODEX 리테일 마케팅 본
 - 타겟 페르소나: 이 구조화 전략에 가장 매력을 느낄 핵심 타겟 고객층(예: 현금흐름 창출을 원하는 은퇴 준비자 등)을 정의할 것."""
             st.code(p2_step3, language="text")
 
-            st.markdown("**📌 [Step 4: 자산운용사(AMC) 수지 분석 및 비즈니스 타당성]**")
-            p2_step4 = f"""네 번째 작업으로, 본 상품을 출시했을 때 자산운용사 입장에서의 수익성을 검토하는 **[4. 운용사 P&L 및 비즈니스 타당성 분석]** 파트를 재무적 관점에서 상세히(약 1페이지 분량) 작성해 줘.
+            st.markdown("**📌 [Step 4: 자산운용사(AMC) 수지 분석 및 M/S 타겟팅]**")
+            p2_step4 = f"""네 번째 작업으로, 본 상품을 출시했을 때 자산운용사 입장에서의 수익성과 시장 침투 전략을 다루는 **[4. 운용사 P&L 및 비즈니스 타당성 분석]** 파트를 재무적 관점에서 상세히(약 1페이지 분량) 작성해 줘.
 
-- AUM 및 보수율 가정: 첫해 타겟 AUM {st.session_state.p_aum}억 원 달성 가정.
-- 손익(P&L) 구조: 운용보수에서 신탁보수 및 고정 유지비, 초기 마케팅 비용을 차감했을 때 운용사 예상 순수익은 {st.session_state.p_profit}억 원으로 추정됨. 
-- 작성 지시: 위 P&L 폭포수(Waterfall) 데이터를 근거로, 상품 런칭 시점의 초기 시딩(Seeding) 규모와 마케팅 프로모션 비용 집행이 장기적 수익성 관점에서 왜 타당한 투자인지 경영진(C-Level)을 설득하는 논리를 전개할 것."""
+- M/S 탈환 전략: 타겟 경쟁사인 [{st.session_state.get('p_comp_ticker', '유사ETF')}]의 보수율({st.session_state.get('p_comp_ter', 0.5)}%) 대비 당사 보수율의 가격 경쟁력 우위/열위를 분석하여, AUM 뺏어오기(Switching) 또는 차별화 마케팅 전략을 구체화할 것.
+- AUM 및 손익(P&L) 구조: 첫해 타겟 AUM {st.session_state.p_aum}억 원 달성 시, 운용보수에서 신탁보수 및 고정 유지비/마케팅 비용을 차감한 운용사 예상 순수익은 {st.session_state.p_profit}억 원으로 추정됨. 
+- 작성 지시: 위 P&L 데이터를 근거로, 상품 런칭 시점의 초기 시딩(Seeding) 규모와 공격적인 마케팅 비용 집행이 시장 점유율 확보 관점에서 왜 타당한 투자인지 경영진(C-Level)을 설득하는 논리를 전개할 것."""
             st.code(p2_step4, language="text")
 
             st.markdown("**📌 [Step 5: 요약 보고서 및 리테일 세일즈 팩트시트 산출]**")
             p2_step5 = """마지막 작업이야. Step 1부터 Step 4까지 전개한 모든 퀀트 논리와 수치 데이터를 총망라하여, 다음 두 가지 실무 산출물을 각각 분리해서 최종 완성해 줘.
 
-1. **[Executive Summary (임원 보고용 요약본)]**: 본부장 및 임원진이 1분 안에 의사결정을 내릴 수 있도록 1페이지 분량으로 요약된 공문서. (기획 의도, 핵심 퀀트 성과, BEP 타당성이 일목요연하게 정리되어야 함)
+1. **[Executive Summary (임원 보고용 요약본)]**: 본부장 및 임원진이 1분 안에 의사결정을 내릴 수 있도록 1페이지 분량으로 요약된 공문서. (기획 의도, 핵심 퀀트 성과, BEP 및 경쟁사 타겟팅 타당성이 일목요연하게 정리되어야 함)
 2. **[Retail Sales Factsheet (세일즈 팩트시트)]**: PB(프라이빗 뱅커) 및 일반 리테일 고객이 읽을 1페이지 분량의 마케팅 팩트시트. 고객을 사로잡을 직관적인 카피라이팅으로 '핵심 소구 포인트 3가지'를 도출하고, 투자 위험도 및 세금(Tax) 혜택 활용법을 알기 쉽게 풀어쓸 것.
 
 모든 출력물은 금융 투자 분석사 및 상품 개발 실무자의 전문적인 톤앤매너를 엄격히 준수하라."""
