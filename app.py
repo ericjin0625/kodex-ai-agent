@@ -242,7 +242,7 @@ def get_app_reviews():
             for r in result:
                 all_reviews.append({"app": app_name, "os": "🤖 AOS", "score": r['score'], "date": r['at'].strftime("%Y-%m-%d"), "title": "구글플레이 리뷰", "content": r['content']})
     except:
-        all_reviews.append({"app": "System", "os": "⚠️ Error", "score": 0, "date": "-", "title": "AOS 수집 라이브러리 누락", "content": "로컬 환경 터미널에서 'pip install google-play-scraper'를 실행하시면 안드로이드 리뷰가 정상 수집됩니다."})
+        all_reviews.append({"app": "System", "os": "⚠️ Error", "score": 0, "date": "-", "title": "AOS 수집 록 누락", "content": "로컬 환경 터미널에서 'pip install google-play-scraper'를 실행하시면 안드로이드 리뷰가 정상 수집됩니다."})
 
     all_reviews.sort(key=lambda x: x['date'], reverse=True)
     return all_reviews[:40]
@@ -732,39 +732,39 @@ with col_main:
                         st.dataframe(df_yt_sorted[["운용사", "영상 제목", "조회수", "업로드"]], use_container_width=True, height=350, hide_index=True)
 
             st.divider()
-            # 🔴 타겟 세대별 키워드 시각화 (원본 기획대로 100% 하드코딩된 완성형 차트 복구)
-            st.markdown("### 🎯 타겟 세대별 미디어 인텔리전스 (유튜브 핫 키워드)")
-            st.caption("선택한 타겟 세대의 유튜브 영상 제목에서 추출한 핵심 키워드 누적 언급량을 분석합니다.")
+            # 🔴 100% 융합: 세대 대통합 vs 갈등 vs 소외 키워드 매트릭스 교차 비교
+            st.markdown("### 🎯 타겟 세대별 미디어 인텔리전스 (유튜브 핫 키워드 교차 분석)")
+            st.caption("ETF 마케팅 핵심 키워드 풀(Pool)을 2030과 4060 세대에 동시 적용하여 언급량을 교차 비교합니다.")
             
-            target_gen = st.radio("분석 타겟 세대 선택:", ["👴 4060 시니어 (은퇴/인컴)", "🧑‍💻 2030 MZ (성장/파이어족)"], horizontal=True, key="gen_toggle_1")
+            # 하드코딩된 완성형 매트릭스 데이터 (기획 시연용)
+            kw_data = {
+                "키워드": ["절세", "복리", "월배당", "퇴직연금", "빅테크", "파이어족", "소액적립", "레버리지", "안전마진", "스마트베타"],
+                "4060 시니어": [85, 50, 95, 88, 45, 5, 20, 15, 75, 2],
+                "2030 MZ": [65, 55, 30, 15, 90, 85, 75, 70, 10, 3]
+            }
+            df_kw = pd.DataFrame(kw_data)
+            df_kw_melt = df_kw.melt(id_vars="키워드", var_name="세대", value_name="언급량")
             
-            # 시연용으로 완벽하게 디자인된 하드코딩 Counter 데이터 사용 (비어보이지 않게)
-            if "4060" in target_gen:
-                word_counts = Counter({"월배당": 15, "퇴직연금": 12, "안전마진": 8, "인컴": 5, "노후준비": 4})
-                stats = "Shorts 45%, Long-form 55%"
-                gen_desc = "4060 시니어"
-            else:
-                word_counts = Counter({"조기은퇴": 28, "적립식": 19, "파이어족": 15, "소액투자": 12, "시드머니": 7})
-                stats = "Shorts 85%, Long-form 15%"
-                gen_desc = "2030 MZ"
-                
             c_kw1, c_kw2 = st.columns([1.5, 1])
             with c_kw1:
-                df_words = pd.DataFrame(word_counts.items(), columns=['키워드', '언급량']).sort_values(by='언급량', ascending=True)
-                fig_words = px.bar(df_words, x='언급량', y='키워드', orientation='h', text='언급량', template="plotly_dark", color_discrete_sequence=['#ffb04d' if "4060" in target_gen else '#4da6ff'])
-                fig_words.update_layout(height=280, margin=dict(t=10, b=10, l=10, r=10), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                fig_words = px.bar(
+                    df_kw_melt, x="언급량", y="키워드", color="세대", barmode="group", orientation="h",
+                    color_discrete_map={"4060 시니어": "#ffb04d", "2030 MZ": "#4da6ff"},
+                    template="plotly_dark"
+                )
+                fig_words.update_layout(height=350, margin=dict(t=10, b=10, l=10, r=10), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(title=None, orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
                 st.plotly_chart(fig_words, use_container_width=True)
+                
             with c_kw2:
-                st.markdown(f"**💡 {gen_desc} 타겟 인사이트**")
-                if "4060" in target_gen:
-                    st.info("안정적인 현금흐름(배당, 연금)에 대한 니즈가 압도적입니다. 긴 호흡의 롱폼(Long-form) 영상 시청 비율이 상대적으로 높습니다.")
-                else:
-                    st.info("자산 증식(레버리지, 빅테크)과 테크 트렌드에 대한 관심이 폭발적입니다. 빠르고 직관적인 쇼츠(Shorts) 포맷의 반응률이 매우 높습니다.")
-            
-            st.session_state.media_context = f"[타겟 세대]: {gen_desc}\n[유튜브 키워드 현황]: {dict(word_counts)}\n[포맷 믹스 구조]: {stats}"
+                st.markdown("**💡 세대 교차 분석 인사이트**")
+                st.success("**🌟 대통합 키워드:** '절세', '복리'\n전 세대를 아우르는 공통 관심사로, 메인 마케팅 카피에 필수 탑재해야 합니다.")
+                st.info("**💥 세대 분리 키워드:**\n- 4060 타겟: '월배당', '퇴직연금', '안전마진'\n- 2030 타겟: '빅테크', '파이어족', '레버리지'\n각 타겟 매체별로 철저히 분리된 카피라이팅이 필요합니다.")
+                st.error("**📉 소외 키워드 (De-marketing):** '스마트베타'\n공급자 중심의 어려운 용어로, 양쪽 세대 모두에서 외면받고 있으므로 마케팅 용어에서 배제해야 합니다.")
+
+            # AI 프롬프트용 Context 실시간 연동
+            st.session_state.media_context = f"[세대 대통합 키워드]: 절세, 복리\n[4060 특화]: 월배당, 퇴직연금, 안전마진\n[2030 특화]: 파이어족, 레버리지, 소액적립\n[배제 권장]: 스마트베타"
 
             st.divider()
-            # 인스타그램 마케팅 동향 (Option A 연동 시뮬레이션 / 리얼 Fallback)
             st.markdown("### 📱 경쟁사 인스타그램 마케팅 동향 (API 연동)")
             st.caption("외부 API 기반으로 경쟁사의 최근 인스타그램 포스팅 성과를 추적합니다.")
             
@@ -987,62 +987,62 @@ with col_main:
                             styled_df = pivot_df.style.format("{:,}").apply(style_aum, axis=1)
                             st.dataframe(styled_df, use_container_width=True)
                             st.session_state.aum_context_text = pivot_df.to_string()
+            except: pass
+
+        st.divider()
+        st.markdown("### 📈 테마별 운용사 전체 순매수 트렌드 (과거 추이)")
+        if uploaded_excel is not None and available_weeks[0] != "데이터 없음":
+            col_theme, col_weeks = st.columns(2)
+            with col_theme: selected_theme = st.selectbox("분석할 테마 선택:", list(pivot_df.index) if not pivot_df.empty else ['🤖 AI & 반도체'])
+            with col_weeks: n_weeks = st.slider("조회할 과거 주차 (N주):", min_value=1, max_value=len(available_weeks), value=min(4, len(available_weeks)))
+            trend_data = []
+            for w in available_weeks[:n_weeks][::-1]:
+                try:
+                    temp_df = load_and_clean_excel(uploaded_excel, w)
+                    if not temp_df.empty and '종목명' in temp_df.columns:
+                        temp_df = temp_df[temp_df['종목명'] != '전체'].copy()
+                        temp_df['브랜드'] = temp_df['종목명'].apply(lambda x: str(x).split(' ')[0]).replace('KBSTAR', 'RISE')
+                        temp_df['분류_테마'] = temp_df['종목명'].apply(assign_auto_theme)
+                        theme_df = temp_df[(temp_df['분류_테마'] == selected_theme) & (temp_df['브랜드'].isin(['KODEX', 'TIGER', 'ACE', 'RISE']))].copy()
+                        theme_df['순매수합계'] = theme_df.get('개인', 0) + theme_df.get('기관', 0) + theme_df.get('외국인', 0)
+                        brand_sum = theme_df.groupby('브랜드')['순매수합계'].sum().reset_index()
+                        brand_sum['주차'] = w
+                        trend_data.append(brand_sum)
                 except: pass
+            if trend_data:
+                df_trend = pd.concat(trend_data)
+                fig_trend = px.line(df_trend, x='주차', y='순매수합계', color='브랜드', markers=True, template="plotly_dark", color_discrete_sequence=px.colors.qualitative.Set2)
+                fig_trend.update_layout(height=400, yaxis_title="전체 순매수 합계", xaxis_title=None, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                st.plotly_chart(fig_trend, use_container_width=True)
+        else: st.info("👉 우측 패널에 엑셀 데이터를 업로드하시면 트렌드 그래프가 활성화됩니다.")
 
-            st.divider()
-            st.markdown("### 📈 테마별 운용사 전체 순매수 트렌드 (과거 추이)")
-            if uploaded_excel is not None and available_weeks[0] != "데이터 없음":
-                col_theme, col_weeks = st.columns(2)
-                with col_theme: selected_theme = st.selectbox("분석할 테마 선택:", list(pivot_df.index) if not pivot_df.empty else ['🤖 AI & 반도체'])
-                with col_weeks: n_weeks = st.slider("조회할 과거 주차 (N주):", min_value=1, max_value=len(available_weeks), value=min(4, len(available_weeks)))
-                trend_data = []
-                for w in available_weeks[:n_weeks][::-1]:
-                    try:
-                        temp_df = load_and_clean_excel(uploaded_excel, w)
-                        if not temp_df.empty and '종목명' in temp_df.columns:
-                            temp_df = temp_df[temp_df['종목명'] != '전체'].copy()
-                            temp_df['브랜드'] = temp_df['종목명'].apply(lambda x: str(x).split(' ')[0]).replace('KBSTAR', 'RISE')
-                            temp_df['분류_테마'] = temp_df['종목명'].apply(assign_auto_theme)
-                            theme_df = temp_df[(temp_df['분류_테마'] == selected_theme) & (temp_df['브랜드'].isin(['KODEX', 'TIGER', 'ACE', 'RISE']))].copy()
-                            theme_df['순매수합계'] = theme_df.get('개인', 0) + theme_df.get('기관', 0) + theme_df.get('외국인', 0)
-                            brand_sum = theme_df.groupby('브랜드')['순매수합계'].sum().reset_index()
-                            brand_sum['주차'] = w
-                            trend_data.append(brand_sum)
-                    except: pass
-                if trend_data:
-                    df_trend = pd.concat(trend_data)
-                    fig_trend = px.line(df_trend, x='주차', y='순매수합계', color='브랜드', markers=True, template="plotly_dark", color_discrete_sequence=px.colors.qualitative.Set2)
-                    fig_trend.update_layout(height=400, yaxis_title="전체 순매수 합계", xaxis_title=None, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                    st.plotly_chart(fig_trend, use_container_width=True)
-            else: st.info("👉 우측 패널에 엑셀 데이터를 업로드하시면 트렌드 그래프가 활성화됩니다.")
-
-            st.markdown("<br><br>", unsafe_allow_html=True)
-            st.markdown("---")
-            
-            st.markdown("### 🇺🇸 글로벌 혁신 구조 공백 분석 (US Mega Trends vs KODEX)")
-            raw_keywords = ["타겟 인컴 ETF 버퍼형", "0DTE 초단기 옵션 커버드콜 ETF", "가상자산 비트코인 현물 ETF", "BDC 기업성장집합투자기구 대체투자", "하방 방어형 100% 버퍼 ETF"]
-            trend_strengths = []
-            with st.spinner("미국 혁신 테마 트렌드를 스캔 중입니다..."):
-                for kw in raw_keywords:
-                    temp_news = get_realtime_news(kw, timeframe="7d", max_items=10)
-                    c = len(temp_news) if not temp_news.empty and temp_news.iloc[0]["게시일 / 출처"] != "-" else 0
-                    trend_strengths.append("🔥🔥🔥 최고조" if c >= 5 else ("🔥🔥 강세" if c >= 2 else "🔥 꾸준함"))
-            st.dataframe(pd.DataFrame({"혁신 상품 구조 (미국 메가 트렌드)": raw_keywords, "최근 뉴스 기반 유입 강도": trend_strengths, "KODEX 라인업 현황": ["공백 (0개)", "일부 유사 (1개)", "규제 한계 (0개)", "규제 한계 (0개)", "공백 (0개)"], "전략적 제언 (Action Plan)": ["즉시 벤치마킹 기획 가동", "분배율 메시지 고도화", "정책 완화 시그널 추적", "법안 통과 즉시 선점", "하락장 방어 포트폴리오 설계"]}), use_container_width=True, hide_index=True)
-            
-            st.divider()
-            selected_trend_label = st.selectbox("🔍 뉴스 검색망 가동할 혁신 구조 선택:", options=raw_keywords, index=2)
-            st.session_state['selected_trend_label'] = selected_trend_label
-            st.markdown(f"#### 📡 `[실시간 정책 시그널]` {selected_trend_label} 관련 완화 동향")
-            with st.spinner("규제 완화 뉴스 스크랩 중..."):
-                df_gap_news = get_realtime_news(selected_trend_label + " 금융위 규제", timeframe="7d")
-                if "링크" in df_gap_news.columns and df_gap_news["링크"].iloc[0] != "":
-                    cols_grid = st.columns(2)
-                    for idx, row in df_gap_news.iterrows():
-                        with cols_grid[idx % 2]:
-                            with st.container(border=True):
-                                st.caption(f"📅 {row['게시일 / 출처']}")
-                                st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:14px; font-weight:bold; color:#ffb04d; text-decoration:none;'>[규제] {row['원본제목']} 🔗</a>", unsafe_allow_html=True)
-                else: st.info("관련된 최신 정책 뉴스 피드가 존재하지 않습니다.")
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        st.markdown("---")
+        
+        st.markdown("### 🇺🇸 글로벌 혁신 구조 공백 분석 (US Mega Trends vs KODEX)")
+        raw_keywords = ["타겟 인컴 ETF 버퍼형", "0DTE 초단기 옵션 커버드콜 ETF", "가상자산 비트코인 현물 ETF", "BDC 기업성장집합투자기구 대체투자", "하방 방어형 100% 버퍼 ETF"]
+        trend_strengths = []
+        with st.spinner("미국 혁신 테마 트렌드를 스캔 중입니다..."):
+            for kw in raw_keywords:
+                temp_news = get_realtime_news(kw, timeframe="7d", max_items=10)
+                c = len(temp_news) if not temp_news.empty and temp_news.iloc[0]["게시일 / 출처"] != "-" else 0
+                trend_strengths.append("🔥🔥🔥 최고조" if c >= 5 else ("🔥🔥 강세" if c >= 2 else "🔥 꾸준함"))
+        st.dataframe(pd.DataFrame({"혁신 상품 구조 (미국 메가 트렌드)": raw_keywords, "최근 뉴스 기반 유입 강도": trend_strengths, "KODEX 라인업 현황": ["공백 (0개)", "일부 유사 (1개)", "규제 한계 (0개)", "규제 한계 (0개)", "공백 (0개)"], "전략적 제언 (Action Plan)": ["즉시 벤치마킹 기획 가동", "분배율 메시지 고도화", "정책 완화 시그널 추적", "법안 통과 즉시 선점", "하락장 방어 포트폴리오 설계"]}), use_container_width=True, hide_index=True)
+        
+        st.divider()
+        selected_trend_label = st.selectbox("🔍 뉴스 검색망 가동할 혁신 구조 선택:", options=raw_keywords, index=2)
+        st.session_state['selected_trend_label'] = selected_trend_label
+        st.markdown(f"#### 📡 `[실시간 정책 시그널]` {selected_trend_label} 관련 완화 동향")
+        with st.spinner("규제 완화 뉴스 스크랩 중..."):
+            df_gap_news = get_realtime_news(selected_trend_label + " 금융위 규제", timeframe="7d")
+            if "링크" in df_gap_news.columns and df_gap_news["링크"].iloc[0] != "":
+                cols_grid = st.columns(2)
+                for idx, row in df_gap_news.iterrows():
+                    with cols_grid[idx % 2]:
+                        with st.container(border=True):
+                            st.caption(f"📅 {row['게시일 / 출처']}")
+                            st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:14px; font-weight:bold; color:#ffb04d; text-decoration:none;'>[규제] {row['원본제목']} 🔗</a>", unsafe_allow_html=True)
+            else: st.info("관련된 최신 정책 뉴스 피드가 존재하지 않습니다.")
 
     # =========================================================================
     # Big 탭 2: 글로벌 상품 기획 시뮬레이터 
@@ -1210,7 +1210,7 @@ with col_main:
                     top5_tkrs = df_pie_show.head(5)["Asset"].tolist() if not df_pie_show.empty else tkrs[:5]
                     corr_matrix = np.random.uniform(0.3, 0.8, size=(len(top5_tkrs), len(top5_tkrs)))
                     np.fill_diagonal(corr_matrix, 1.0)
-                    corr_matrix = (corr_matrix + corr_matrix.T) / 2 
+                    corr_matrix = (corr_matrix + corr_matrix.T) / 2
                     np.fill_diagonal(corr_matrix, 1.0)
                     
                     corr_df = pd.DataFrame(corr_matrix, columns=top5_tkrs, index=top5_tkrs)
@@ -1455,7 +1455,7 @@ with col_main:
             p1_step2 = f"""[Step 2: 수급 및 투자자 심리(VOC) 분석]
 Step 1의 거시적 흐름 하에서, 다음의 순매수 엑셀 데이터와 종토방 감성 분석 결과를 연결하여 리테일 투자자들의 '공포와 탐욕' 심리 상태를 진단하시오.
 [주간 거래량 랭킹]: {st.session_state.df_volume_summary_text}
-[경쟁사 유튜브/블로그 동향]: {st.session_state.media_context}"""
+[경쟁사 미디어 동향]: {st.session_state.media_context}"""
             st.code(p1_step2, language="text")
 
             p1_step3 = """[Step 3: 최종 주간 마케팅 리포트 산출]
