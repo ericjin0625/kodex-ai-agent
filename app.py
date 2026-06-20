@@ -1558,55 +1558,49 @@ with col_main:
         st.markdown("### 🧠 모듈형 AI 프롬프트 컨트롤 타워")
         st.caption("각 단계별 목적에 맞게 AI(LLM)에게 전달할 최적화된 프롬프트를 체인(Chain) 형태로 분리하여 제공합니다.")
         
-        # 👇 [추가된 부분] 필수 데이터 다운로드 존 (하위 탭 위에 고정)
-        with st.expander("📥 프롬프트 첨부용 필수 데이터 및 양식 다운로드", expanded=True):
-            st.info("AI에게 프롬프트를 입력할 때 아래의 파일들을 함께 업로드하시면 분석 퀄리티가 크게 향상됩니다. (차트 이미지는 탭 내에서 개별 다운로드)")
-            
-            dl_col1, dl_col2, dl_col3 = st.columns(3)
-            
-            with dl_col1:
-                # 1. 앱 내부에서 생성된 데이터(CSV) 다운로드
-                csv_data = st.session_state.df_scatter.to_csv(index=False).encode('utf-8-sig') if not st.session_state.df_scatter.empty else b"Data Empty"
-                st.download_button(label="📊 이번주 순매수/수익률 데이터 (CSV)", data=csv_data, file_name="weekly_data.csv", mime="text/csv", use_container_width=True)
-                
-            with dl_col2:
-                # 2. 텍스트 요약본(TXT) 다운로드
-                txt_data = st.session_state.media_context.encode('utf-8')
-                st.download_button(label="📝 세대별 미디어 인사이트 요약 (TXT)", data=txt_data, file_name="media_insight.txt", mime="text/plain", use_container_width=True)
-                
-            with dl_col3:
-                # 3. 로컬에 저장된 정적 파일(PDF, Excel 등) 가이드 양식 다운로드
-                st.download_button(label="📄 AI 상품기획서 템플릿 (PDF)", data=b"dummy_pdf_data", file_name="template.pdf", mime="application/pdf", use_container_width=True)
-        
-        # ---------------------------------------------------------
-        # 하위 탭 (프롬프트 추출 영역)
         prompt_tabs = st.tabs(["📊 1. 주간 모니터링 체인 프롬프트", "🌟 2. 상품 기획 RAG 마스터 프롬프트 (최종 결과물)"])
         
         with prompt_tabs[0]:
             st.markdown("#### [주간 시장 요약 및 세일즈 리포트 프롬프트 - 3-Step 체인]")
-            st.info("💡 대시보드의 실시간 데이터를 바탕으로 AI에게 주간 리포트를 지시하는 3단계 체인 프롬프트입니다. 위에서 다운받은 CSV 데이터나 캡처한 차트 이미지를 함께 업로드하세요.")
+            st.info("💡 대시보드의 실시간 데이터를 바탕으로 AI에게 주간 리포트를 지시하는 3단계 체인 프롬프트입니다. 아래 각 단계에 맞는 데이터를 다운받아 AI에게 함께 업로드하세요.")
             
             news_text = "\n".join([f"- {row['원본제목']}" for _, row in st.session_state.df_real_news.head(5).iterrows()]) if not st.session_state.df_real_news.empty else "데이터 없음"
             
+            st.markdown("**📌 [Step 1: 매크로 및 AUM 동향 파악]**")
+            st.caption("👉 팁: [ETF 시장 모니터링] 탭의 대시보드 화면을 캡처해서 함께 주면 더 좋습니다.")
             p1_step1 = f"""[Step 1: 매크로 및 AUM 동향 파악]
 다음의 실시간 시장 지표와 AUM 데이터를 바탕으로 이번 주 ETF 시장의 전반적인 거시적 흐름과 자금 이동 방향을 3줄로 요약하시오. (※ 첨부된 차트 이미지가 있다면 시각적 추세도 함께 반영할 것)
 [시장 주요 뉴스]: {news_text}
 [AUM 현황 데이터]: {st.session_state.aum_context_text}"""
             st.code(p1_step1, language="text")
 
+            st.divider()
+
+            st.markdown("**📌 [Step 2: 수급 및 투자자 심리(VOC) 분석]**")
+            c_dl1, c_dl2 = st.columns(2)
+            with c_dl1:
+                csv_data = st.session_state.df_scatter.to_csv(index=False).encode('utf-8-sig') if not st.session_state.df_scatter.empty else b"Data Empty"
+                st.download_button(label="📥 Step 2 첨부용: 이번주 순매수/수익률 데이터 (CSV)", data=csv_data, file_name="weekly_data.csv", mime="text/csv", use_container_width=True)
+            with c_dl2:
+                txt_data = st.session_state.media_context.encode('utf-8')
+                st.download_button(label="📥 Step 2 첨부용: 세대별 미디어 인사이트 (TXT)", data=txt_data, file_name="media_insight.txt", mime="text/plain", use_container_width=True)
+            
             p1_step2 = f"""[Step 2: 수급 및 투자자 심리(VOC) 분석]
 Step 1의 거시적 흐름 하에서, 다음의 순매수 엑셀 데이터와 종토방 감성 분석 결과를 연결하여 리테일 투자자들의 '공포와 탐욕' 심리 상태를 진단하시오. (※ 함께 첨부한 '주간 순매수 데이터(CSV)' 및 차트 이미지를 분석하여 특정 사분면에 위치한 이상치(Outlier) 종목들을 반드시 언급할 것)
 [주간 거래량 랭킹]: {st.session_state.df_volume_summary_text}
 [경쟁사 미디어 동향]: {st.session_state.media_context}"""
             st.code(p1_step2, language="text")
 
+            st.divider()
+
+            st.markdown("**📌 [Step 3: 최종 주간 마케팅 리포트 산출]**")
             p1_step3 = """[Step 3: 최종 주간 마케팅 리포트 산출]
 Step 1과 Step 2의 분석 결과를 종합하여, 리테일 마케팅 본부장에게 보고할 '주간 세일즈 액션 플랜 리포트'를 마크다운 형식으로 작성하시오. 리포트에는 반드시 다음 주 추천 셀링 포인트(Selling Point) 3가지가 포함되어야 함."""
             st.code(p1_step3, language="text")
             
         with prompt_tabs[1]:
             st.markdown("#### [글로벌 대체자산 ETF 상품기획 프롬프트 - 5-Step 체인]")
-            st.caption("고품질의 상세한 상품 기획서(5~6페이지 분량)를 도출하기 위해, 실제 자산운용사 제안서 목차에 맞춘 5단계 체인 프롬프트입니다. 다운로드받은 템플릿(PDF)과 차트 이미지를 프로급 AI(ChatGPT, Gemini 등)에 함께 업로드하세요.")
+            st.caption("고품질의 상세한 상품 기획서(5~6페이지 분량)를 도출하기 위해, 실제 자산운용사 제안서 목차에 맞춘 5단계 체인 프롬프트입니다. 한 번에 하나씩 복사하여 프로급 AI(ChatGPT, Gemini 등)에 순서대로 입력하세요.")
 
             if st.session_state.p_has_csv:
                 csv_directive = f"첨부된 유니버스 엑셀(CSV) 데이터를 분석하여, 위 펀더멘털 필터링 룰(LTV {st.session_state.p_ltv}% 이하, FCF 마진 {st.session_state.p_fcf}% 이상)을 통과한 최종 편입 종목 10개의 리스트를 기획서 포트폴리오 섹션에 표 형태로 출력할 것."
@@ -1625,6 +1619,7 @@ Step 1과 Step 2의 분석 결과를 종합하여, 리테일 마케팅 본부장
             st.code(p2_step1, language="text")
 
             st.markdown("**📌 [Step 2: 퀀트 백테스팅 및 매크로 스트레스 테스트]**")
+            st.caption("👉 팁: [가상 지수 샌드박스]에서 밴드 차트 이미지를 다운받아 이 스텝에 첨부하시면 AI가 차트의 방어력을 분석해 줍니다.")
             p2_step2 = f"""훌륭해. 두 번째 작업으로 앞서 설정한 지수의 **[2. 퀀트 퍼포먼스 및 리스크 검증]** 파트를 상세히(약 1페이지 분량) 작성해 줘.
 
 - 퀀트 백테스트 지표: 샤프비율 {st.session_state.p_sharpe}, MDD {st.session_state.p_mdd}%, S&P 500 상관계수 {st.session_state.p_corr}.
@@ -1643,6 +1638,7 @@ Step 1과 Step 2의 분석 결과를 종합하여, 리테일 마케팅 본부장
             st.code(p2_step3, language="text")
 
             st.markdown("**📌 [Step 4: 자산운용사(AMC) 수지 분석 및 M/S 타겟팅]**")
+            st.caption("👉 팁: Step 3에서 도출된 P&L 워터폴 차트를 캡처하여 첨부해 보세요.")
             p2_step4 = f"""네 번째 작업으로, 본 상품을 출시했을 때 자산운용사 입장에서의 수익성과 시장 침투 전략을 다루는 **[4. 운용사 P&L 및 비즈니스 타당성 분석]** 파트를 재무적 관점에서 상세히(약 1페이지 분량) 작성해 줘.
 
 - M/S 탈환 전략: 타겟 경쟁사인 [{st.session_state.get('p_comp_ticker', '유사ETF')}]의 보수율({st.session_state.get('p_comp_ter', 0.5)}%) 대비 당사 보수율의 가격 경쟁력 우위/열위를 분석하여, AUM 뺏어오기(Switching) 또는 차별화 마케팅 전략을 구체화할 것.
@@ -1651,10 +1647,12 @@ Step 1과 Step 2의 분석 결과를 종합하여, 리테일 마케팅 본부장
             st.code(p2_step4, language="text")
 
             st.markdown("**📌 [Step 5: 요약 보고서 및 리테일 세일즈 팩트시트 산출]**")
+            # PDF 버튼 (가짜 데이터임을 인지하도록 캡션 추가)
+            st.download_button(label="📥 Step 5 첨부용: AI 상품기획서 템플릿 (임시 더미 PDF)", data=b"dummy_pdf_data", file_name="template.pdf", mime="application/pdf")
             p2_step5 = """마지막 작업이야. Step 1부터 Step 4까지 전개한 모든 퀀트 논리와 수치 데이터를 총망라하여, 다음 두 가지 실무 산출물을 각각 분리해서 최종 완성해 줘.
 
 1. **[Executive Summary (임원 보고용 요약본)]**: 본부장 및 임원진이 1분 안에 의사결정을 내릴 수 있도록 1페이지 분량으로 요약된 공문서. (기획 의도, 핵심 퀀트 성과, BEP 및 경쟁사 타겟팅 타당성이 일목요연하게 정리되어야 함)
 2. **[Retail Sales Factsheet (세일즈 팩트시트)]**: PB(프라이빗 뱅커) 및 일반 리테일 고객이 읽을 1페이지 분량의 마케팅 팩트시트. 고객을 사로잡을 직관적인 카피라이팅으로 '핵심 소구 포인트 3가지'를 도출하고, 투자 위험도 및 세금(Tax) 혜택 활용법을 알기 쉽게 풀어쓸 것.
 
-모든 출력물은 금융 투자 분석사 및 상품 개발 실무자의 전문적인 톤앤매너를 엄격히 준수하라. (※ 첨부한 AI 상품기획서 템플릿 파일의 목차와 포맷을 준수할 것)"""
+모든 출력물은 금융 투자 분석사 및 상품 개발 실무자의 전문적인 톤앤매너를 엄격히 준수하라. (※ 첨부한 AI 상품기획서 템플릿 파일이 있다면 해당 목차와 포맷을 준수할 것)"""
             st.code(p2_step5, language="text")
