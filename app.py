@@ -1558,18 +1558,33 @@ with col_main:
         st.markdown("### 🧠 모듈형 AI 프롬프트 컨트롤 타워")
         st.caption("각 단계별 목적에 맞게 AI(LLM)에게 전달할 최적화된 프롬프트를 체인(Chain) 형태로 분리하여 제공합니다.")
         
+        # 👇 [추가된 부분] 필수 데이터 다운로드 존 (하위 탭 위에 고정)
+        with st.expander("📥 프롬프트 첨부용 필수 데이터 및 양식 다운로드", expanded=True):
+            st.info("AI에게 프롬프트를 입력할 때 아래의 파일들을 함께 업로드하시면 분석 퀄리티가 크게 향상됩니다. (차트 이미지는 탭 내에서 개별 다운로드)")
+            
+            dl_col1, dl_col2, dl_col3 = st.columns(3)
+            
+            with dl_col1:
+                # 1. 앱 내부에서 생성된 데이터(CSV) 다운로드
+                csv_data = st.session_state.df_scatter.to_csv(index=False).encode('utf-8-sig') if not st.session_state.df_scatter.empty else b"Data Empty"
+                st.download_button(label="📊 이번주 순매수/수익률 데이터 (CSV)", data=csv_data, file_name="weekly_data.csv", mime="text/csv", use_container_width=True)
+                
+            with dl_col2:
+                # 2. 텍스트 요약본(TXT) 다운로드
+                txt_data = st.session_state.media_context.encode('utf-8')
+                st.download_button(label="📝 세대별 미디어 인사이트 요약 (TXT)", data=txt_data, file_name="media_insight.txt", mime="text/plain", use_container_width=True)
+                
+            with dl_col3:
+                # 3. 로컬에 저장된 정적 파일(PDF, Excel 등) 가이드 양식 다운로드
+                st.download_button(label="📄 AI 상품기획서 템플릿 (PDF)", data=b"dummy_pdf_data", file_name="template.pdf", mime="application/pdf", use_container_width=True)
+        
+        # ---------------------------------------------------------
+        # 하위 탭 (프롬프트 추출 영역)
         prompt_tabs = st.tabs(["📊 1. 주간 모니터링 체인 프롬프트", "🌟 2. 상품 기획 RAG 마스터 프롬프트 (최종 결과물)"])
         
         with prompt_tabs[0]:
             st.markdown("#### [주간 시장 요약 및 세일즈 리포트 프롬프트 - 3-Step 체인]")
-            
-            st.success("""
-            **📸 [핵심 Tip] 멀티모달(Vision) AI 200% 활용하기**
-            텍스트 데이터뿐만 아니라, **[ETF 시장 모니터링] 탭에서 생성된 중요 차트(예: 마케팅 임팩트 분석기, 산점도 등) 이미지를 함께 첨부**하면 AI가 훨씬 더 정교한 추세 분석을 수행합니다.
-            * **다운로드 방법:** 각 차트 우측 상단에 마우스를 올린 후 **📷(Download plot as a png)** 아이콘을 클릭하세요.
-            """)
-            
-            st.info("💡 대시보드의 실시간 데이터를 바탕으로 AI에게 주간 리포트를 지시하는 3단계 체인 프롬프트입니다. 한 번에 하나씩 복사하여 입력하세요.")
+            st.info("💡 대시보드의 실시간 데이터를 바탕으로 AI에게 주간 리포트를 지시하는 3단계 체인 프롬프트입니다. 위에서 다운받은 CSV 데이터나 캡처한 차트 이미지를 함께 업로드하세요.")
             
             news_text = "\n".join([f"- {row['원본제목']}" for _, row in st.session_state.df_real_news.head(5).iterrows()]) if not st.session_state.df_real_news.empty else "데이터 없음"
             
@@ -1580,7 +1595,7 @@ with col_main:
             st.code(p1_step1, language="text")
 
             p1_step2 = f"""[Step 2: 수급 및 투자자 심리(VOC) 분석]
-Step 1의 거시적 흐름 하에서, 다음의 순매수 엑셀 데이터와 종토방 감성 분석 결과를 연결하여 리테일 투자자들의 '공포와 탐욕' 심리 상태를 진단하시오. (※ 첨부된 '투자자별 순매수 증감률 산점도' 이미지가 있다면, 특정 사분면에 위치한 이상치(Outlier) 종목들을 반드시 언급할 것)
+Step 1의 거시적 흐름 하에서, 다음의 순매수 엑셀 데이터와 종토방 감성 분석 결과를 연결하여 리테일 투자자들의 '공포와 탐욕' 심리 상태를 진단하시오. (※ 함께 첨부한 '주간 순매수 데이터(CSV)' 및 차트 이미지를 분석하여 특정 사분면에 위치한 이상치(Outlier) 종목들을 반드시 언급할 것)
 [주간 거래량 랭킹]: {st.session_state.df_volume_summary_text}
 [경쟁사 미디어 동향]: {st.session_state.media_context}"""
             st.code(p1_step2, language="text")
@@ -1591,14 +1606,7 @@ Step 1과 Step 2의 분석 결과를 종합하여, 리테일 마케팅 본부장
             
         with prompt_tabs[1]:
             st.markdown("#### [글로벌 대체자산 ETF 상품기획 프롬프트 - 5-Step 체인]")
-            
-            st.success("""
-            **📸 [핵심 Tip] 팬 차트(Fan Chart) 및 P&L 결과 이미지 첨부**
-            AI가 보다 정밀한 상품 기획서(Factsheet)를 작성할 수 있도록, **[가상 지수 샌드박스]에서 생성한 밴드 차트나 P&L 워터폴 차트를 다운로드하여 프롬프트와 함께 업로드**해 주세요.
-            * **다운로드 방법:** 각 차트 우측 상단에 마우스를 올린 후 **📷(Download plot as a png)** 아이콘을 클릭하세요.
-            """)
-            
-            st.caption("고품질의 상세한 상품 기획서(5~6페이지 분량)를 도출하기 위해, 실제 자산운용사 제안서 목차에 맞춘 5단계 체인 프롬프트입니다. 한 번에 하나씩 복사하여 프로급 AI(ChatGPT, Gemini 등)에 순서대로 입력하세요.")
+            st.caption("고품질의 상세한 상품 기획서(5~6페이지 분량)를 도출하기 위해, 실제 자산운용사 제안서 목차에 맞춘 5단계 체인 프롬프트입니다. 다운로드받은 템플릿(PDF)과 차트 이미지를 프로급 AI(ChatGPT, Gemini 등)에 함께 업로드하세요.")
 
             if st.session_state.p_has_csv:
                 csv_directive = f"첨부된 유니버스 엑셀(CSV) 데이터를 분석하여, 위 펀더멘털 필터링 룰(LTV {st.session_state.p_ltv}% 이하, FCF 마진 {st.session_state.p_fcf}% 이상)을 통과한 최종 편입 종목 10개의 리스트를 기획서 포트폴리오 섹션에 표 형태로 출력할 것."
@@ -1648,5 +1656,5 @@ Step 1과 Step 2의 분석 결과를 종합하여, 리테일 마케팅 본부장
 1. **[Executive Summary (임원 보고용 요약본)]**: 본부장 및 임원진이 1분 안에 의사결정을 내릴 수 있도록 1페이지 분량으로 요약된 공문서. (기획 의도, 핵심 퀀트 성과, BEP 및 경쟁사 타겟팅 타당성이 일목요연하게 정리되어야 함)
 2. **[Retail Sales Factsheet (세일즈 팩트시트)]**: PB(프라이빗 뱅커) 및 일반 리테일 고객이 읽을 1페이지 분량의 마케팅 팩트시트. 고객을 사로잡을 직관적인 카피라이팅으로 '핵심 소구 포인트 3가지'를 도출하고, 투자 위험도 및 세금(Tax) 혜택 활용법을 알기 쉽게 풀어쓸 것.
 
-모든 출력물은 금융 투자 분석사 및 상품 개발 실무자의 전문적인 톤앤매너를 엄격히 준수하라."""
+모든 출력물은 금융 투자 분석사 및 상품 개발 실무자의 전문적인 톤앤매너를 엄격히 준수하라. (※ 첨부한 AI 상품기획서 템플릿 파일의 목차와 포맷을 준수할 것)"""
             st.code(p2_step5, language="text")
