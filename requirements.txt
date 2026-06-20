@@ -6,3 +6,4 @@ openpyxl
 finance-datareader
 beautifulsoup4
 requests
+scipy
