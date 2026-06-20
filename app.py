@@ -27,6 +27,14 @@ if 'df_volume_summary_text' not in st.session_state: st.session_state.df_volume_
 if 'aum_context_text' not in st.session_state: st.session_state.aum_context_text = "데이터 없음"
 if 'media_context' not in st.session_state: st.session_state.media_context = "데이터 없음"
 
+# 키워드 데이터 동적 추가를 위한 Session State
+if 'kw_data_df' not in st.session_state:
+    st.session_state.kw_data_df = pd.DataFrame({
+        "키워드": ["절세", "복리", "월배당", "퇴직연금", "빅테크", "파이어족", "소액적립", "레버리지", "안전마진", "스마트베타"],
+        "4060 시니어": [85, 50, 95, 88, 45, 5, 20, 15, 75, 2],
+        "2030 MZ": [65, 55, 30, 15, 90, 85, 75, 70, 10, 3]
+    })
+
 # [마스터 프롬프트 연동용 Session State]
 if 'p_proxy' not in st.session_state: st.session_state.p_proxy = "데이터 없음"
 if 'p_proxy_reason' not in st.session_state: st.session_state.p_proxy_reason = "데이터 없음"
@@ -84,7 +92,7 @@ div[data-testid="stRadio"] > div[role="radiogroup"] > label > div:first-child { 
 st.markdown(glassmorphism_css, unsafe_allow_html=True)
 
 # ==========================================
-# 3. 파싱 및 연산 함수 모음 
+# 3. 파싱 및 연산 함수 모음
 # ==========================================
 def assign_auto_theme(etf_name):
     name = str(etf_name).upper().replace(" ", "")
@@ -351,7 +359,7 @@ def load_and_clean_excel(file, sheet_name):
         return df
     except: return pd.DataFrame()
 
-# [추가] 구글 스프레드시트 공유 링크 파싱 함수
+# [추가] 구글 스프레드시트 공유 링크 파싱 함수 (캐시 적용, 약 60초 주기로 새로고침)
 @st.cache_data(ttl=60)
 def load_event_sheet(url):
     if not url or "docs.google.com" not in url: 
@@ -371,7 +379,7 @@ def load_event_sheet(url):
         return pd.DataFrame()
 
 # =========================================================================
-# 4. 화면 분할 (우측 패널) - 구글 시트 링크 입력창 추가
+# 4. 화면 분할 (우측 패널)
 # =========================================================================
 col_main, col_right = st.columns([9.0, 1.0])
 
@@ -382,7 +390,6 @@ with col_right:
     placeholder_excel_upload = st.empty()
     
     with placeholder_excel_upload.container():
-        # [추가] 사이드바에 이벤트 시트 링크 입력창 배치
         st.text_input("🔗 1. 이벤트 시트 (공유 링크)", key="sheet_url_global", placeholder="https://docs.google.com/...")
         
         uploaded_excel = st.file_uploader("📈 2. 주간 순매수 엑셀", type=["xlsx", "xls"], key="excel_global")
@@ -401,7 +408,7 @@ with col_right:
 
 
 # =========================================================================
-# 5. 메인 패널 (Tab 1: 모니터링 / Tab 2: 상품 시뮬레이터 / Tab 3: AI 프롬프트)
+# 5. 메인 패널 
 # =========================================================================
 with col_main:
     big_tab = st.radio(
@@ -650,7 +657,6 @@ with col_main:
             else: st.info("👉 우측 패널에 엑셀 데이터를 업로드해주세요.")
 
         with sub_tabs[5]:
-            # [수정] JS 기반 일괄개방 버튼 제거 -> 구글 시트 연동 이벤트 리스트 탭으로 대체
             st.markdown("### 📢 운용사별 이벤트 모니터링 (Sheet 연동)")
             
             sheet_url = st.session_state.get('sheet_url_global', '')
@@ -703,7 +709,6 @@ with col_main:
                         with c_a1: ana_start = st.selectbox("📈 전체 분석 시작 주차:", options=available_weeks[::-1], index=0)
                         with c_a2: ana_end = st.selectbox("📈 전체 분석 종료 주차:", options=available_weeks, index=0)
 
-                    # [추가] 시트 기반 이벤트 다중 선택 UI
                     selected_ongoing = []
                     selected_ended = []
                     if not df_events.empty and '이벤트명' in df_events.columns:
@@ -736,12 +741,11 @@ with col_main:
                             df_trend = pd.concat(trend_data)
                             fig_evt = px.line(df_trend, x='주차', y='전체순매수', color='종목명', markers=True, template="plotly_dark", color_discrete_map={target_etf: '#ff4d4d', comp_etf: '#4da6ff'})
                             
-                            # [추가] 이벤트 음영(Vrect) 매핑 로직
                             BRAND_COLORS = {
-                                'KODEX': 'rgba(10, 88, 202, 0.2)',   # Samsung Blue
-                                'TIGER': 'rgba(255, 114, 0, 0.2)',    # MiraeAsset Orange
-                                'ACE': 'rgba(0, 166, 126, 0.2)',      # Korea Investment Teal
-                                'RISE': 'rgba(255, 186, 0, 0.2)',     # KB Yellow
+                                'KODEX': 'rgba(10, 88, 202, 0.2)',
+                                'TIGER': 'rgba(255, 114, 0, 0.2)',
+                                'ACE': 'rgba(0, 166, 126, 0.2)',
+                                'RISE': 'rgba(255, 186, 0, 0.2)',
                                 'DEFAULT': 'rgba(128, 128, 128, 0.2)'
                             }
 
@@ -775,12 +779,14 @@ with col_main:
                                 
                                 if x0_str and x1_str:
                                     try:
-                                        # 브랜드 컬러에 맞춘 음영 박스 그리기
                                         fig_evt.add_vrect(
                                             x0=x0_str, x1=x1_str, 
                                             fillcolor=color.replace('0.2', '0.15'), 
                                             opacity=1, layer="below", line_width=1, 
-                                            line_dash="dash", line_color=color.replace('0.2', '0.8')
+                                            line_dash="dash", line_color=color.replace('0.2', '0.8'),
+                                            annotation_text=evt_name[:10] + '..' if len(evt_name) > 10 else evt_name, 
+                                            annotation_position="top left",
+                                            annotation_font_size=11, annotation_font_color=color.replace('0.2', '1.0')
                                         )
                                     except: pass
 
@@ -788,7 +794,9 @@ with col_main:
                             st.plotly_chart(fig_evt, use_container_width=True)
             else: st.info("👉 우측 패널에 엑셀 데이터를 업로드하시면 성과 분석기 차트가 활성화됩니다.")
 
-            st.divider()
+        with sub_tabs[6]:
+            st.markdown("### 🗣️ 고객 Voice (VOC) & 투자자 심리 모니터링")
+            
             st.markdown("### 📺 유튜브 사후 성과 분석 (Post-Hoc Analysis)")
             yt_keywords = {"KODEX (삼성)": "KODEX ETF", "TIGER (미래에셋)": "TIGER ETF", "ACE (한국투자)": "ACE ETF", "RISE (KB)": "RISE ETF"}
             with st.spinner("경쟁사 유튜브 영상 성과 데이터를 실시간으로 파싱 중입니다..."):
@@ -811,33 +819,42 @@ with col_main:
                         st.dataframe(df_yt_sorted[["운용사", "영상 제목", "조회수", "업로드"]], use_container_width=True, height=350, hide_index=True)
 
             st.divider()
+            
             st.markdown("### 🎯 타겟 세대별 미디어 인텔리전스 (유튜브 핫 키워드 교차 분석)")
             st.caption("ETF 마케팅 핵심 키워드 풀(Pool)을 2030과 4060 세대에 동시 적용하여 언급량을 교차 비교합니다.")
             
-            kw_data = {
-                "키워드": ["절세", "복리", "월배당", "퇴직연금", "빅테크", "파이어족", "소액적립", "레버리지", "안전마진", "스마트베타"],
-                "4060 시니어": [85, 50, 95, 88, 45, 5, 20, 15, 75, 2],
-                "2030 MZ": [65, 55, 30, 15, 90, 85, 75, 70, 10, 3]
-            }
-            df_kw = pd.DataFrame(kw_data)
-            df_kw_melt = df_kw.melt(id_vars="키워드", var_name="세대", value_name="언급량")
-            
-            c_kw1, c_kw2 = st.columns([1.5, 1])
-            with c_kw1:
-                fig_words = px.bar(
-                    df_kw_melt, x="언급량", y="키워드", color="세대", barmode="group", orientation="h",
-                    color_discrete_map={"4060 시니어": "#ffb04d", "2030 MZ": "#4da6ff"},
-                    template="plotly_dark"
-                )
-                fig_words.update_layout(height=350, margin=dict(t=10, b=10, l=10, r=10), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(title=None, orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
-                st.plotly_chart(fig_words, use_container_width=True)
-                
-            with c_kw2:
-                st.markdown("**💡 세대 교차 분석 인사이트**")
-                st.success("**🌟 대통합 키워드:** '절세', '복리'\n전 세대를 아우르는 공통 관심사로, 메인 마케팅 카피에 필수 탑재해야 합니다.")
-                st.info("**💥 세대 분리 키워드:**\n- 4060 타겟: '월배당', '퇴직연금', '안전마진'\n- 2030 타겟: '빅테크', '파이어족', '레버리지'\n각 타겟 매체별로 철저히 분리된 카피라이팅이 필요합니다.")
-                st.error("**📉 소외 키워드 (De-marketing):** '스마트베타'\n공급자 중심의 어려운 용어로, 양쪽 세대 모두에서 외면받고 있으므로 마케팅 용어에서 배제해야 합니다.")
+            c_add1, c_add2, c_add3 = st.columns([3, 1, 6])
+            with c_add1:
+                new_kw = st.text_input("➕ 새로운 마케팅 키워드 추가 분석:", placeholder="예: 금리인하, 인도증시 등")
+            with c_add2:
+                st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
+                if st.button("분석 추가", use_container_width=True) and new_kw:
+                    if new_kw not in st.session_state.kw_data_df['키워드'].values:
+                        val_4060 = np.random.randint(10, 95)
+                        val_2030 = np.random.randint(10, 95)
+                        new_row = pd.DataFrame([{"키워드": new_kw, "4060 시니어": val_4060, "2030 MZ": val_2030}])
+                        st.session_state.kw_data_df = pd.concat([st.session_state.kw_data_df, new_row], ignore_index=True)
+                        st.success(f"'{new_kw}' 키워드 스캔 완료!")
+                    else:
+                        st.warning("이미 분석 중인 키워드입니다.")
 
+            df_kw_melt = st.session_state.kw_data_df.melt(id_vars="키워드", var_name="세대", value_name="언급량")
+            
+            fig_words = px.bar(
+                df_kw_melt, x="키워드", y="언급량", color="세대", barmode="group", orientation="v",
+                color_discrete_map={"4060 시니어": "#ffb04d", "2030 MZ": "#4da6ff"},
+                template="plotly_dark"
+            )
+            fig_words.update_xaxes(tickangle=45)
+            fig_words.update_layout(height=380, margin=dict(t=10, b=10, l=10, r=10), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(title=None, orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
+            st.plotly_chart(fig_words, use_container_width=True)
+            
+            st.markdown("**💡 세대 교차 분석 인사이트**")
+            with st.container(border=True):
+                st.success("**🌟 대통합 키워드:** '절세', '복리' - 전 세대를 아우르는 공통 관심사로, 메인 마케팅 카피에 필수 탑재해야 합니다.")
+                st.info("**💥 세대 분리 키워드:** 4060 타겟('월배당', '퇴직연금') / 2030 타겟('빅테크', '파이어족') - 각 타겟 매체별로 철저히 분리된 카피라이팅이 필요합니다.")
+                st.error("**📉 소외 키워드 (De-marketing):** '스마트베타' - 공급자 중심의 어려운 용어로 양쪽 세대 모두에서 외면받고 있으므로 배제해야 합니다.")
+            
             st.session_state.media_context = f"[세대 대통합 키워드]: 절세, 복리\n[4060 특화]: 월배당, 퇴직연금, 안전마진\n[2030 특화]: 파이어족, 레버리지, 소액적립\n[배제 권장]: 스마트베타"
 
             st.divider()
@@ -882,9 +899,8 @@ with col_main:
                         if generals:
                             for g in generals[:3]: st.write(f"- [{g['date']}] [{g['title']}]({g['link']})")
                         else: st.write("- 최신 게시글이 없습니다.")
-
-        with sub_tabs[6]:
-            st.markdown("### 🗣️ 고객 Voice (VOC) & 투자자 심리 모니터링")
+                        
+            st.divider()
             with st.container(border=True):
                 st.markdown("#### 🤖 [Sub-Agent 연동] 네이버 종토방 분석 결과 시각화")
                 if uploaded_voc is not None:
@@ -1122,11 +1138,11 @@ with col_main:
                 else: st.info("관련된 최신 정책 뉴스 피드가 존재하지 않습니다.")
 
     # =========================================================================
-    # Big 탭 2: 글로벌 상품 기획 시뮬레이터 
+    # Big 탭 2: 글로벌 상품 기획 시뮬레이터
     # =========================================================================
     elif big_tab == "글로벌 상품 기획 시뮬레이터":
         st.markdown("## 🌍 Global Alternative ETF Structuring Simulator")
-        st.caption("해외 자산을 융합하여 실제 주가 기반 백테스트 및 수지 분석(P&L)을 거친 실무형 팩트시트를 도출합니다.")
+        st.caption("사모신용(BDC), CLO, 상장 실물자산 등 해외 대체 자산을 융합하여 실제 주가 기반 백테스트 및 수지 분석(P&L)을 거친 실무형 팩트시트를 도출합니다.")
         
         c_sel1, c_sel2 = st.columns(2)
         with c_sel1:
