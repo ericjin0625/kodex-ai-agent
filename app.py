@@ -92,7 +92,7 @@ div[data-testid="stRadio"] > div[role="radiogroup"] > label > div:first-child { 
 st.markdown(glassmorphism_css, unsafe_allow_html=True)
 
 # ==========================================
-# 3. 파싱 및 연산 함수 모음
+# 3. 파싱 및 연산 함수 모음 
 # ==========================================
 def assign_auto_theme(etf_name):
     name = str(etf_name).upper().replace(" ", "")
@@ -359,7 +359,7 @@ def load_and_clean_excel(file, sheet_name):
         return df
     except: return pd.DataFrame()
 
-# [추가] 구글 스프레드시트 공유 링크 파싱 함수 (캐시 적용, 약 60초 주기로 새로고침)
+# 구글 스프레드시트 공유 링크 파싱 함수 (캐시 적용, 약 60초 주기로 새로고침)
 @st.cache_data(ttl=60)
 def load_event_sheet(url):
     if not url or "docs.google.com" not in url: 
@@ -794,9 +794,7 @@ with col_main:
                             st.plotly_chart(fig_evt, use_container_width=True)
             else: st.info("👉 우측 패널에 엑셀 데이터를 업로드하시면 성과 분석기 차트가 활성화됩니다.")
 
-        with sub_tabs[6]:
-            st.markdown("### 🗣️ 고객 Voice (VOC) & 투자자 심리 모니터링")
-            
+            st.divider()
             st.markdown("### 📺 유튜브 사후 성과 분석 (Post-Hoc Analysis)")
             yt_keywords = {"KODEX (삼성)": "KODEX ETF", "TIGER (미래에셋)": "TIGER ETF", "ACE (한국투자)": "ACE ETF", "RISE (KB)": "RISE ETF"}
             with st.spinner("경쟁사 유튜브 영상 성과 데이터를 실시간으로 파싱 중입니다..."):
@@ -819,7 +817,6 @@ with col_main:
                         st.dataframe(df_yt_sorted[["운용사", "영상 제목", "조회수", "업로드"]], use_container_width=True, height=350, hide_index=True)
 
             st.divider()
-            
             st.markdown("### 🎯 타겟 세대별 미디어 인텔리전스 (유튜브 핫 키워드 교차 분석)")
             st.caption("ETF 마케팅 핵심 키워드 풀(Pool)을 2030과 4060 세대에 동시 적용하여 언급량을 교차 비교합니다.")
             
@@ -899,8 +896,9 @@ with col_main:
                         if generals:
                             for g in generals[:3]: st.write(f"- [{g['date']}] [{g['title']}]({g['link']})")
                         else: st.write("- 최신 게시글이 없습니다.")
-                        
-            st.divider()
+
+        with sub_tabs[6]:
+            st.markdown("### 🗣️ 고객 Voice (VOC) & 투자자 심리 모니터링")
             with st.container(border=True):
                 st.markdown("#### 🤖 [Sub-Agent 연동] 네이버 종토방 분석 결과 시각화")
                 if uploaded_voc is not None:
@@ -1142,7 +1140,7 @@ with col_main:
     # =========================================================================
     elif big_tab == "글로벌 상품 기획 시뮬레이터":
         st.markdown("## 🌍 Global Alternative ETF Structuring Simulator")
-        st.caption("사모신용(BDC), CLO, 상장 실물자산 등 해외 대체 자산을 융합하여 실제 주가 기반 백테스트 및 수지 분석(P&L)을 거친 실무형 팩트시트를 도출합니다.")
+        st.caption("해외 자산을 융합하여 실제 주가 기반 백테스트 및 수지 분석(P&L)을 거친 실무형 팩트시트를 도출합니다.")
         
         c_sel1, c_sel2 = st.columns(2)
         with c_sel1:
