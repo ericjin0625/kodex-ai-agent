@@ -14,7 +14,7 @@ import re
 from collections import Counter
 import io
 import streamlit.components.v1 as components
-import scipy.stats as stats  # 무조건 정공법 통계 분석을 위한 Scipy 로드
+import scipy.stats as stats  
 
 # ==========================================
 # 1. 페이지 레이아웃 및 전역 변수 초기화
@@ -28,7 +28,6 @@ if 'df_volume_summary_text' not in st.session_state: st.session_state.df_volume_
 if 'aum_context_text' not in st.session_state: st.session_state.aum_context_text = "데이터 없음"
 if 'media_context' not in st.session_state: st.session_state.media_context = "데이터 없음"
 
-# 키워드 데이터 동적 추가를 위한 Session State
 if 'kw_data_df' not in st.session_state:
     st.session_state.kw_data_df = pd.DataFrame({
         "키워드": ["절세", "복리", "월배당", "퇴직연금", "빅테크", "파이어족", "소액적립", "레버리지", "안전마진", "스마트베타"],
@@ -36,7 +35,6 @@ if 'kw_data_df' not in st.session_state:
         "2030 MZ": [65, 55, 30, 15, 90, 85, 75, 70, 10, 3]
     })
 
-# [마스터 프롬프트 연동용 Session State]
 if 'p_proxy' not in st.session_state: st.session_state.p_proxy = "데이터 없음"
 if 'p_proxy_reason' not in st.session_state: st.session_state.p_proxy_reason = "데이터 없음"
 if 'p_purity' not in st.session_state: st.session_state.p_purity = "데이터 없음"
@@ -53,7 +51,6 @@ if 'p_fx' not in st.session_state: st.session_state.p_fx = "환노출"
 if 'p_aum' not in st.session_state: st.session_state.p_aum = 1000
 if 'p_profit' not in st.session_state: st.session_state.p_profit = 0.0
 
-# AI 연동용 통계 결과값 Session State
 if 'stat_did_multiplier' not in st.session_state: st.session_state.stat_did_multiplier = 0.0
 if 'stat_p_value' not in st.session_state: st.session_state.stat_p_value = 0.0
 if 'stat_net_inflow' not in st.session_state: st.session_state.stat_net_inflow = 0.0
@@ -111,6 +108,16 @@ def assign_auto_theme(etf_name):
     elif any(kw in name for kw in ['코스피', '코스닥', '200']): return '🇰🇷 국내 대표지수'
     elif any(kw in name for kw in ['채권', '국고채', '금리', 'KOFR', 'CD', '파킹']): return '🛡️ 안전자산 (채권/금리)'
     else: return '📦 기타 섹터/테마'
+
+def normalize_etf_name(name):
+    """ETF 종목명의 미세한 불일치(공백, 오탈자 등)를 통일하는 전처리 함수"""
+    name = str(name).strip()
+    # DataLab과 Excel 간의 전형적인 이름 불일치 하드코딩 매핑
+    aliases = {
+        "KODEX 고배당": "KODEX 고배당주",
+        "PLUS 고배당주위클리커버드콜": "PLUS 고배당주위클리커버드콜"
+    }
+    return aliases.get(name, name)
 
 def extract_table(df, expected_cols):
     cols_str = " ".join([str(c) for c in df.columns])
@@ -359,7 +366,8 @@ def load_and_clean_excel(file, sheet_name):
         df = pd.read_excel(file, sheet_name=sheet_name)
         df.columns = df.columns.str.strip()
         if '종목명' in df.columns:
-            df['종목명'] = df['종목명'].astype(str).str.strip()
+            # 여기서 ETF 종목명 불일치 전처리 적용
+            df['종목명'] = df['종목명'].apply(normalize_etf_name)
         for col in ["개인", "기관", "외국인"]:
             if col in df.columns:
                 clean_val = df[col].astype(str).str.replace(',', '', regex=False).str.replace('-', '0', regex=False)
@@ -367,7 +375,6 @@ def load_and_clean_excel(file, sheet_name):
         return df
     except: return pd.DataFrame()
 
-# 구글 스프레드시트 공유 링크 파싱 함수 고도화 (캐시 적용, 공백 문자 방어 로직 강화)
 @st.cache_data(ttl=60)
 def load_event_sheet(url):
     if not url or "docs.google.com" not in url: 
@@ -384,7 +391,6 @@ def load_event_sheet(url):
         df = pd.read_csv(csv_url)
         df.columns = df.columns.str.strip()
         
-        # 문자열 데이터들의 양끝 공백 전처리 제거
         for col in df.columns:
             if df[col].dtype == 'object':
                 df[col] = df[col].astype(str).str.strip()
@@ -396,6 +402,21 @@ def load_event_sheet(url):
         return df
     except Exception as e:
         return pd.DataFrame()
+
+# 주차 텍스트("6.8-6.12")를 시작일과 종료일 datetime 객체로 파싱하는 함수
+def parse_week_range(w_str, year):
+    try:
+        start_str, end_str = str(w_str).split('-')
+        sm, sd = map(int, start_str.split('.'))
+        em, ed = map(int, end_str.split('.'))
+        start_dt = datetime(int(year), sm, sd)
+        end_dt = datetime(int(year), em, ed)
+        # 연도 넘어가는 주차(예: 12.28-1.3) 방어 로직
+        if em < sm:
+            end_dt = datetime(int(year) + 1, em, ed)
+        return start_dt, end_dt
+    except:
+        return None, None
 
 
 # =========================================================================
@@ -439,9 +460,6 @@ with col_main:
     )
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # -------------------------------------------------------------------------
-    # Big 탭 1: ETF 시장 모니터링 
-    # -------------------------------------------------------------------------
     if big_tab == "ETF 시장 모니터링":
         st.markdown("## 📊 ETF Market Intelligence")
         st.caption("국내외 거시 경제, 경쟁사 수급, 마케팅 액션 및 리테일 투자자 심리를 종합적으로 모니터링합니다.")
@@ -677,7 +695,6 @@ with col_main:
             else: st.info("👉 우측 패널에 엑셀 데이터를 업로드해주세요.")
 
         with sub_tabs[5]:
-            # 1. 유지 기능: 구글 시트 연동 이벤트 모니터링
             st.markdown("### 📢 운용사별 이벤트 모니터링 (Sheet 연동)")
             sheet_url = st.session_state.get('sheet_url_global', '')
             df_events = load_event_sheet(sheet_url)
@@ -711,10 +728,9 @@ with col_main:
             
             st.divider()
 
-            # 2. 유지 기능: 마케팅 임팩트 분석기 (음영 표시 라인 차트)
             st.markdown("### 📊 마케팅 촉매(이벤트/영상) 임팩트 분석기")
             
-            df_trend = pd.DataFrame(columns=['주차', '종목명', '전체순매수']) # 안전한 기본값 선언
+            df_trend = pd.DataFrame(columns=['주차', '종목명', '전체순매수']) 
             target_sheets = []
             
             if uploaded_excel is not None and len(available_weeks) > 1 and available_weeks[0] != "데이터 없음":
@@ -820,7 +836,7 @@ with col_main:
             else: st.info("👉 우측 패널에 엑셀 데이터를 업로드하시면 성과 분석기 차트가 활성화됩니다.")
 
             # =========================================================================
-            # [수정완료] 정공법: Scipy 기반 마케팅 인과관계 통계 검증 (DiD & Lag 분석)
+            # [전처리 고도화] 정공법: Scipy 기반 마케팅 인과관계 통계 검증 (DiD & Lag 분석)
             # =========================================================================
             st.divider()
             st.markdown("### 🔍 [심화 분석] 마케팅 인과관계 통계 검증 (이중차분 & 시차 상관관계)")
@@ -837,7 +853,7 @@ with col_main:
                         st.info(f"**DiD 설계:** '{event_start_week}' 이전 기간을 **Pre**, 이후 기간을 **Post**로 지정하여 실제 순매수 증감을 계산합니다.")
                 
                 with st.spinner("Scipy 및 Pandas로 실제 통계값을 연산 중입니다..."):
-                    # 1) DiD 연산 로직 [조건문 if not -> if로 논리버그 수정 완결]
+                    # 1) DiD 연산 로직 
                     pre_weeks = target_sheets[:target_sheets.index(event_start_week)]
                     post_weeks = target_sheets[target_sheets.index(event_start_week):]
                     
@@ -855,36 +871,32 @@ with col_main:
                     elif comp_diff == 0:
                         real_did_multiplier = round(target_diff, 2)
 
-                    # 2) DataLab 연동 p-value 및 시차분석 연산 로직 [동적 연도 정렬 알고리즘 반영]
+                    # 2) DataLab 연동 p-value 및 시차분석 연산 로직 [동적 구간 병합 로직 이식]
                     calc_p_value = None
                     brand_search_inc = None
                     lag_corrs = []
-                    
-                    # 기본 연도 설정 (안정장치)
                     data_year = datetime.today().year
                     
                     if uploaded_dls:
                         try:
-                            # 첫 번째 DataLab 파일 기준 연산
                             dl_file = uploaded_dls[0]
+                            # skiprows=6 로 첫번째 헤더 이슈 완벽 회피
                             df_dl = pd.read_csv(dl_file, skiprows=6, encoding='cp949') if dl_file.name.endswith('csv') else pd.read_excel(dl_file, skiprows=6)
                             date_col = df_dl.columns[0]
                             df_dl[date_col] = pd.to_datetime(df_dl[date_col])
                             
-                            # 데이터랩 파일에서 실제 연도 추출하여 매칭 데이터 싱크 조율
                             if not df_dl[date_col].empty:
                                 data_year = df_dl[date_col].dt.year.max()
                             
+                            # 날짜가 아닌 값들을 필터링하여 검색량 컬럼 추출
                             val_cols = [c for c in df_dl.columns if '날짜' not in c and 'Unnamed' not in c]
                             
                             if val_cols:
                                 first_col = val_cols[0]
                                 
-                                # 이벤트 기준 날짜 추출
                                 evt_month, evt_day = map(int, event_start_week.split('-')[0].split('.'))
                                 evt_date = datetime(int(data_year), evt_month, evt_day)
                                 
-                                # Pre / Post 분리하여 Welch's t-test (Scipy 진짜 통계)
                                 pre_data = df_dl[df_dl[date_col] < evt_date][first_col].dropna()
                                 post_data = df_dl[df_dl[date_col] >= evt_date][first_col].dropna()
                                 
@@ -895,29 +907,30 @@ with col_main:
                                     if pre_mean > 0:
                                         brand_search_inc = round(((post_mean - pre_mean) / pre_mean) * 100, 1)
 
-                                # 시차 상관계수 (Lag Cross Correlation) 연산
-                                # DataLab 일간 데이터를 주간으로 리샘플링하여 엑셀 주차와 매칭
-                                df_dl_weekly = df_dl.set_index(date_col).resample('W-MON').mean().reset_index()
+                                # ★ 핵심 전처리: 엑셀의 "M.D-M.D" 주차를 실제 날짜 구간으로 파싱하여 데이터랩 평균 산출 (Weekly Binning)
+                                dl_weekly_search = {}
+                                for w in target_sheets:
+                                    s_dt, e_dt = parse_week_range(w, data_year)
+                                    if s_dt and e_dt:
+                                        mask = (df_dl[date_col] >= s_dt) & (df_dl[date_col] <= e_dt)
+                                        avg_search = df_dl.loc[mask, first_col].mean()
+                                        dl_weekly_search[w] = avg_search
+                                    else:
+                                        dl_weekly_search[w] = np.nan
+                                        
                                 target_trend = df_trend[df_trend['종목명'] == target_etf].copy()
+                                # 시계열 순서로 정렬 보장 (target_sheets는 역순이므로 뒤집음)
+                                chronological_weeks = list(reversed(target_sheets))
+                                target_trend['주차_순서'] = pd.Categorical(target_trend['주차'], categories=chronological_weeks, ordered=True)
+                                target_trend = target_trend.sort_values('주차_순서').reset_index(drop=True)
                                 
-                                # 매칭을 위한 날짜 변환 함수 (추출된 데이터 실연도 주입)
-                                def week_to_date(w_str, year=2026):
-                                    try:
-                                        m, d = map(int, w_str.split('-')[0].split('.'))
-                                        return datetime(int(year), m, d)
-                                    except: return None
+                                # 매핑 딕셔너리로 검색량 삽입
+                                target_trend['검색량'] = target_trend['주차'].map(dl_weekly_search)
                                 
-                                target_trend['date'] = target_trend['주차'].apply(lambda x: week_to_date(x, year=data_year))
-                                target_trend = target_trend.dropna(subset=['date']).sort_values('date').set_index('date')
-                                df_dl_weekly = df_dl_weekly.set_index(date_col)
-                                
-                                # 두 데이터프레임 조인
-                                merged = target_trend.join(df_dl_weekly, how='inner')
-                                
-                                if len(merged) >= 4:
-                                    for lag in range(5): # 0주부터 4주 지연
-                                        shifted_search = merged[first_col].shift(lag)
-                                        valid_data = pd.concat([merged['전체순매수'], shifted_search], axis=1).dropna()
+                                if len(target_trend) >= 4:
+                                    for lag in range(5):
+                                        shifted_search = target_trend['검색량'].shift(lag)
+                                        valid_data = pd.concat([target_trend['전체순매수'], shifted_search], axis=1).dropna()
                                         if len(valid_data) >= 3:
                                             r = valid_data.corr().iloc[0, 1]
                                             lag_corrs.append(r if not pd.isna(r) else 0)
@@ -953,7 +966,6 @@ with col_main:
                         with st.container(border=True):
                             st.markdown("**📊 시장효과 vs 설정효과 분해 추정치**")
                             try:
-                                # 지수 등락에 따른 시장효과 추정 (KOSPI 대용 proxy로 지수데이터 활용)
                                 end_dt = datetime.today()
                                 start_dt = end_dt - timedelta(weeks=len(target_sheets)+2)
                                 ks_df = fdr.DataReader('KS11', start_dt, end_dt)
@@ -964,7 +976,7 @@ with col_main:
                                 valid_weeks = []
                                 
                                 for w in target_sheets:
-                                    w_date = week_to_date(w, year=data_year)
+                                    w_date, _ = parse_week_range(w, data_year)
                                     val = df_trend[(df_trend['종목명'] == target_etf) & (df_trend['주차'] == w)]['전체순매수'].sum()
                                     
                                     if w_date:
@@ -988,7 +1000,7 @@ with col_main:
                     with c_chart2:
                         with st.container(border=True):
                             st.markdown("**⏱️ 시차 상관관계 (Lag Cross Correlation)**")
-                            if lag_corrs and len(lag_corrs) == 5:
+                            if lag_corrs and any(lag_corrs) and len(lag_corrs) == 5:
                                 lags = ["0주 (당일)", "+1주", "+2주", "+3주", "+4주"]
                                 max_idx = np.argmax(lag_corrs)
                                 colors = ['gray'] * 5
@@ -1005,7 +1017,6 @@ with col_main:
 
             st.divider()
 
-            # 3. 유지 기능: 유튜브 사후 성과 분석 (Post-Hoc Analysis)
             st.markdown("### 📺 유튜브 사후 성과 분석 (Post-Hoc Analysis)")
             yt_keywords = {"KODEX (삼성)": "KODEX ETF", "TIGER (미래에셋)": "TIGER ETF", "ACE (한국투자)": "ACE ETF", "RISE (KB)": "RISE ETF"}
             with st.spinner("경쟁사 유튜브 영상 성과 데이터를 실시간으로 파싱 중입니다..."):
@@ -1029,7 +1040,6 @@ with col_main:
 
             st.divider()
             
-            # 4. 유지 기능: 타겟 세대별 미디어 인텔리전스
             st.markdown("### 🎯 타겟 세대별 미디어 인텔리전스 (유튜브 핫 키워드 교차 분석)")
             st.caption("ETF 마케팅 핵심 키워드 풀(Pool)을 2030과 4060 세대에 동시 적용하여 언급량을 교차 비교합니다.")
             
@@ -1069,7 +1079,6 @@ with col_main:
 
             st.divider()
 
-            # 5. 유지 기능: 경쟁사 인스타그램
             st.markdown("### 📱 경쟁사 인스타그램 마케팅 동향 (API 연동)")
             st.caption("외부 API 기반으로 경쟁사의 최근 인스타그램 포스팅 성과를 추적합니다.")
             
@@ -1088,7 +1097,6 @@ with col_main:
 
             st.divider()
 
-            # 6. 유지 기능: 블로그 피드
             st.markdown("### 🏢 운용사별 세일즈 액션 및 마케팅 동향 (블로그 피드)")
             brand_mappings = {
                 "KODEX (삼성)": {"blog": "samsung_fund"}, "TIGER (미래에셋)": {"blog": "m_invest"},
@@ -1351,9 +1359,6 @@ with col_main:
                                 st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:14px; font-weight:bold; color:#ffb04d; text-decoration:none;'>[규제] {row['원본제목']} 🔗</a>", unsafe_allow_html=True)
                 else: st.info("관련된 최신 정책 뉴스 피드가 존재하지 않습니다.")
 
-    # -------------------------------------------------------------------------
-    # Big 탭 2 & 3: (원래 주신 코드의 빈 뼈대 보존용 분기 처리)
-    # -------------------------------------------------------------------------
     elif big_tab == "글로벌 상품 기획 시뮬레이터":
         st.markdown("## 🏗️ 글로벌 상품 기획 시뮬레이터")
         st.info("상품 기획 모듈은 메인 모니터링 에이전트와 백엔드 로직이 결합되어 구동됩니다.")
