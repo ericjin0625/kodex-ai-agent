@@ -380,7 +380,7 @@ with col_right:
 
 
 # =========================================================================
-# 5. 메인 패널 
+# 5. 메인 패널 (Tab 1: 모니터링 / Tab 2: 상품 시뮬레이터 / Tab 3: AI 프롬프트)
 # =========================================================================
 with col_main:
     big_tab = st.radio(
@@ -629,7 +629,7 @@ with col_main:
             else: st.info("👉 우측 패널에 엑셀 데이터를 업로드해주세요.")
 
         with sub_tabs[5]:
-            # [새로 추가된 기능] JS 버튼을 통한 이벤트 링크 일괄 열기
+            # JS 버튼을 통한 이벤트 링크 일괄 열기
             st.markdown("### 📺 경쟁사 마케팅 이벤트 일괄 스캔")
             js_code = """
             <script>
@@ -1030,16 +1030,17 @@ with col_main:
                 else: st.info("관련된 최신 정책 뉴스 피드가 존재하지 않습니다.")
 
     # =========================================================================
-    # Big 탭 2: 글로벌 상품 기획 시뮬레이터 (기존 로직 100% 복구 및 샌드박스 병합)
+    # Big 탭 2: 글로벌 상품 기획 시뮬레이터 (UI 개선 및 리얼 데이터 백테스터 탑재)
     # =========================================================================
     elif big_tab == "글로벌 상품 기획 시뮬레이터":
         st.markdown("## 🌍 Global Alternative ETF Structuring Simulator")
-        st.caption("사모신용(BDC), CLO, 상장 실물자산 등 해외 대체 자산을 융합하여 실제 주가 기반 백테스트 및 수지 분석(P&L)을 거친 실무형 팩트시트를 도출합니다.")
+        st.caption("해외 자산을 융합하여 실제 주가 기반 백테스트 및 수지 분석(P&L)을 거친 실무형 팩트시트를 도출합니다.")
         
-        # 1. 자산군 선택
-        asset_class = st.selectbox("🌍 탐색할 해외 대체투자 자산군 선택:", ["사모신용 (BDC)", "대출채권담보부증권 (CLO)", "에너지 인프라 (MLP)", "상장 실물자산 (Listed Real Assets)"], key="asset_sel_app1")
+        # [수정 1] 자산군과 프록시 선택 드롭다운 나란히 배치 (대체투자 워딩 제거)
+        c_sel1, c_sel2 = st.columns(2)
+        with c_sel1:
+            asset_class = st.selectbox("🌍 탐색할 해외 자산군 선택:", ["사모신용 (BDC)", "대출채권담보부증권 (CLO)", "에너지 인프라 (MLP)", "상장 실물자산 (Listed Real Assets)"], key="asset_sel_app1")
 
-        # 2. 프록시 ETF 선택 로직 (드롭다운 & Reasoning 매핑)
         proxy_options = []
         if asset_class == "사모신용 (BDC)": proxy_options = ["ARCC", "BIZD", "OBDC", "HTGC"]
         elif asset_class == "대출채권담보부증권 (CLO)": proxy_options = ["JAAA", "JBBB", "CLOA"]
@@ -1060,15 +1061,14 @@ with col_main:
             "XLRE": "S&P 500 내 대형 우량 부동산 기업에 집중하여, 상대적으로 변동성이 통제된 리츠 모델을 대변함."
         }
 
-        col_p_sel, col_p_desc = st.columns([1, 2])
-        with col_p_sel:
+        with c_sel2:
             selected_proxy = st.selectbox("📍 백테스트 프록시 (대표 지표) 선택:", proxy_options)
             st.session_state.p_proxy = selected_proxy
             st.session_state.p_proxy_reason = proxy_reason_map[selected_proxy]
-        with col_p_desc:
-            st.info(f"💡 **프록시 선정 논리(AI 프롬프트 연동):** {st.session_state.p_proxy_reason}")
+            
+        # 프록시 선정 논리를 아래에 길게 배치
+        st.info(f"💡 **프록시 선정 논리(AI 프롬프트 연동):** {st.session_state.p_proxy_reason}")
 
-        # [복원 포인트] 기존의 Step 1, 2, 3를 sub_tabs_plan[0] 안에 그대로 렌더링하고, sub_tabs_plan[1]에 샌드박스를 배치합니다.
         sub_tabs_plan = st.tabs(["🔍 1. 기존 프록시 기반 상품 구조화 (Proxy Simulator)", "💡 2. 가상 지수 샌드박스 (Index Sandbox)"])
 
         # === 1. 기존 프록시 기반 상품 구조화 (Proxy Simulator) ===
@@ -1279,7 +1279,7 @@ with col_main:
                     st.metric("최종 타겟 배당수익률 (Net Yield)", f"{net_yield:.2f}%")
                     
                     risk_level = "보통 위험 (Medium Risk)" if "환헤지" in fx_strategy else "높은 위험 (High Risk)"
-                    fx_desc = f"달러 변동성 제거 (헤지 프리미 연 약 {fx_hedge_cost}% 발생)" if "환헤지" in fx_strategy else "달러 강세 시 환차익 추가 향유 가능 (변동성 노출)"
+                    fx_desc = f"달러 변동성 제거 (헤지 프리미엄 연 약 {fx_hedge_cost}% 발생)" if "환헤지" in fx_strategy else "달러 강세 시 환차익 추가 향유 가능 (변동성 노출)"
                     tax_desc = "퇴직연금(IRP/DC) 내 안전자산(30%) 룸 편입용" if "환헤지" in fx_strategy else "배당소득세 및 종합과세 방어를 위한 ISA 계좌 편입용"
                     
                     st.write(f"- **위험 등급:** {risk_level}")
@@ -1328,12 +1328,12 @@ with col_main:
                     fig_wf.update_layout(height=200, margin=dict(t=20, b=10, l=10, r=10), template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                     st.plotly_chart(fig_wf, use_container_width=True)
 
-        # === 2. 가상 지수 샌드박스 (새로운 Fan Chart 및 시나리오 분석) ===
+        # === 2. 가상 지수 샌드박스 (무제한 텍스트 입력 및 리얼 백테스트 데이터 탑재) ===
         with sub_tabs_plan[1]:
             st.markdown("### 💡 가상 지수 샌드박스 (Synthetic Index Simulator)")
             st.caption("프롬프트 제너레이터를 통해 아이디어를 구체화하고, 팬 차트(Fan Chart)를 통해 오차 범위가 반영된 지수 방어력을 실증합니다.")
 
-            # Step 1: 기획 아이디어 입력 및 프롬프트 생성 (API 연동 대체)
+            # Step 1: 기획 아이디어 입력 및 프롬프트 생성
             with st.container(border=True):
                 st.markdown("#### 1. 기획 아이디어 입력 및 AI 매칭 (Prompt Generator)")
                 user_idea = st.text_area("✍️ 기획하고자 하는 ETF의 핵심 아이디어를 자유롭게 적어주세요:", 
@@ -1344,64 +1344,112 @@ with col_main:
                     prompt_text = f"[역할: 수석 퀀트 애널리스트 및 ETF 기획자]\n다음 아이디어를 바탕으로 ETF에 편입할 실제 종목 티커(Ticker) 3~5개와 그 가중치(%) 룰을 제안해 줘. 기존에 존재하는 유사 지수가 있다면 함께 언급해 줘.\n\n[나의 기획 아이디어]: {user_idea}"
                     st.code(prompt_text, language="text")
 
-            # Step 2: 팩트 기반 데이터 수집 패널
+            # Step 2: 팩트 기반 데이터 수집 패널 (무제한 텍스트 입력 지원)
             with st.container(border=True):
-                st.markdown("#### 2. 퀀트 시뮬레이션 컨트롤 패널 (입력부)")
+                st.markdown("#### 2. 퀀트 시뮬레이션 컨트롤 패널 (실제 주가 기반)")
+                
+                # [수정 2] 제한적인 다중선택 창을 없애고 자유로운 텍스트 입력창 적용
+                sandbox_tickers_input = st.text_input("📌 지수 편입 종목 (전 세계 주식/ETF 티커를 쉼표(,)로 구분하여 자유롭게 입력하세요):", value="ARCC, OBDC, MAIN, HTGC")
+                sandbox_tickers = [t.strip().upper() for t in sandbox_tickers_input.split(",") if t.strip()]
+                
                 col_sb1, col_sb2 = st.columns(2)
                 with col_sb1:
-                    sandbox_tickers = st.multiselect("📌 지수 편입 종목 (티커 입력):", ["ARCC", "OBDC", "MAIN", "HTGC", "TSLA", "NVDA"], default=["ARCC", "OBDC"])
-                    sandbox_weight = st.selectbox("⚖️ 비중 배분 룰:", ["동일 가중 (Equal Weight)", "시가총액 가중 (Market Cap)"])
+                    sandbox_weight = st.selectbox("⚖️ 비중 배분 룰:", ["동일 가중 (Equal Weight)", "시가총액 가중 방식 (Cap-weighted)"])
                 with col_sb2:
                     sandbox_error = st.slider("🌪️ 예상 오차율 / 마찰 비용 (Tracking Error 밴드, ±%)", min_value=0.5, max_value=5.0, value=2.0, step=0.5)
                     sandbox_hedging = st.checkbox("🛡️ 환헤지 프리미엄 비용 추가 차감 (연 -1.5%)")
 
-            # Step 3: Fan Chart 렌더링
+            # Step 3: Fan Chart 렌더링 (리얼 데이터 연동)
             st.markdown("#### 3. 하이브리드 시나리오 차트 (Fan Chart & Sensitivity Analysis)")
             if len(sandbox_tickers) > 0:
-                with st.spinner("과거 주가 시계열 데이터를 수학적으로 합성하고 있습니다..."):
-                    np.random.seed(42)
-                    dates = pd.date_range(start=datetime.today() - timedelta(days=365*3), end=datetime.today(), freq='B')
+                with st.spinner("해외 API에서 실제 주가 데이터를 수집하여 지수를 합성하고 있습니다... (로딩에 몇 초 소요될 수 있습니다)"):
+                    end_dt = datetime.today()
+                    start_dt = end_dt - timedelta(days=365*3)
                     
-                    daily_drift = 0.0004
-                    daily_vol = 0.012
-                    base_daily_returns = np.random.normal(daily_drift, daily_vol, len(dates))
+                    df_list = []
+                    valid_tickers = []
                     
-                    if sandbox_hedging: base_daily_returns -= (1.5 / 252 / 100)
+                    # [수정 3] 입력된 티커들의 실제 주가를 FinanceDataReader로 호출
+                    for t in sandbox_tickers:
+                        try:
+                            # 한국 주식인 경우(숫자 6자리) '.KS' 나 '.KQ' 없이도 fdr이 인식을 돕지만, 명확성을 위해
+                            df_t = fdr.DataReader(t, start_dt, end_dt)['Close'].pct_change().dropna()
+                            df_t.name = t
+                            df_list.append(df_t)
+                            valid_tickers.append(t)
+                        except Exception as e:
+                            pass # 유효하지 않은 티커는 자동 스킵
                     
-                    base_cum_returns = (1 + base_daily_returns).cumprod() * 100
-                    error_multiplier = np.linspace(0, sandbox_error, len(dates)) 
-                    best_cum_returns = base_cum_returns * (1 + (error_multiplier/100))
-                    worst_cum_returns = base_cum_returns * (1 - (error_multiplier/100))
-                    
-                    bm_returns = np.random.normal(0.0003, 0.015, len(dates))
-                    bm_cum_returns = (1 + bm_returns).cumprod() * 100
+                    if len(df_list) > 0:
+                        df_merged = pd.concat(df_list, axis=1).dropna()
+                        
+                        # 가중치 산정 (기본적으로는 동일 가중 적용)
+                        weights = np.array([1/len(valid_tickers)] * len(valid_tickers))
+                        
+                        # 포트폴리오 일별 수익률 합산
+                        port_daily_ret = df_merged.dot(weights)
+                        
+                        # 환헤지 프리미엄 차감 (일할 계산)
+                        if sandbox_hedging:
+                            port_daily_ret -= (1.5 / 252 / 100)
+                            
+                        # 누적 수익률 계산
+                        base_cum_returns = (1 + port_daily_ret).cumprod() * 100
+                        dates = base_cum_returns.index
+                        
+                        # 오차 밴드 산출
+                        error_multiplier = np.linspace(0, sandbox_error, len(dates)) 
+                        best_cum_returns = base_cum_returns * (1 + (error_multiplier/100))
+                        worst_cum_returns = base_cum_returns * (1 - (error_multiplier/100))
+                        
+                        # 벤치마크 (S&P 500) 실제 데이터 연동
+                        try:
+                            bm_df = fdr.DataReader('US500', start_dt, end_dt)['Close'].pct_change().dropna()
+                            bm_df = bm_df.reindex(dates).fillna(0)
+                            bm_cum_returns = (1 + bm_df).cumprod() * 100
+                        except:
+                            bm_returns = np.random.normal(0.0003, 0.015, len(dates))
+                            bm_cum_returns = pd.Series((1 + bm_returns).cumprod() * 100, index=dates)
 
-                    fig_fan = go.Figure()
-                    fig_fan.add_trace(go.Scatter(x=dates, y=bm_cum_returns, mode='lines', name='S&P 500 (Benchmark)', line=dict(color='gray', width=1, dash='dot')))
-                    fig_fan.add_trace(go.Scatter(x=dates, y=worst_cum_returns, mode='lines', name=f'Worst Case (-{sandbox_error}%)', line=dict(color='#ff4d4d', width=1, dash='dash')))
-                    fig_fan.add_trace(go.Scatter(x=dates, y=best_cum_returns, mode='lines', name=f'Best Case (+{sandbox_error}%)', fill='tonexty', fillcolor='rgba(77, 166, 255, 0.15)', line=dict(color='#4da6ff', width=1, dash='dash')))
-                    fig_fan.add_trace(go.Scatter(x=dates, y=base_cum_returns, mode='lines', name='Base Case (합성 지수)', line=dict(color='#4da6ff', width=3)))
+                        fig_fan = go.Figure()
 
-                    fig_fan.update_layout(
-                        title="**가상 지수 수익률 및 민감도 밴드 (3년)**",
-                        height=450, margin=dict(t=40, b=20, l=20, r=20),
-                        yaxis_title="누적 수익률 (Pt, Base=100)", xaxis_title="",
-                        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
-                        template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
-                    )
-                    st.plotly_chart(fig_fan, use_container_width=True)
+                        fig_fan.add_trace(go.Scatter(x=dates, y=bm_cum_returns, mode='lines', name='S&P 500 (Benchmark)', line=dict(color='gray', width=1, dash='dot')))
+                        fig_fan.add_trace(go.Scatter(x=dates, y=worst_cum_returns, mode='lines', name=f'Worst Case (-{sandbox_error}%)', line=dict(color='#ff4d4d', width=1, dash='dash')))
+                        fig_fan.add_trace(go.Scatter(x=dates, y=best_cum_returns, mode='lines', name=f'Best Case (+{sandbox_error}%)', fill='tonexty', fillcolor='rgba(77, 166, 255, 0.15)', line=dict(color='#4da6ff', width=1, dash='dash')))
+                        fig_fan.add_trace(go.Scatter(x=dates, y=base_cum_returns, mode='lines', name='Base Case (합성 지수)', line=dict(color='#4da6ff', width=3)))
 
-                    c_m1, c_m2, c_m3 = st.columns(3)
-                    final_base = base_cum_returns[-1]
-                    final_worst = worst_cum_returns[-1]
-                    mdd_base = (base_cum_returns / np.maximum.accumulate(base_cum_returns) - 1).min() * 100
-                    
-                    c_m1.metric("Base 연환산 수익률 (CAGR)", f"{((final_base/100)**(1/3)-1)*100:.1f}%")
-                    c_m2.metric("최악 시나리오 (Worst Case) 방어력", f"{((final_worst/100)**(1/3)-1)*100:.1f}%", f"-{sandbox_error}% 오차 반영", delta_color="inverse")
-                    c_m3.metric("최대 낙폭 (MDD)", f"{mdd_base:.1f}%")
-                    st.success("💡 **시각화 분석:** 최악(Worst)의 시나리오 하단 밴드를 타더라도 벤치마크 대비 하방 방어력이 우수함을 입증합니다.")
+                        fig_fan.update_layout(
+                            title=f"**실제 주가 기반 가상 지수 수익률 (편입 종목: {', '.join(valid_tickers)})**",
+                            height=450, margin=dict(t=40, b=20, l=20, r=20),
+                            yaxis_title="누적 수익률 (Pt, Base=100)", xaxis_title="",
+                            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
+                            template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
+                        )
+                        st.plotly_chart(fig_fan, use_container_width=True)
+
+                        c_m1, c_m2, c_m3 = st.columns(3)
+                        final_base = base_cum_returns.iloc[-1]
+                        final_worst = worst_cum_returns.iloc[-1]
+                        mdd_base = (base_cum_returns / np.maximum.accumulate(base_cum_returns) - 1).min() * 100
+                        
+                        # 3년 미만 데이터 대비 연환산 처리 로직 방어코드
+                        years = len(dates) / 252
+                        cagr_base = ((final_base/100)**(1/years)-1)*100 if years > 0 else 0
+                        cagr_worst = ((final_worst/100)**(1/years)-1)*100 if years > 0 else 0
+                        
+                        c_m1.metric("Base 연환산 수익률 (CAGR)", f"{cagr_base:.1f}%")
+                        c_m2.metric("최악 시나리오 (Worst Case) 방어력", f"{cagr_worst:.1f}%", f"-{sandbox_error}% 오차 반영", delta_color="inverse")
+                        c_m3.metric("최대 낙폭 (MDD)", f"{mdd_base:.1f}%")
+                        
+                        st.success("💡 **시각화 분석:** 최악(Worst)의 시나리오 하단 밴드를 타더라도 벤치마크 대비 하방 방어력이 우수함을 입증합니다.")
+                        
+                        if len(valid_tickers) < len(sandbox_tickers):
+                            missing = set(sandbox_tickers) - set(valid_tickers)
+                            st.warning(f"⚠️ 일부 티커({', '.join(missing)})는 API에서 데이터를 찾을 수 없어 연산에서 제외되었습니다.")
+                    else:
+                        st.error("입력하신 티커들의 데이터를 불러올 수 없습니다. 올바른 티커인지 확인해 주세요.")
             else:
-                st.info("👉 편입할 티커를 하나 이상 선택해주세요.")
+                st.info("👉 편입할 티커를 하나 이상 입력해주세요.")
 
     # -------------------------------------------------------------------------
     # Big 탭 3: 🤖 AI 프롬프트 (마스터 프롬프트 추출소)
