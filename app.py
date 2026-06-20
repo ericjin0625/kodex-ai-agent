@@ -351,9 +351,27 @@ def load_and_clean_excel(file, sheet_name):
         return df
     except: return pd.DataFrame()
 
+# [추가] 구글 스프레드시트 공유 링크 파싱 함수
+@st.cache_data(ttl=60)
+def load_event_sheet(url):
+    if not url or "docs.google.com" not in url: 
+        return pd.DataFrame()
+    try:
+        if "export?format=csv" not in url:
+            csv_url = url.replace('/edit?usp=sharing', '/export?format=csv').replace('/edit#gid=', '/export?format=csv&gid=')
+        else:
+            csv_url = url
+        df = pd.read_csv(csv_url)
+        if '시작일' in df.columns:
+            df['시작일'] = pd.to_datetime(df['시작일'].astype(str).str.replace('.', '-'), errors='coerce')
+        if '종료일' in df.columns:
+            df['종료일'] = pd.to_datetime(df['종료일'].astype(str).str.replace('.', '-'), errors='coerce')
+        return df
+    except Exception as e:
+        return pd.DataFrame()
 
 # =========================================================================
-# 4. 화면 분할 (우측 패널)
+# 4. 화면 분할 (우측 패널) - 구글 시트 링크 입력창 추가
 # =========================================================================
 col_main, col_right = st.columns([9.0, 1.0])
 
@@ -364,7 +382,10 @@ with col_right:
     placeholder_excel_upload = st.empty()
     
     with placeholder_excel_upload.container():
-        uploaded_excel = st.file_uploader("📈 1. 주간 순매수 엑셀", type=["xlsx", "xls"], key="excel_global")
+        # [추가] 사이드바에 이벤트 시트 링크 입력창 배치
+        st.text_input("🔗 1. 이벤트 시트 (공유 링크)", key="sheet_url_global", placeholder="https://docs.google.com/...")
+        
+        uploaded_excel = st.file_uploader("📈 2. 주간 순매수 엑셀", type=["xlsx", "xls"], key="excel_global")
         available_weeks = ["데이터 없음"]
         if uploaded_excel is not None:
             try:
@@ -375,8 +396,8 @@ with col_right:
     with placeholder_week_dropdown.container():
         selected_week = st.selectbox("📆 조회 기준 주차", options=available_weeks, index=1 if len(available_weeks)>1 else 0)
         
-    uploaded_dls = st.file_uploader("🔍 2. DataLab 다중 비교", type=["csv", "xlsx", "xls"], key="dl_global", accept_multiple_files=True)
-    uploaded_voc = st.file_uploader("💬 3. 종토방 VOC 엑셀", type=["xlsx", "xls"], key="voc_global")
+    uploaded_dls = st.file_uploader("🔍 3. DataLab 다중 비교", type=["csv", "xlsx", "xls"], key="dl_global", accept_multiple_files=True)
+    uploaded_voc = st.file_uploader("💬 4. 종토방 VOC 엑셀", type=["xlsx", "xls"], key="voc_global")
 
 
 # =========================================================================
@@ -629,23 +650,38 @@ with col_main:
             else: st.info("👉 우측 패널에 엑셀 데이터를 업로드해주세요.")
 
         with sub_tabs[5]:
-            # JS 버튼을 통한 이벤트 링크 일괄 열기
-            st.markdown("### 📺 경쟁사 마케팅 이벤트 일괄 스캔")
-            js_code = """
-            <script>
-            function openCompetitorLinks() {
-                window.open('https://www.samsungfund.com/etc/event/list.do', '_blank');
-                window.open('https://www.tigeretf.com/ko/support/notice/list.do', '_blank');
-                window.open('https://www.aceetf.co.kr/main/customer/event', '_blank');
-                window.open('https://www.kbstar.com/etf/kor/board/event.do', '_blank');
-            }
-            </script>
-            <button onclick="openCompetitorLinks()" style="background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); color:white; padding:12px 24px; border:none; border-radius:8px; cursor:pointer; font-weight:bold; font-size: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); transition: all 0.3s ease;">
-                🌐 전 운용사 이벤트 페이지 일괄 개방 (새 탭)
-            </button>
-            <p style="font-size:12px; color:#94a3b8; margin-top:5px;">※ 브라우저 팝업 차단이 설정되어 있다면 최초 1회 허용이 필요합니다.</p>
-            """
-            components.html(js_code, height=90)
+            # [수정] JS 기반 일괄개방 버튼 제거 -> 구글 시트 연동 이벤트 리스트 탭으로 대체
+            st.markdown("### 📢 운용사별 이벤트 모니터링 (Sheet 연동)")
+            
+            sheet_url = st.session_state.get('sheet_url_global', '')
+            df_events = load_event_sheet(sheet_url)
+            
+            if not df_events.empty and '이벤트명' in df_events.columns:
+                today = pd.to_datetime(datetime.today().date())
+                df_ongoing = df_events[df_events['종료일'] >= today]
+                df_ended = df_events[df_events['종료일'] < today]
+                
+                evt_tab1, evt_tab2 = st.tabs(["🟢 진행 중인 이벤트", "🔴 종료된 이벤트"])
+                
+                with evt_tab1:
+                    if not df_ongoing.empty:
+                        for brand, group in df_ongoing.groupby('ETF 브랜드'):
+                            with st.expander(f"🔵 {brand} ({len(group)}건)", expanded=True):
+                                for _, row in group.iterrows():
+                                    st.markdown(f"- **{row.get('이벤트명', '')}** (대상: {row.get('대상 ETF의 종목 코드', '')}) | {row['시작일'].strftime('%Y.%m.%d')} ~ {row['종료일'].strftime('%Y.%m.%d')}")
+                    else:
+                        st.write("진행 중인 이벤트가 없습니다.")
+                        
+                with evt_tab2:
+                    if not df_ended.empty:
+                        for brand, group in df_ended.groupby('ETF 브랜드'):
+                            with st.expander(f"🔴 {brand} ({len(group)}건)", expanded=False):
+                                for _, row in group.iterrows():
+                                    st.markdown(f"- **{row.get('이벤트명', '')}** (대상: {row.get('대상 ETF의 종목 코드', '')}) | {row['시작일'].strftime('%Y.%m.%d')} ~ {row['종료일'].strftime('%Y.%m.%d')}")
+                    else:
+                        st.write("종료된 이벤트가 없습니다.")
+            else:
+                st.info("👉 우측 패널 '1. 이벤트 시트 링크' 칸에 구글 스프레드시트 공유 링크를 입력해주세요.")
             
             st.divider()
 
@@ -662,14 +698,24 @@ with col_main:
                         target_etf = st.selectbox("🎯 Target 연동 (자사):", options=all_etf_names, index=default_target_idx)
                         comp_etf = st.selectbox("⚔️ Competitor ETF (타사):", options=all_etf_names, index=default_comp_idx)
                     with col_sel2:
-                        st.markdown("**2. 차트 조회 기간 및 수동 이벤트 영역 설정**")
+                        st.markdown("**2. 차트 조회 기간 설정**")
                         c_a1, c_a2 = st.columns(2)
                         with c_a1: ana_start = st.selectbox("📈 전체 분석 시작 주차:", options=available_weeks[::-1], index=0)
                         with c_a2: ana_end = st.selectbox("📈 전체 분석 종료 주차:", options=available_weeks, index=0)
-                        
-                        c_h1, c_h2 = st.columns(2)
-                        with c_h1: evt_start = st.selectbox("📍 캠페인/이벤트 시작 주차:", options=available_weeks[::-1], index=0)
-                        with c_h2: evt_end = st.selectbox("📍 캠페인/이벤트 종료 주차:", options=available_weeks[::-1], index=0)
+
+                    # [추가] 시트 기반 이벤트 다중 선택 UI
+                    selected_ongoing = []
+                    selected_ended = []
+                    if not df_events.empty and '이벤트명' in df_events.columns:
+                        c_evt1, c_evt2 = st.columns(2)
+                        with c_evt1:
+                            ongoing_list = df_ongoing['이벤트명'].tolist() if not df_ongoing.empty else []
+                            selected_ongoing = st.multiselect("🟢 진행 중인 이벤트 (차트 음영 표시):", options=ongoing_list)
+                        with c_evt2:
+                            ended_list = df_ended['이벤트명'].tolist() if not df_ended.empty else []
+                            selected_ended = st.multiselect("🔴 종료된 이벤트 (차트 음영 표시):", options=ended_list)
+                    else:
+                        st.warning("이벤트 시트가 연동되지 않아 음영 매핑 기능이 비활성화되었습니다.")
 
                     s_idx = available_weeks.index(ana_start)
                     e_idx = available_weeks.index(ana_end)
@@ -689,9 +735,55 @@ with col_main:
                         if trend_data:
                             df_trend = pd.concat(trend_data)
                             fig_evt = px.line(df_trend, x='주차', y='전체순매수', color='종목명', markers=True, template="plotly_dark", color_discrete_map={target_etf: '#ff4d4d', comp_etf: '#4da6ff'})
-                            try:
-                                fig_evt.add_vrect(x0=evt_start, x1=evt_end, fillcolor="#ffb04d", opacity=0.15, layer="below", line_width=1, line_dash="dash", line_color="#ffb04d")
-                            except: pass
+                            
+                            # [추가] 이벤트 음영(Vrect) 매핑 로직
+                            BRAND_COLORS = {
+                                'KODEX': 'rgba(10, 88, 202, 0.2)',   # Samsung Blue
+                                'TIGER': 'rgba(255, 114, 0, 0.2)',    # MiraeAsset Orange
+                                'ACE': 'rgba(0, 166, 126, 0.2)',      # Korea Investment Teal
+                                'RISE': 'rgba(255, 186, 0, 0.2)',     # KB Yellow
+                                'DEFAULT': 'rgba(128, 128, 128, 0.2)'
+                            }
+
+                            def find_closest_week_str(dt, weeks_list):
+                                if pd.isnull(dt) or not weeks_list: return None
+                                best_w = weeks_list[-1]
+                                min_diff = float('inf')
+                                for w in weeks_list:
+                                    try:
+                                        s_str = w.split('-')[0]
+                                        s_m, s_d = map(int, s_str.split('.'))
+                                        w_dt = datetime(dt.year, s_m, s_d)
+                                        diff = abs((dt - w_dt).days)
+                                        if diff < min_diff:
+                                            min_diff = diff
+                                            best_w = w
+                                    except: pass
+                                return best_w
+
+                            all_selected = selected_ongoing + selected_ended
+                            for evt_name in all_selected:
+                                evt_row = df_events[df_events['이벤트명'] == evt_name].iloc[0]
+                                e_start = evt_row['시작일']
+                                e_end = evt_row['종료일']
+                                e_brand = evt_row.get('ETF 브랜드', '')
+                                
+                                x0_str = find_closest_week_str(e_start, target_sheets)
+                                x1_str = find_closest_week_str(e_end, target_sheets)
+                                
+                                color = BRAND_COLORS.get(e_brand, BRAND_COLORS['DEFAULT'])
+                                
+                                if x0_str and x1_str:
+                                    try:
+                                        # 브랜드 컬러에 맞춘 음영 박스 그리기
+                                        fig_evt.add_vrect(
+                                            x0=x0_str, x1=x1_str, 
+                                            fillcolor=color.replace('0.2', '0.15'), 
+                                            opacity=1, layer="below", line_width=1, 
+                                            line_dash="dash", line_color=color.replace('0.2', '0.8')
+                                        )
+                                    except: pass
+
                             fig_evt.update_layout(height=450, margin=dict(l=20, r=20, t=20, b=20), xaxis_title=None, yaxis_title="전체 순매수 금액 합계", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
                             st.plotly_chart(fig_evt, use_container_width=True)
             else: st.info("👉 우측 패널에 엑셀 데이터를 업로드하시면 성과 분석기 차트가 활성화됩니다.")
@@ -1030,13 +1122,12 @@ with col_main:
                 else: st.info("관련된 최신 정책 뉴스 피드가 존재하지 않습니다.")
 
     # =========================================================================
-    # Big 탭 2: 글로벌 상품 기획 시뮬레이터 (UI 개선 및 리얼 데이터 백테스터 탑재)
+    # Big 탭 2: 글로벌 상품 기획 시뮬레이터 
     # =========================================================================
     elif big_tab == "글로벌 상품 기획 시뮬레이터":
         st.markdown("## 🌍 Global Alternative ETF Structuring Simulator")
         st.caption("해외 자산을 융합하여 실제 주가 기반 백테스트 및 수지 분석(P&L)을 거친 실무형 팩트시트를 도출합니다.")
         
-        # [수정 1] 자산군과 프록시 선택 드롭다운 나란히 배치 (대체투자 워딩 제거)
         c_sel1, c_sel2 = st.columns(2)
         with c_sel1:
             asset_class = st.selectbox("🌍 탐색할 해외 자산군 선택:", ["사모신용 (BDC)", "대출채권담보부증권 (CLO)", "에너지 인프라 (MLP)", "상장 실물자산 (Listed Real Assets)"], key="asset_sel_app1")
@@ -1066,7 +1157,6 @@ with col_main:
             st.session_state.p_proxy = selected_proxy
             st.session_state.p_proxy_reason = proxy_reason_map[selected_proxy]
             
-        # 프록시 선정 논리를 아래에 길게 배치
         st.info(f"💡 **프록시 선정 논리(AI 프롬프트 연동):** {st.session_state.p_proxy_reason}")
 
         sub_tabs_plan = st.tabs(["🔍 1. 기존 프록시 기반 상품 구조화 (Proxy Simulator)", "💡 2. 가상 지수 샌드박스 (Index Sandbox)"])
@@ -1109,7 +1199,6 @@ with col_main:
             st.divider()
 
             st.markdown("#### Step 2. 퀀트 기반 백테스팅 및 리스크")
-            # 상관관계 매트릭스 (다각화 증명)
             st.markdown("##### 🔗 핵심 자산군 상관관계 (다각화 증명)")
             c_corr_desc, c_corr_map = st.columns([1, 1.5])
             with c_corr_desc:
@@ -1148,7 +1237,6 @@ with col_main:
                             port_daily = port_df['Close'].pct_change().dropna()
                             port_cum = (1 + port_daily).cumprod() * 100
                             
-                            # 마찰 비용 일할 차감 적용
                             discount_array = (1 - lp_cost/100) ** (np.arange(len(port_cum)) / 252)
                             port_cum = port_cum * discount_array
                             
@@ -1257,7 +1345,6 @@ with col_main:
                     annual_yield = 8.0 if "BDC" in asset_class else 6.0
                     net_yield = annual_yield - ter - fx_hedge_cost
 
-                    # 환헤지 vs 환노출 궤적 시각화
                     st.markdown("<br>**📉 환율 전략별 성과 차이 (Mock)**", unsafe_allow_html=True)
                     np.random.seed(77)
                     x_idx = np.arange(100)
@@ -1274,7 +1361,6 @@ with col_main:
 
             with c_pl2:
                 with st.container(border=True):
-                    # Factsheet
                     st.markdown("##### 📄 Simulated Product Factsheet")
                     st.metric("최종 타겟 배당수익률 (Net Yield)", f"{net_yield:.2f}%")
                     
@@ -1328,12 +1414,11 @@ with col_main:
                     fig_wf.update_layout(height=200, margin=dict(t=20, b=10, l=10, r=10), template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                     st.plotly_chart(fig_wf, use_container_width=True)
 
-# === 2. 가상 지수 샌드박스 (무제한 텍스트 입력 및 Total Return 백테스트 탑재) ===
+        # === 2. 가상 지수 샌드박스 ===
         with sub_tabs_plan[1]:
             st.markdown("### 💡 가상 지수 샌드박스 (Synthetic Index Simulator)")
             st.caption("프롬프트 제너레이터를 통해 아이디어를 구체화하고, 팬 차트(Fan Chart)를 통해 오차 범위가 반영된 지수 방어력을 실증합니다.")
 
-            # Step 1: 기획 아이디어 입력 및 프롬프트 생성
             with st.container(border=True):
                 st.markdown("#### 1. 기획 아이디어 입력 및 AI 매칭 (Prompt Generator)")
                 user_idea = st.text_area("✍️ 기획하고자 하는 ETF의 핵심 아이디어를 자유롭게 적어주세요:", 
@@ -1344,7 +1429,6 @@ with col_main:
                     prompt_text = f"[역할: 수석 퀀트 애널리스트 및 ETF 기획자]\n다음 아이디어를 바탕으로 ETF에 편입할 실제 종목 티커(Ticker) 3~5개와 그 가중치(%) 룰을 제안해 줘. 기존에 존재하는 유사 지수가 있다면 함께 언급해 줘.\n\n[나의 기획 아이디어]: {user_idea}"
                     st.code(prompt_text, language="text")
 
-            # Step 2: 팩트 기반 데이터 수집 패널 (Total Return 및 줌인 옵션 추가)
             with st.container(border=True):
                 st.markdown("#### 2. 퀀트 시뮬레이션 컨트롤 패널 (Total Return 기반)")
                 
@@ -1355,13 +1439,11 @@ with col_main:
                 with col_sb1:
                     sandbox_weight = st.selectbox("⚖️ 비중 배분 룰:", ["동일 가중 (Equal Weight)", "시가총액 가중 방식 (Cap-weighted)"])
                 with col_sb2:
-                    # BDC 등의 고배당 자산의 Total Return 연산을 위한 배당률 입력
                     sandbox_div = st.slider("💰 포트폴리오 예상 연 배당수익률 (%)", 0.0, 15.0, 8.5, 0.5, help="배당이 제외된 주가 수익률에 입력하신 배당률을 일할(252일) 계산하여 Total Return을 합성합니다.")
                 with col_sb3:
                     sandbox_error = st.slider("🌪️ 예상 오차율/마찰 비용 (Tracking Error, ±%)", 0.5, 5.0, 2.0, 0.5)
                     sandbox_hedging = st.checkbox("🛡️ 환헤지 프리미엄 비용 차감 (연 -1.5%)")
 
-            # Step 3: Fan Chart 렌더링 (리얼 데이터 연동 및 Range Selector 추가)
             st.markdown("#### 3. 하이브리드 시나리오 차트 (Fan Chart & Sensitivity Analysis)")
             if len(sandbox_tickers) > 0:
                 with st.spinner("해외 API에서 실제 주가 데이터를 수집하여 Total Return 지수를 합성하고 있습니다..."):
@@ -1384,7 +1466,6 @@ with col_main:
                         df_merged = pd.concat(df_list, axis=1).dropna()
                         weights = np.array([1/len(valid_tickers)] * len(valid_tickers))
                         
-                        # [TR 핵심 로직] 순수 주가 수익률(Price Return) + 배당 수익률(Income Return)
                         daily_div_yield = sandbox_div / 100 / 252
                         port_daily_ret = df_merged.dot(weights) + daily_div_yield
                         
@@ -1394,15 +1475,12 @@ with col_main:
                         base_cum_returns = (1 + port_daily_ret).cumprod() * 100
                         dates = base_cum_returns.index
                         
-                        # [시인성 개선] 선형이 아닌 Constant Corridor 적용
                         best_cum_returns = base_cum_returns * (1 + (sandbox_error/100))
                         worst_cum_returns = base_cum_returns * (1 - (sandbox_error/100))
                         
-                        # 벤치마크 (S&P 500 - 주가 수익률)
                         try:
                             bm_df = fdr.DataReader('US500', start_dt, end_dt)['Close'].pct_change().dropna()
                             bm_df = bm_df.reindex(dates).fillna(0)
-                            # S&P 500 평균 배당수익률 약 1.5% 더해주기 (공정한 TR 비교)
                             bm_df += (1.5 / 100 / 252)
                             bm_cum_returns = (1 + bm_df).cumprod() * 100
                         except:
@@ -1416,7 +1494,6 @@ with col_main:
                         fig_fan.add_trace(go.Scatter(x=dates, y=best_cum_returns, mode='lines', name=f'Best Case (+{sandbox_error}%)', fill='tonexty', fillcolor='rgba(77, 166, 255, 0.15)', line=dict(color='#4da6ff', width=1, dash='dash')))
                         fig_fan.add_trace(go.Scatter(x=dates, y=base_cum_returns, mode='lines', name='Base Case (합성 지수)', line=dict(color='#4da6ff', width=3)))
 
-                        # [시인성 개선] Range Selector (기간 확대 버튼) 탑재
                         fig_fan.update_xaxes(
                             rangeselector=dict(
                                 buttons=list([
