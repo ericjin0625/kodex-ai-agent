@@ -15,8 +15,6 @@ from collections import Counter
 import io
 import streamlit.components.v1 as components
 import scipy.stats as stats  
-import matplotlib.pyplot as plt
-from wordcloud import WordCloud
 
 # ==========================================
 # 1. 페이지 레이아웃 및 전역 변수 초기화
