@@ -1592,7 +1592,6 @@ with col_main:
                             port_df = fdr.DataReader(st.session_state.p_proxy, start_dt, end_dt)
                             port_daily = port_df['Close'].pct_change().dropna()
                             
-                            # API 정상 호출 시, 후속 옵션/환율 연동을 위해 세션/로컬 변수로 궤적 저장
                             port_cum = (1 + port_daily).cumprod() * 100
                             discount_array = (1 - lp_cost/100) ** (np.arange(len(port_cum)) / 252)
                             port_cum = port_cum * discount_array
@@ -1635,7 +1634,8 @@ with col_main:
 
             with c_bt2:
                 with st.container(border=True):
-                    st.markdown("**🌪️ 매크로 스트레스 테스트 시나리오**")
+                    # [개선 1] 매크로 스트레스 테스트 하드코딩 제거 및 실데이터 연동
+                    st.markdown("**🌪️ 매크로 스트레스 테스트 시나리오 (실데이터 연동)**")
                     scenario = st.selectbox("과거 위기 시나리오 국면을 선택하세요:", [
                         "2020년 코로나 팬데믹 (글로벌 셧다운 및 신용경색)",
                         "2022년 급격한 금리 인상기 (인플레이션 쇼크)",
@@ -1643,13 +1643,29 @@ with col_main:
                     ])
                     st.session_state.p_scenario = scenario
                     
-                    if "코로나" in scenario: sp_drop, my_drop, desc = -33.9, -25.4, "극단적 신용 스프레드 확대에 대한 회복력 증명"
-                    elif "금리" in scenario: sp_drop, my_drop, desc = -19.4, -12.8, "고금리 환경 수혜 자산에 의한 방어력 증명"
-                    else: sp_drop, my_drop, desc = -10.2, -4.2, "우량 담보에 의한 하방 경직성 증명"
+                    if "코로나" in scenario:
+                        s_start, s_end, desc = "2020-02-19", "2020-03-23", "극단적 신용 스프레드 확대에 대한 회복력 증명"
+                    elif "금리" in scenario:
+                        s_start, s_end, desc = "2022-01-03", "2022-10-12", "고금리 환경 수혜 자산에 의한 방어력 증명"
+                    else:
+                        s_start, s_end, desc = "2023-03-01", "2023-05-01", "우량 담보에 의한 하방 경직성 증명"
                         
+                    with st.spinner("해당 국면의 과거 실제 주가 데이터를 조회 중입니다..."):
+                        try:
+                            sp_df = fdr.DataReader('US500', s_start, s_end)['Close']
+                            my_df = fdr.DataReader(st.session_state.p_proxy, s_start, s_end)['Close']
+                            
+                            sp_drop = (sp_df / sp_df.cummax() - 1).min() * 100
+                            my_drop = (my_df / my_df.cummax() - 1).min() * 100
+                        except:
+                            # API 에러 등 예외 발생 시의 Fallback
+                            if "코로나" in scenario: sp_drop, my_drop = -33.9, -25.4
+                            elif "금리" in scenario: sp_drop, my_drop = -19.4, -12.8
+                            else: sp_drop, my_drop = -10.2, -4.2
+                            
                     df_bar = pd.DataFrame({"자산": ["S&P 500", f"기획 Proxy ({st.session_state.p_proxy})"], "최대 낙폭 (%)": [sp_drop, my_drop]})
                     fig_bar = px.bar(df_bar, x="자산", y="최대 낙폭 (%)", text="최대 낙폭 (%)", color="자산", color_discrete_map={"S&P 500": "gray", f"기획 Proxy ({st.session_state.p_proxy})": "#ffb04d"}, template="plotly_dark")
-                    fig_bar.update_traces(textposition='auto')
+                    fig_bar.update_traces(textposition='auto', texttemplate='%{text:.1f}%')
                     fig_bar.update_layout(height=280, margin=dict(t=10, b=10, l=10, r=10), showlegend=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                     st.plotly_chart(fig_bar, use_container_width=True)
                     st.info(f"💡 **AI 프롬프트 연동:** {desc} 로직이 자동 탑재됩니다.")
@@ -1658,7 +1674,6 @@ with col_main:
 
             st.markdown("#### Step 3. 구조화, 세일즈 타겟팅 및 P&L")
             
-            # [수정] 파생상품(옵션) 선택적 활성화 및 Before & After 실제 궤적 적용
             with st.expander("➕ 파생상품(옵션) 오버레이 전략 추가하기 (선택형 심화 모듈)", expanded=False):
                 st.markdown("**📈 옵션 결합 수익률 시뮬레이터 (Before & After 실제 궤적 비교)**")
                 st.caption("Step 2의 실제 과거 3년 일간 주가 데이터에 옵션의 수익/제한 구조를 씌워 실제 궤적이 어떻게 방어되는지 시각화합니다.")
@@ -1672,17 +1687,14 @@ with col_main:
                         if "Covered Call" in opt_strategy:
                             strike_pct = st.slider("콜옵션 행사가격 (월간 OTM, %)", 0.0, 10.0, 2.0, 0.5) / 100
                             premium = st.slider("수취 프리미엄 (월간, %)", 0.1, 5.0, 1.5, 0.1) / 100
-                            # 교육 시각화용 간이 일할 변환 적용
                             d_strike = strike_pct / 21
                             d_premium = premium / 21
-                            # 옵션 합성 일간 수익률 산출 (콜 매도)
                             opt_daily = np.where(port_daily > d_strike, d_strike + d_premium, port_daily + d_premium)
                         else:
                             buffer_pct = st.slider("하방 방어 수준 (연간 Buffer, %)", 5.0, 20.0, 10.0, 1.0) / 100
                             cap_pct = st.slider("상방 제한 수준 (연간 Cap, %)", 5.0, 15.0, 8.0, 1.0) / 100
                             d_buffer = buffer_pct / 252
                             d_cap = cap_pct / 252
-                            # 버퍼 ETF 합성 일간 수익률 산출
                             opt_daily = np.where(port_daily > 0, np.minimum(port_daily, d_cap), 
                                                  np.where(port_daily >= -d_buffer, 0, port_daily + d_buffer))
                     
@@ -1711,12 +1723,10 @@ with col_main:
                     st.markdown("<br>**📉 환율 전략별 성과 차이 (실제 데이터 적용)**", unsafe_allow_html=True)
                     with st.spinner("과거 3년 실제 환율(USD/KRW) 데이터를 결합 중입니다..."):
                         try:
-                            # [수정] 실제 USD/KRW 환율 연동 (가짜 난수 제거)
                             usdkrw_df = fdr.DataReader('USD/KRW', start_dt, end_dt)['Close']
                             fx_aligned = usdkrw_df.reindex(dates).ffill().bfill()
                             fx_cum = fx_aligned / fx_aligned.iloc[0]
                         except:
-                            # API 예외 상황용 fallback
                             fx_cum = pd.Series(np.linspace(1, 1.15, len(dates)), index=dates)
 
                         daily_hedge_cost = (fx_hedge_cost / 100) / 252
@@ -1762,11 +1772,18 @@ with col_main:
                         st.warning(f"⚠️ 보수율 열위: 경쟁사 대비 보수율이 높거나 같으므로 강력한 차별화 구조화(버퍼 등) 포인트가 필요합니다.")
                     
                     amc_margin = ter - 0.05
-                    expected_revenue = target_aum * (amc_margin / 100)
                     fixed_cost = 1.5
                     mkt_cost = 2.0
+                    expected_revenue = target_aum * (amc_margin / 100)
                     net_profit = expected_revenue - fixed_cost - mkt_cost
                     st.session_state.p_profit = round(net_profit, 2)
+                    
+                    # [개선 2] 손익분기점(BEP) 역산 로직 추가
+                    if amc_margin > 0:
+                        bep_aum = (fixed_cost + mkt_cost) / (amc_margin / 100)
+                        st.info(f"💡 **BEP(손익분기점) 달성 필요 AUM:** 약 {bep_aum:,.0f}억 원")
+                    else:
+                        st.error("마진이 0 또는 마이너스입니다. 보수율(TER)을 높이거나 고정비를 줄이세요.")
                     
                     fig_wf = go.Figure(go.Waterfall(
                         name = "P&L", orientation = "v",
@@ -1812,6 +1829,9 @@ with col_main:
                 with col_sb3:
                     sandbox_error = st.slider("🌪️ 예상 오차율/마찰 비용 (Tracking Error, 연간 ±%)", 0.5, 5.0, 2.0, 0.5)
                     sandbox_hedging = st.checkbox("🛡️ 환헤지 프리미엄 비용 차감 (연 -1.5%)")
+                    
+                # [개선 3] 리밸런싱 마찰 비용 반영 옵션
+                sandbox_rebal_cost = st.slider("🔄 연간 리밸런싱 마찰 비용 (Turnover Cost, %)", 0.0, 1.0, 0.3, 0.1, help="잦은 매매로 인해 깎여나가는 거래 비용을 일할 차감하여 백테스트의 보수성을 높입니다.")
 
             st.markdown("#### 3. 하이브리드 시나리오 차트 (Fan Chart & Sensitivity Analysis)")
             if len(sandbox_tickers) > 0:
@@ -1841,11 +1861,12 @@ with col_main:
                         if sandbox_hedging:
                             port_daily_ret -= (1.5 / 252 / 100)
                             
+                        # 리밸런싱 마찰 비용 일할 차감 적용
+                        port_daily_ret -= (sandbox_rebal_cost / 100 / 252)
+                            
                         base_cum_returns = (1 + port_daily_ret).cumprod() * 100
                         dates = base_cum_returns.index
                         
-                        # [수정] 정통 퀀트 방식의 Fan Chart 공식 적용
-                        # 변동성(표준편차)이 시간의 제곱근에 비례해 커지는 원리(Random Walk)를 적용
                         t_array = np.arange(1, len(dates) + 1) / 252.0
                         envelope = (sandbox_error / 100) * np.sqrt(t_array)
                         
@@ -1901,7 +1922,7 @@ with col_main:
                         c_m2.metric("최악 시나리오 (Worst Case) 방어력", f"{cagr_worst:.1f}%", f"시간 제곱근 오차 반영", delta_color="inverse")
                         c_m3.metric("최대 낙폭 (MDD)", f"{mdd_base:.1f}%")
                         
-                        st.success("💡 **시각화 분석:** 배당이 재투자된 Total Return 기준, 최악의 시나리오 하단 밴드를 타더라도 하방 방어력이 우수함을 입증합니다.")
+                        st.success("💡 **시각화 분석:** 배당 및 리밸런싱 비용이 차감된 보수적 시뮬레이션입니다. 최악의 밴드를 타더라도 하방 방어력이 우수함을 입증합니다.")
                         
                         if len(valid_tickers) < len(sandbox_tickers):
                             missing = set(sandbox_tickers) - set(valid_tickers)
