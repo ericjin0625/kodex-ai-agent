@@ -210,7 +210,7 @@ def get_realtime_news(keyword="ETF", timeframe="7d", max_items=12):
             news_list.append({"게시일 / 출처": f"{pubDate} / {source}", "원본제목": title, "링크": link})
         if not news_list: return pd.DataFrame([{"게시일 / 출처": "-", "원본제목": f"'{keyword}' 관련 뉴스가 없습니다.", "링크": ""}])
         return pd.DataFrame(news_list)
-    except: return pd.DataFrame([{"게시일 / 출처": "오류", "원본제목": "실시간 뉴스를 불러올 수 없습니다.", "링크": ""}])
+    except: return pd.DataFrame([{"게시일 / 출처": "오류", "원본제목": "실시간 뉴스를 불러올 수문을 수 없습니다.", "링크": ""}])
 
 @st.cache_data(ttl=1800)
 def get_app_reviews():
@@ -1247,6 +1247,105 @@ with col_main:
                                 st.caption(f"📅 {row['게시일 / 출처']}")
                     else: st.info("검색 범위(최대 1년) 내 포착된 리스크성 기사가 없습니다.")
 
+            # =========================================================================
+            # [신규 추가] Apify 인스타그램 크롤링 및 성과 분석 시각화
+            # =========================================================================
+            st.divider()
+            st.markdown("### 📱 인스타그램 활동성 및 인게이지먼트 분석 (Apify API)")
+            st.caption("최근 1주 및 1달간의 경쟁사 인스타그램 마케팅 성과(게시물, 좋아요, 댓글 수)를 수집하고 핵심 해시태그를 도출합니다.")
+            
+            target_accounts_input = st.text_input("🔍 분석할 인스타그램 계정 (쉼표로 구분):", value="kodex_etf, tiger_etf_official, aceetf, rise_etf")
+            
+            if st.button("인스타그램 실시간 데이터 수집 및 분석 시작"):
+                try:
+                    from apify_client import ApifyClient
+                    API_TOKEN = "apify_api_RbQEjBapWWqrraM6FrnlTNpS8WrdXW244eS9"
+                    client = ApifyClient(API_TOKEN)
+                    
+                    accounts = [acc.strip() for acc in target_accounts_input.split(",") if acc.strip()]
+                    
+                    with st.spinner("Apify 인스타그램 스크래퍼가 클라우드에서 최신 데이터를 수집 중입니다... (약 15~30초 소요)"):
+                        run_input = {
+                            "username": accounts,
+                            "resultsLimit": 30, # 최근 약 1달 치 데이터 확보 목적
+                        }
+                        run = client.actor("apify/instagram-post-scraper").call(run_input=run_input)
+                        dataset_items = client.dataset(run["defaultDatasetId"]).iterate_items()
+                        raw_data = list(dataset_items)
+                        
+                    if raw_data:
+                        df_insta = pd.DataFrame(raw_data)
+                        
+                        # 시간 데이터 전처리
+                        if 'timestamp' in df_insta.columns:
+                            df_insta['timestamp'] = pd.to_datetime(df_insta['timestamp']).dt.tz_localize(None)
+                        
+                        now = datetime.now()
+                        last_7d = now - timedelta(days=7)
+                        last_30d = now - timedelta(days=30)
+                        
+                        summary = []
+                        all_hashtags = []
+                        
+                        for user in df_insta['ownerUsername'].unique():
+                            user_df = df_insta[df_insta['ownerUsername'] == user]
+                            df_7d = user_df[user_df['timestamp'] >= last_7d]
+                            df_30d = user_df[user_df['timestamp'] >= last_30d]
+                            
+                            summary.append({
+                                "운용사 계정": f"@{user}",
+                                "지난 1주 게시물 수": len(df_7d),
+                                "지난 1주 좋아요 누적": df_7d['likesCount'].sum() if 'likesCount' in df_7d else 0,
+                                "지난 1달 게시물 수": len(df_30d),
+                                "지난 1달 좋아요 누적": df_30d['likesCount'].sum() if 'likesCount' in df_30d else 0,
+                                "지난 1달 댓글 누적": df_30d['commentsCount'].sum() if 'commentsCount' in df_30d else 0,
+                            })
+                            
+                            # 해시태그 추출 (최근 1달 캡션 기준)
+                            if 'caption' in df_30d.columns:
+                                for caption in df_30d['caption'].dropna():
+                                    tags = re.findall(r'#\w+', str(caption))
+                                    all_hashtags.extend([(user, tag) for tag in tags])
+                                
+                        st.markdown("#### 📊 계정별 최근 활동성 및 인게이지먼트 요약")
+                        df_summary = pd.DataFrame(summary)
+                        st.dataframe(df_summary, use_container_width=True, hide_index=True)
+                        
+                        c_i1, c_i2 = st.columns([1, 1.5])
+                        with c_i1:
+                            st.markdown("#### 🏷️ 최근 1달 가장 많이 쓴 해시태그 Top 10")
+                            if all_hashtags:
+                                df_tags = pd.DataFrame(all_hashtags, columns=['운용사', '해시태그'])
+                                tag_counts = df_tags['해시태그'].value_counts().head(10).reset_index()
+                                tag_counts.columns = ['해시태그', '사용빈도']
+                                fig_tags = px.bar(tag_counts, x='사용빈도', y='해시태그', orientation='h', template="plotly_dark", color_discrete_sequence=['#ffb04d'])
+                                fig_tags.update_layout(yaxis={'categoryorder':'total ascending'}, height=350, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                                st.plotly_chart(fig_tags, use_container_width=True)
+                            else:
+                                st.info("최근 한 달간 수집된 해시태그가 없습니다.")
+                        
+                        with c_i2:
+                            st.markdown("#### 🖼️ 최근 1달 최고 인기 게시물 (인게이지먼트 Top 3 갤러리)")
+                            if 'likesCount' in df_insta.columns:
+                                top_posts = df_insta.sort_values(by='likesCount', ascending=False).head(3)
+                                cols_p = st.columns(3)
+                                for idx, (_, row) in enumerate(top_posts.iterrows()):
+                                    with cols_p[idx % 3]:
+                                        with st.container(border=True):
+                                            if 'displayUrl' in row and pd.notna(row['displayUrl']):
+                                                st.image(row['displayUrl'], use_column_width=True)
+                                            st.markdown(f"**@{row['ownerUsername']}**")
+                                            st.caption(f"❤️ {row.get('likesCount', 0):,} | 💬 {row.get('commentsCount', 0):,}")
+                                            caption_text = str(row.get('caption', ''))
+                                            st.write(f"{caption_text[:60]}..." if len(caption_text) > 60 else caption_text)
+                    else:
+                        st.warning("데이터를 가져오지 못했습니다. 계정명이나 대상 계정의 공개 여부를 확인해주세요.")
+                
+                except ImportError:
+                    st.error("⚠️ `apify-client` 라이브러리가 설치되지 않았습니다. 터미널(또는 `requirements.txt`)에 `pip install apify-client`를 추가하고 실행해주세요.")
+                except Exception as e:
+                    st.error(f"⚠️ 데이터 수집 중 오류가 발생했습니다: {e}")
+
         with sub_tabs[7]:
             st.markdown("### 🏢 국내 ETF 운용사 AUM 시장 점유율 및 테마별 현황 (실시간 기준)")
             col_pie, col_table = st.columns([1, 2])
@@ -1379,7 +1478,7 @@ with col_main:
         
         proxy_reason_map = {
             "ARCC": "미국 BDC 시가총액 1위 종목으로, 가장 다각화된 포트폴리오를 보유하여 우량 사모신용의 펀더멘털을 가장 잘 대변함.",
-            "BIZD": "미국 BDC 산업 전체를 추종하는 ETF로, 사모신용 섹터 전반의 평균적인 위험/수익 프로파일을 반영함.",
+            "BIZD": "미국 BDC 산업 전체 추종하는 ETF로, 사모신용 섹터 전반의 평균적인 위험/수익 프로파일을 반영함.",
             "OBDC": "신흥 우량 담보 대출 위주의 포트폴리오로, 하방 경직성이 뛰어난 프록시 역할을 수행함.",
             "HTGC": "벤처 및 테크 기업 대출에 특화되어 고수익/고변동성 환경의 테스트에 적합함.",
             "JAAA": "최상위 AAA 등급 트랜치에 집중하여 주식 시장 급락 시 피난처(Safe Haven) 역할을 가장 잘 대변함.",
@@ -1798,7 +1897,7 @@ with col_main:
             
             news_text = "\n".join([f"- {row['원본제목']}" for _, row in st.session_state.df_real_news.head(5).iterrows()]) if not st.session_state.df_real_news.empty else "데이터 없음"
             
-            st.markdown("**📌 [Step 1: 매크로 및 AUM 동향 파악]**")
+            st.markdown("**📌 [Step 1: 매크로 및 AUM 동향 파 파악]**")
             st.caption("📸 **권장 첨부 이미지:** [ETF 시장 모니터링] ➡️ [🥧 ETF/AUM 현황] 탭의 **'전체 시장 점유율 파이차트'** (우측 상단 📷 아이콘 클릭)")
             p1_step1 = f"""[Step 1: 매크로 및 AUM 동향 파악]
 다음의 실시간 시장 지표와 AUM 데이터를 바탕으로 이번 주 ETF 시장의 전반적인 거시적 흐름과 자금 이동 방향을 3줄로 요약하시오. (※ 첨부된 차트 이미지가 있다면 시각적 추세도 함께 반영할 것)
