@@ -1274,9 +1274,18 @@ with col_main:
                         raw_data = list(dataset_items)
                         
                     if raw_data:
+                        # [추가된 방어 로직] ownerUsername 키가 없을 경우를 대비한 안전망
+                        for item in raw_data:
+                            if 'ownerUsername' not in item:
+                                # 'owner' 딕셔너리 안에 'username'이 숨어있는 경우 추출
+                                if 'owner' in item and isinstance(item['owner'], dict):
+                                    item['ownerUsername'] = item['owner'].get('username', 'Unknown')
+                                else:
+                                    item['ownerUsername'] = item.get('username', 'Unknown')
+
                         df_insta = pd.DataFrame(raw_data)
                         
-                        # 시간 데이터 전처리
+                        # 시간 데이터 전처리 (이후 코드는 기존과 동일하게 유지)
                         if 'timestamp' in df_insta.columns:
                             df_insta['timestamp'] = pd.to_datetime(df_insta['timestamp']).dt.tz_localize(None)
                         
