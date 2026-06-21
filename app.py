@@ -112,7 +112,6 @@ def assign_auto_theme(etf_name):
 def normalize_etf_name(name):
     """ETF 종목명의 미세한 불일치(공백, 오탈자 등)를 통일하는 전처리 함수"""
     name = str(name).strip()
-    # DataLab과 Excel 간의 전형적인 이름 불일치 하드코딩 매핑
     aliases = {
         "KODEX 고배당": "KODEX 고배당주",
         "PLUS 고배당주위클리커버드콜": "PLUS 고배당주위클리커버드콜"
@@ -207,10 +206,10 @@ def get_realtime_news(keyword="ETF", timeframe="7d", max_items=12):
             link = item.find('link').text if item.find('link') is not None else ""
             pubDate = item.find('pubDate').text[5:16] if item.find('pubDate') is not None else ""
             source = item.find('source').text if item.find('source') is not None else "Google News"
-            news_list.append({"게시일 / 출처": f"{pubDate} / {source}", "원본제목": title, "링크": link})
-        if not news_list: return pd.DataFrame([{"게시일 / 출처": "-", "원본제목": f"'{keyword}' 관련 뉴스가 없습니다.", "링크": ""}])
+            news_list.append({"게시일 / 출처": f"{pubDate} / {source}", "원본제목": title, "リンク": link})
+        if not news_list: return pd.DataFrame([{"게시일 / 출처": "-", "원본제목": f"'{keyword}' 관련 뉴스가 없습니다.", "リンク": ""}])
         return pd.DataFrame(news_list)
-    except: return pd.DataFrame([{"게시일 / 출처": "오류", "원본제목": "실시간 뉴스를 불러올 수문을 수 없습니다.", "링크": ""}])
+    except: return pd.DataFrame([{"게시일 / 출처": "오류", "원본제목": "실시간 뉴스를 불러올 수 수 없습니다.", "リンク": ""}])
 
 @st.cache_data(ttl=1800)
 def get_app_reviews():
@@ -872,7 +871,7 @@ with col_main:
                     elif comp_diff == 0:
                         real_did_multiplier = round(target_diff, 2)
 
-                    # 2) DataLab 연동 p-value 및 시차분석 연산 로직 [동적 구간 병합 로직 이식]
+                    # 2) DataLab 연동 p-value 및 시차분석 연산 로직
                     calc_p_value = None
                     brand_search_inc = None
                     lag_corrs = []
@@ -881,7 +880,6 @@ with col_main:
                     if uploaded_dls:
                         try:
                             dl_file = uploaded_dls[0]
-                            # skiprows=6 로 첫번째 헤더 이슈 완벽 회피
                             df_dl = pd.read_csv(dl_file, skiprows=6, encoding='cp949') if dl_file.name.endswith('csv') else pd.read_excel(dl_file, skiprows=6)
                             date_col = df_dl.columns[0]
                             df_dl[date_col] = pd.to_datetime(df_dl[date_col])
@@ -889,7 +887,6 @@ with col_main:
                             if not df_dl[date_col].empty:
                                 data_year = df_dl[date_col].dt.year.max()
                             
-                            # 날짜가 아닌 값들을 필터링하여 검색량 컬럼 추출
                             val_cols = [c for c in df_dl.columns if '날짜' not in c and 'Unnamed' not in c]
                             
                             if val_cols:
@@ -908,7 +905,6 @@ with col_main:
                                     if pre_mean > 0:
                                         brand_search_inc = round(((post_mean - pre_mean) / pre_mean) * 100, 1)
 
-                                # ★ 핵심 전처리: 엑셀의 "M.D-M.D" 주차를 실제 날짜 구간으로 파싱하여 데이터랩 평균 산출 (Weekly Binning)
                                 dl_weekly_search = {}
                                 for w in target_sheets:
                                     s_dt, e_dt = parse_week_range(w, data_year)
@@ -920,12 +916,10 @@ with col_main:
                                         dl_weekly_search[w] = np.nan
                                         
                                 target_trend = df_trend[df_trend['종목명'] == target_etf].copy()
-                                # 시계열 순서로 정렬 보장 (target_sheets는 역순이므로 뒤집음)
                                 chronological_weeks = list(reversed(target_sheets))
                                 target_trend['주차_순서'] = pd.Categorical(target_trend['주차'], categories=chronological_weeks, ordered=True)
                                 target_trend = target_trend.sort_values('주차_순서').reset_index(drop=True)
                                 
-                                # 매핑 딕셔너리로 검색량 삽입
                                 target_trend['검색량'] = target_trend['주차'].map(dl_weekly_search)
                                 
                                 if len(target_trend) >= 4:
@@ -1084,10 +1078,10 @@ with col_main:
             st.caption("외부 API 기반으로 경쟁사의 최근 인스타그램 포스팅 성과를 추적합니다.")
             
             with st.spinner("Instagram API 및 RSS 데이터를 수집하고 있습니다..."):
-                df_insta = get_instagram_data()
-                if not df_insta.empty:
-                    cols_insta = st.columns(len(df_insta))
-                    for i, row in df_insta.iterrows():
+                df_insta_rss = get_instagram_data()
+                if not df_insta_rss.empty:
+                    cols_insta = st.columns(len(df_insta_rss))
+                    for i, row in df_insta_rss.iterrows():
                         with cols_insta[i % len(cols_insta)]:
                             with st.container(border=True):
                                 st.markdown(f"**{row['brand']}** ({row.get('type', 'Post')})")
@@ -1267,27 +1261,43 @@ with col_main:
                     with st.spinner("Apify 인스타그램 스크래퍼가 클라우드에서 최신 데이터를 수집 중입니다... (약 15~30초 소요)"):
                         run_input = {
                             "username": accounts,
-                            "resultsLimit": 30, # 최근 약 1달 치 데이터 확보 목적
+                            "resultsLimit": 30,
                         }
                         run = client.actor("apify/instagram-post-scraper").call(run_input=run_input)
                         dataset_items = client.dataset(run.default_dataset_id).iterate_items()
                         raw_data = list(dataset_items)
                         
                     if raw_data:
-                        # [추가된 방어 로직] ownerUsername 키가 없을 경우를 대비한 안전망
-                        for item in raw_data:
-                            if 'ownerUsername' not in item:
-                                # 'owner' 딕셔너리 안에 'username'이 숨어있는 경우 추출
-                                if 'owner' in item and isinstance(item['owner'], dict):
-                                    item['ownerUsername'] = item['owner'].get('username', 'Unknown')
-                                else:
-                                    item['ownerUsername'] = item.get('username', 'Unknown')
-
+                        # 1. 데이터프레임 변환
                         df_insta = pd.DataFrame(raw_data)
                         
-                        # 시간 데이터 전처리 (이후 코드는 기존과 동일하게 유지)
-                        if 'timestamp' in df_insta.columns:
-                            df_insta['timestamp'] = pd.to_datetime(df_insta['timestamp']).dt.tz_localize(None)
+                        # --- [강력한 무결성 방어 로직 추가] ---
+                        # 2. ownerUsername 컬럼 확보 (어떤 구조로 오든 필수 컬럼 자동 유도 및 결측치 완벽 차단)
+                        if 'ownerUsername' not in df_insta.columns:
+                            if 'owner' in df_insta.columns:
+                                df_insta['ownerUsername'] = df_insta['owner'].apply(
+                                    lambda x: x.get('username', 'Unknown') if isinstance(x, dict) else 'Unknown'
+                                )
+                            elif 'username' in df_insta.columns:
+                                df_insta['ownerUsername'] = df_insta['username']
+                            else:
+                                df_insta['ownerUsername'] = 'Unknown_Account'
+                                
+                        df_insta['ownerUsername'] = df_insta['ownerUsername'].fillna('Unknown_Account')
+
+                        # 3. 수치형 및 텍스트 필수 필드 누락 예방방지 (KeyError 완전 박멸)
+                        if 'likesCount' not in df_insta.columns: 
+                            df_insta['likesCount'] = 0
+                        if 'commentsCount' not in df_insta.columns: 
+                            df_insta['commentsCount'] = 0
+                        if 'caption' not in df_insta.columns: 
+                            df_insta['caption'] = ""
+                        if 'timestamp' not in df_insta.columns: 
+                            df_insta['timestamp'] = pd.Timestamp.now()
+
+                        # 4. 시간축 데이터 안전 파싱 (오류 시 강제 NaT 결측치 유도)
+                        df_insta['timestamp'] = pd.to_datetime(df_insta['timestamp'], errors='coerce').dt.tz_localize(None)
+                        # ------------------------------------
                         
                         now = datetime.now()
                         last_7d = now - timedelta(days=7)
@@ -1310,7 +1320,6 @@ with col_main:
                                 "지난 1달 댓글 누적": df_30d['commentsCount'].sum() if 'commentsCount' in df_30d else 0,
                             })
                             
-                            # 해시태그 추출 (최근 1달 캡션 기준)
                             if 'caption' in df_30d.columns:
                                 for caption in df_30d['caption'].dropna():
                                     tags = re.findall(r'#\w+', str(caption))
@@ -1487,7 +1496,7 @@ with col_main:
         
         proxy_reason_map = {
             "ARCC": "미국 BDC 시가총액 1위 종목으로, 가장 다각화된 포트폴리오를 보유하여 우량 사모신용의 펀더멘털을 가장 잘 대변함.",
-            "BIZD": "미국 BDC 산업 전체 추종하는 ETF로, 사모신용 섹터 전반의 평균적인 위험/수익 프로파일을 반영함.",
+            "BIZD": "미국 BDC 산업 전체를 추종하는 ETF로, 사모신용 섹터 전반의 평균적인 위험/수익 프로파일을 반영함.",
             "OBDC": "신흥 우량 담보 대출 위주의 포트폴리오로, 하방 경직성이 뛰어난 프록시 역할을 수행함.",
             "HTGC": "벤처 및 테크 기업 대출에 특화되어 고수익/고변동성 환경의 테스트에 적합함.",
             "JAAA": "최상위 AAA 등급 트랜치에 집중하여 주식 시장 급락 시 피난처(Safe Haven) 역할을 가장 잘 대변함.",
@@ -1883,7 +1892,7 @@ with col_main:
                         st.error("입력하신 티커들의 데이터를 불러올 수 없습니다. 올바른 티커인지 확인해 주세요.")
             else:
                 st.info("👉 편입할 티커를 하나 이상 입력해주세요.")
-
+                
     # -------------------------------------------------------------------------
     # Big 탭 3: 🤖 AI 프롬프트 (마스터 프롬프트 추출소)
     # -------------------------------------------------------------------------
