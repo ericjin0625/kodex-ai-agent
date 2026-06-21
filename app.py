@@ -1270,7 +1270,7 @@ with col_main:
                             "resultsLimit": 30, # 최근 약 1달 치 데이터 확보 목적
                         }
                         run = client.actor("apify/instagram-post-scraper").call(run_input=run_input)
-                        dataset_items = client.dataset(run["defaultDatasetId"]).iterate_items()
+                        dataset_items = client.dataset(run.default_dataset_id).iterate_items()
                         raw_data = list(dataset_items)
                         
                     if raw_data:
