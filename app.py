@@ -455,7 +455,7 @@ with col_main:
     )
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # -------------------------------------------------------------------------
+# -------------------------------------------------------------------------
     # Big 탭 1: ETF 시장 모니터링 
     # -------------------------------------------------------------------------
     if big_tab == "ETF 시장 모니터링":
@@ -617,8 +617,28 @@ with col_main:
 
         with sub_tabs[3]:
             st.markdown("### 📰 실시간 뉴스 리스트")
-            st.session_state.df_real_news = get_realtime_news("ETF", timeframe="7d", max_items=12)
+            
+            # [수정 1] 동적 키워드 추출 및 토글 UI 적용
+            top_keyword = "ETF"
+            if uploaded_excel is not None and selected_week != "데이터 없음":
+                try:
+                    df_temp = load_and_clean_excel(uploaded_excel, selected_week)
+                    df_temp['테마'] = df_temp['종목명'].apply(assign_auto_theme)
+                    # 이번 주 개인투자자 순매수 1위 테마 도출
+                    top_theme = df_temp[df_temp['종목명'] != '전체'].groupby('테마')['개인'].sum().idxmax()
+                    top_keyword = re.sub(r'[^\w\s]', '', top_theme).strip() # 이모지 등 제거
+                except:
+                    pass
+            
+            news_mode = st.radio("뉴스 모드 선택:", ["🌐 일반 ETF 트렌드 뉴스 (거시/업계 동향)", f"🎯 주간 수급 Top 테마 동적 뉴스 ({top_keyword})"], horizontal=True)
+            
+            search_kw = "ETF" if "일반" in news_mode else f"{top_keyword} ETF"
+            st.session_state.df_real_news = get_realtime_news(search_kw, timeframe="7d", max_items=12)
             df_real_news = st.session_state.df_real_news
+            
+            # [통합 변수화] AI 프롬프트로 넘길 뉴스 요약본 세션 저장
+            news_summary = "\n".join([f"- {row['원본제목']}" for _, row in df_real_news.head(5).iterrows()])
+            st.session_state.weekly_dynamic_news = f"[{search_kw} 검색 결과]\n{news_summary}"
             
             if "링크" in df_real_news.columns and df_real_news["링크"].iloc[0] != "":
                 for i in range(0, len(df_real_news), 2):
@@ -956,6 +976,11 @@ with col_main:
                         else:
                             st.metric("통계적 유의성", "계산 불가", "검색량 데이터 부족", delta_color="off")
 
+                    # 연산된 지표를 Session State에 저장 (통합 리포트용)
+                    st.session_state.stat_net_inflow = round(target_diff, 2)
+                    st.session_state.stat_did_multiplier = real_did_multiplier
+                    st.session_state.stat_p_value = round(calc_p_value, 4) if calc_p_value is not None else 1.0
+
                     c_chart1, c_chart2 = st.columns([1, 1])
                     with c_chart1:
                         with st.container(border=True):
@@ -1012,8 +1037,21 @@ with col_main:
 
             st.divider()
 
+            # [수정 2] 유튜브 사후 성과 분석 (타겟 종목명 동적 스크랩 반영)
             st.markdown("### 📺 유튜브 사후 성과 분석 (Post-Hoc Analysis)")
-            yt_keywords = {"KODEX (삼성)": "KODEX ETF", "TIGER (미래에셋)": "TIGER ETF", "ACE (한국투자)": "ACE ETF", "RISE (KB)": "RISE ETF"}
+            
+            # DiD 분석 탭에서 설정된 타겟 ETF 이름 가져오기 (없으면 기본값)
+            current_target = target_etf if 'target_etf' in locals() else "KODEX 200"
+            
+            # 운용사 브랜드 + 타겟 종목명 동시 스크랩
+            yt_keywords = {
+                "KODEX (삼성)": "KODEX ETF", 
+                "TIGER (미래에셋)": "TIGER ETF", 
+                "ACE (한국투자)": "ACE ETF", 
+                "RISE (KB)": "RISE ETF",
+                f"🎯 타겟 종목 ({current_target})": current_target
+            }
+            
             with st.spinner("경쟁사 유튜브 영상 성과 데이터를 실시간으로 파싱 중입니다..."):
                 yt_data = []
                 for brand, kw in yt_keywords.items():
@@ -1022,6 +1060,15 @@ with col_main:
                 if yt_data:
                     df_yt = pd.DataFrame(yt_data)
                     df_yt_sorted = df_yt.sort_values(by="조회수", ascending=False)
+                    
+                    # [통합 변수화] 타겟 종목 최고 바이럴 영상 세션 저장
+                    target_vids = df_yt[df_yt['운용사'].str.contains("🎯 타겟")].sort_values(by="조회수", ascending=False)
+                    if not target_vids.empty:
+                        top_vid = target_vids.iloc[0]
+                        st.session_state.yt_target_insights = f"타겟 종목({current_target}) 유튜브 최고 바이럴 영상: '{top_vid['영상 제목']}' (조회수 {top_vid['조회수']:,}회)"
+                    else:
+                        st.session_state.yt_target_insights = f"타겟 종목({current_target}) 관련 유의미한 유튜브 바이럴 없음."
+
                     c_yt1, c_yt2 = st.columns([1, 1])
                     with c_yt1:
                         st.markdown("#### 🏆 주요 검색어별 평균 조회수 (영향력)")
@@ -1078,10 +1125,10 @@ with col_main:
             st.caption("외부 API 기반으로 경쟁사의 최근 인스타그램 포스팅 성과를 추적합니다.")
             
             with st.spinner("Instagram API 및 RSS 데이터를 수집하고 있습니다..."):
-                df_insta_rss = get_instagram_data()
-                if not df_insta_rss.empty:
-                    cols_insta = st.columns(len(df_insta_rss))
-                    for i, row in df_insta_rss.iterrows():
+                df_insta = get_instagram_data()
+                if not df_insta.empty:
+                    cols_insta = st.columns(len(df_insta))
+                    for i, row in df_insta.iterrows():
                         with cols_insta[i % len(cols_insta)]:
                             with st.container(border=True):
                                 st.markdown(f"**{row['brand']}** ({row.get('type', 'Post')})")
@@ -1240,129 +1287,6 @@ with col_main:
                                 st.markdown(f"🚨 <a href='{row['링크']}' target='_blank' style='color:#ff4d4d; text-decoration:none;'>{row['원본제목']} 🔗</a>", unsafe_allow_html=True)
                                 st.caption(f"📅 {row['게시일 / 출처']}")
                     else: st.info("검색 범위(최대 1년) 내 포착된 리스크성 기사가 없습니다.")
-
-            # =========================================================================
-            # [신규 추가] Apify 인스타그램 크롤링 및 성과 분석 시각화
-            # =========================================================================
-            st.divider()
-            st.markdown("### 📱 인스타그램 활동성 및 인게이지먼트 분석 (Apify API)")
-            st.caption("최근 1주 및 1달간의 경쟁사 인스타그램 마케팅 성과(게시물, 좋아요, 댓글 수)를 수집하고 핵심 해시태그를 도출합니다.")
-            
-            target_accounts_input = st.text_input("🔍 분석할 인스타그램 계정 (쉼표로 구분):", value="kodex_etf, tiger_etf_official, aceetf, rise_etf")
-            
-            if st.button("인스타그램 실시간 데이터 수집 및 분석 시작"):
-                try:
-                    from apify_client import ApifyClient
-                    API_TOKEN = "apify_api_RbQEjBapWWqrraM6FrnlTNpS8WrdXW244eS9"
-                    client = ApifyClient(API_TOKEN)
-                    
-                    accounts = [acc.strip() for acc in target_accounts_input.split(",") if acc.strip()]
-                    
-                    with st.spinner("Apify 인스타그램 스크래퍼가 클라우드에서 최신 데이터를 수집 중입니다... (약 15~30초 소요)"):
-                        run_input = {
-                            "username": accounts,
-                            "resultsLimit": 30,
-                        }
-                        run = client.actor("apify/instagram-post-scraper").call(run_input=run_input)
-                        dataset_items = client.dataset(run.default_dataset_id).iterate_items()
-                        raw_data = list(dataset_items)
-                        
-                    if raw_data:
-                        # 1. 데이터프레임 변환
-                        df_insta = pd.DataFrame(raw_data)
-                        
-                        # --- [강력한 무결성 방어 로직 추가] ---
-                        # 2. ownerUsername 컬럼 확보 (어떤 구조로 오든 필수 컬럼 자동 유도 및 결측치 완벽 차단)
-                        if 'ownerUsername' not in df_insta.columns:
-                            if 'owner' in df_insta.columns:
-                                df_insta['ownerUsername'] = df_insta['owner'].apply(
-                                    lambda x: x.get('username', 'Unknown') if isinstance(x, dict) else 'Unknown'
-                                )
-                            elif 'username' in df_insta.columns:
-                                df_insta['ownerUsername'] = df_insta['username']
-                            else:
-                                df_insta['ownerUsername'] = 'Unknown_Account'
-                                
-                        df_insta['ownerUsername'] = df_insta['ownerUsername'].fillna('Unknown_Account')
-
-                        # 3. 수치형 및 텍스트 필수 필드 누락 예방방지 (KeyError 완전 박멸)
-                        if 'likesCount' not in df_insta.columns: 
-                            df_insta['likesCount'] = 0
-                        if 'commentsCount' not in df_insta.columns: 
-                            df_insta['commentsCount'] = 0
-                        if 'caption' not in df_insta.columns: 
-                            df_insta['caption'] = ""
-                        if 'timestamp' not in df_insta.columns: 
-                            df_insta['timestamp'] = pd.Timestamp.now()
-
-                        # 4. 시간축 데이터 안전 파싱 (오류 시 강제 NaT 결측치 유도)
-                        df_insta['timestamp'] = pd.to_datetime(df_insta['timestamp'], errors='coerce').dt.tz_localize(None)
-                        # ------------------------------------
-                        
-                        now = datetime.now()
-                        last_7d = now - timedelta(days=7)
-                        last_30d = now - timedelta(days=30)
-                        
-                        summary = []
-                        all_hashtags = []
-                        
-                        for user in df_insta['ownerUsername'].unique():
-                            user_df = df_insta[df_insta['ownerUsername'] == user]
-                            df_7d = user_df[user_df['timestamp'] >= last_7d]
-                            df_30d = user_df[user_df['timestamp'] >= last_30d]
-                            
-                            summary.append({
-                                "운용사 계정": f"@{user}",
-                                "지난 1주 게시물 수": len(df_7d),
-                                "지난 1주 좋아요 누적": df_7d['likesCount'].sum() if 'likesCount' in df_7d else 0,
-                                "지난 1달 게시물 수": len(df_30d),
-                                "지난 1달 좋아요 누적": df_30d['likesCount'].sum() if 'likesCount' in df_30d else 0,
-                                "지난 1달 댓글 누적": df_30d['commentsCount'].sum() if 'commentsCount' in df_30d else 0,
-                            })
-                            
-                            if 'caption' in df_30d.columns:
-                                for caption in df_30d['caption'].dropna():
-                                    tags = re.findall(r'#\w+', str(caption))
-                                    all_hashtags.extend([(user, tag) for tag in tags])
-                                
-                        st.markdown("#### 📊 계정별 최근 활동성 및 인게이지먼트 요약")
-                        df_summary = pd.DataFrame(summary)
-                        st.dataframe(df_summary, use_container_width=True, hide_index=True)
-                        
-                        c_i1, c_i2 = st.columns([1, 1.5])
-                        with c_i1:
-                            st.markdown("#### 🏷️ 최근 1달 가장 많이 쓴 해시태그 Top 10")
-                            if all_hashtags:
-                                df_tags = pd.DataFrame(all_hashtags, columns=['운용사', '해시태그'])
-                                tag_counts = df_tags['해시태그'].value_counts().head(10).reset_index()
-                                tag_counts.columns = ['해시태그', '사용빈도']
-                                fig_tags = px.bar(tag_counts, x='사용빈도', y='해시태그', orientation='h', template="plotly_dark", color_discrete_sequence=['#ffb04d'])
-                                fig_tags.update_layout(yaxis={'categoryorder':'total ascending'}, height=350, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                                st.plotly_chart(fig_tags, use_container_width=True)
-                            else:
-                                st.info("최근 한 달간 수집된 해시태그가 없습니다.")
-                        
-                        with c_i2:
-                            st.markdown("#### 🖼️ 최근 1달 최고 인기 게시물 (인게이지먼트 Top 3 갤러리)")
-                            if 'likesCount' in df_insta.columns:
-                                top_posts = df_insta.sort_values(by='likesCount', ascending=False).head(3)
-                                cols_p = st.columns(3)
-                                for idx, (_, row) in enumerate(top_posts.iterrows()):
-                                    with cols_p[idx % 3]:
-                                        with st.container(border=True):
-                                            if 'displayUrl' in row and pd.notna(row['displayUrl']):
-                                                st.image(row['displayUrl'], use_column_width=True)
-                                            st.markdown(f"**@{row['ownerUsername']}**")
-                                            st.caption(f"❤️ {row.get('likesCount', 0):,} | 💬 {row.get('commentsCount', 0):,}")
-                                            caption_text = str(row.get('caption', ''))
-                                            st.write(f"{caption_text[:60]}..." if len(caption_text) > 60 else caption_text)
-                    else:
-                        st.warning("데이터를 가져오지 못했습니다. 계정명이나 대상 계정의 공개 여부를 확인해주세요.")
-                
-                except ImportError:
-                    st.error("⚠️ `apify-client` 라이브러리가 설치되지 않았습니다. 터미널(또는 `requirements.txt`)에 `pip install apify-client`를 추가하고 실행해주세요.")
-                except Exception as e:
-                    st.error(f"⚠️ 데이터 수집 중 오류가 발생했습니다: {e}")
 
         with sub_tabs[7]:
             st.markdown("### 🏢 국내 ETF 운용사 AUM 시장 점유율 및 테마별 현황 (실시간 기준)")
@@ -1932,7 +1856,7 @@ with col_main:
             else:
                 st.info("👉 편입할 티커를 하나 이상 입력해주세요.")
                 
-    # -------------------------------------------------------------------------
+# -------------------------------------------------------------------------
     # Big 탭 3: 🤖 AI 프롬프트 (마스터 프롬프트 추출소)
     # -------------------------------------------------------------------------
     elif big_tab == "🤖 AI 프롬프트":
@@ -1943,41 +1867,38 @@ with col_main:
         
         with prompt_tabs[0]:
             st.markdown("#### [주간 시장 요약 및 세일즈 리포트 프롬프트 - 3-Step 체인]")
+            st.info("💡 대시보드의 실시간 데이터를 바탕으로 AI에게 주간 리포트를 지시하는 3단계 체인 프롬프트입니다. 한 번에 하나씩 복사하여 제미나이(Gemini)나 GPT에 입력하세요.")
             
-            st.success("""
-            **🤖 [핵심 Tip] 멀티모달(Vision) AI 200% 활용하기**
-            필요한 수치 데이터는 아래 프롬프트 텍스트 안에 이미 자동으로 모두 포함되어 있습니다! 
-            추가적으로 **각 Step 안내에 적힌 위치로 이동해 차트 이미지를 다운받아 함께 첨부**하시면 AI가 훨씬 더 정교하게 시각적 추세를 분석해 줍니다.
-            """)
-            
-            st.info("💡 대시보드의 실시간 데이터를 바탕으로 AI에게 주간 리포트를 지시하는 3단계 체인 프롬프트입니다. 한 번에 하나씩 복사하여 입력하세요.")
-            
-            news_text = "\n".join([f"- {row['원본제목']}" for _, row in st.session_state.df_real_news.head(5).iterrows()]) if not st.session_state.df_real_news.empty else "데이터 없음"
-            
-            st.markdown("**📌 [Step 1: 매크로 및 AUM 동향 파 파악]**")
-            st.caption("📸 **권장 첨부 이미지:** [ETF 시장 모니터링] ➡️ [🥧 ETF/AUM 현황] 탭의 **'전체 시장 점유율 파이차트'** (우측 상단 📷 아이콘 클릭)")
-            p1_step1 = f"""[Step 1: 매크로 및 AUM 동향 파악]
-다음의 실시간 시장 지표와 AUM 데이터를 바탕으로 이번 주 ETF 시장의 전반적인 거시적 흐름과 자금 이동 방향을 3줄로 요약하시오. (※ 첨부된 차트 이미지가 있다면 시각적 추세도 함께 반영할 것)
-[시장 주요 뉴스]: {news_text}
-[AUM 현황 데이터]: {st.session_state.aum_context_text}"""
+            # Step 1: 매크로 및 수급 뉴스 연동
+            st.markdown("**📌 [Step 1: 매크로 환경 및 수급 원인 분석]**")
+            p1_step1 = f"""[Step 1: 시장 환경 및 자금 유입 원인 분석]
+이번 주 ETF 시장의 핵심 키워드는 다음과 같으며, 타겟 ETF에는 {st.session_state.get('stat_net_inflow', 0)}억 원이 순유입되었습니다.
+다음은 이번 주 시장 및 핵심 테마와 관련된 언론 보도(뉴스 크롤링) 내용입니다.
+[주요 뉴스]:
+{st.session_state.get('weekly_dynamic_news', '뉴스 데이터 없음')}
+
+위 뉴스 데이터를 바탕으로, 이번 주 리테일 투자자들의 자금이 왜 특정 테마와 상품으로 쏠렸는지 그 '거시적/심리적 원인'을 3줄로 진단하시오."""
             st.code(p1_step1, language="text")
 
             st.divider()
 
-            st.markdown("**📌 [Step 2: 수급 및 투자자 심리(VOC) 분석]**")
-            st.caption("📸 **권장 첨부 이미지:** [ETF 시장 모니터링] ➡️ [📈 순매수 & 수익률] 탭의 **'주간 수익률 vs 순매수 증감률 산점도'** (우측 상단 📷 아이콘 클릭)")
-            p1_step2 = f"""[Step 2: 수급 및 투자자 심리(VOC) 분석]
-Step 1의 거시적 흐름 하에서, 다음의 순매수 엑셀 데이터와 종토방 감성 분석 결과를 연결하여 리테일 투자자들의 '공포와 탐욕' 심리 상태를 진단하시오. (※ 첨부된 차트 이미지를 분석하여 특정 사분면에 위치한 이상치(Outlier) 종목들을 반드시 언급할 것)
-[주간 거래량 랭킹]: {st.session_state.df_volume_summary_text}
-[경쟁사 미디어 동향]: {st.session_state.media_context}"""
+            # Step 2: 타겟 종목 유튜브 및 성과(DiD) 연동
+            st.markdown("**📌 [Step 2: 미디어 바이럴 및 마케팅 임팩트 평가]**")
+            p1_step2 = f"""[Step 2: 미디어 바이럴 및 마케팅 성과 평가]
+이번 주 타겟 ETF 및 경쟁사의 미디어 마케팅 성과를 크롤링한 결과는 다음과 같습니다.
+[유튜브 바이럴 최상위 영상]: {st.session_state.get('yt_target_insights', '데이터 없음')}
+[커뮤니티 심리(VOC) 핵심]: {st.session_state.get('media_context', '데이터 없음')}
+
+위 미디어 노출이 실제로 타겟 ETF의 경쟁사 대비 이중차분(DiD) 성과({st.session_state.get('stat_did_multiplier', 0)}배)에 얼마나 기여했는지, 통계적 유의성(p-value: {st.session_state.get('stat_p_value', 1.0)})을 근거로 객관적으로 평가하시오. 미디어 바이럴이 실제 순매수를 견인했는지 결론을 내려야 합니다."""
             st.code(p1_step2, language="text")
 
             st.divider()
 
+            # Step 3: 최종 리포트 및 액션 플랜
             st.markdown("**📌 [Step 3: 최종 주간 마케팅 리포트 산출]**")
-            st.caption("📸 **권장 첨부 이미지:** [ETF 시장 모니터링] ➡️ [📺 이벤트 및 성과 검증] 탭의 **'마케팅 촉매 임팩트 분석기 (선 그래프)'** (우측 상단 📷 아이콘 클릭)")
-            p1_step3 = """[Step 3: 최종 주간 마케팅 리포트 산출]
-Step 1과 Step 2의 분석 결과를 종합하여, 리테일 마케팅 본부장에게 보고할 '주간 세일즈 액션 플랜 리포트'를 마크다운 형식으로 작성하시오. 리포트에는 반드시 다음 주 추천 셀링 포인트(Selling Point) 3가지가 포함되어야 함."""
+            p1_step3 = """[Step 3: 최종 리테일 마케팅 본부 보고서 산출]
+Step 1(자금 유입 원인)과 Step 2(미디어 성과 평가)의 분석을 종합하여, 마케팅 본부장에게 보고할 '주간 세일즈 액션 플랜 리포트'를 마크다운 형식으로 작성하시오. 
+특히, 다음 주 자사 ETF의 순매수를 끌어올리기 위해 우리가 즉시 섭외해야 할 유튜브 채널 타겟(콘텐츠 방향성 포함)과 블로그 이벤트 기획 아이디어를 반드시 1가지씩 포함하여 제안할 것."""
             st.code(p1_step3, language="text")
             
         with prompt_tabs[1]:
