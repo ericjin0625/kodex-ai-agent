@@ -1477,7 +1477,7 @@ with col_main:
                                 st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:14px; font-weight:bold; color:#ffb04d; text-decoration:none;'>[규제] {row['원본제목']} 🔗</a>", unsafe_allow_html=True)
                 else: st.info("관련된 최신 정책 뉴스 피드가 존재하지 않습니다.")
 
-    # =========================================================================
+# =========================================================================
     # Big 탭 2: 글로벌 상품 기획 시뮬레이터
     # =========================================================================
     elif big_tab == "글로벌 상품 기획 시뮬레이터":
@@ -1524,9 +1524,9 @@ with col_main:
             with col_p1:
                 with st.container(border=True):
                     st.markdown("**🔍 기초자산 펀더멘털 스크리닝 (허들 설정)**")
-                    st.caption("실제 종목 필터링 기준이 될 주요 재무 비율 상/하한선을 설정합니다.")
-                    ltv_limit = st.slider("최대 LTV (부채비율) 허용 한도 (%)", 10, 80, 40, step=5)
-                    fcf_limit = st.slider("최소 잉여현금흐름(FCF) 마진 (%)", 0, 30, 10, step=1)
+                    st.caption("AI를 통한 실제 종목 필터링 지시 기준이 될 재무 비율을 설정합니다.")
+                    ltv_limit = st.slider("[AI 유니버스 필터링 지시용] 최대 LTV (부채비율) 한도 (%)", 10, 80, 40, step=5)
+                    fcf_limit = st.slider("[AI 유니버스 필터링 지시용] 최소 잉여현금흐름(FCF) 마진 (%)", 0, 30, 10, step=1)
                     st.session_state.p_ltv = ltv_limit
                     st.session_state.p_fcf = fcf_limit
                     
@@ -1591,8 +1591,9 @@ with col_main:
                         try:
                             port_df = fdr.DataReader(st.session_state.p_proxy, start_dt, end_dt)
                             port_daily = port_df['Close'].pct_change().dropna()
-                            port_cum = (1 + port_daily).cumprod() * 100
                             
+                            # API 정상 호출 시, 후속 옵션/환율 연동을 위해 세션/로컬 변수로 궤적 저장
+                            port_cum = (1 + port_daily).cumprod() * 100
                             discount_array = (1 - lp_cost/100) ** (np.arange(len(port_cum)) / 252)
                             port_cum = port_cum * discount_array
                             
@@ -1605,7 +1606,7 @@ with col_main:
                             st.warning("API 지연으로 자체 퀀트 모델 합성값이 도출됩니다.")
                             np.random.seed(42)
                             dates = pd.date_range(start=start_dt, end=end_dt, periods=756)
-                            port_daily = np.random.normal(0.0003, 0.008, 756)
+                            port_daily = pd.Series(np.random.normal(0.0003, 0.008, 756), index=dates)
                             port_cum = pd.Series((1 + port_daily).cumprod() * 100, index=dates)
                             
                             discount_array = (1 - lp_cost/100) ** (np.arange(len(port_cum)) / 252)
@@ -1636,7 +1637,7 @@ with col_main:
                 with st.container(border=True):
                     st.markdown("**🌪️ 매크로 스트레스 테스트 시나리오**")
                     scenario = st.selectbox("과거 위기 시나리오 국면을 선택하세요:", [
-                        "2020년 코로나 팬 거시적 위기 (글로벌 셧다운)",
+                        "2020년 코로나 팬데믹 (글로벌 셧다운 및 신용경색)",
                         "2022년 급격한 금리 인상기 (인플레이션 쇼크)",
                         "2023년 실리콘밸리은행(SVB) 파산 (단기 유동성 위기)"
                     ])
@@ -1656,8 +1657,12 @@ with col_main:
             st.divider()
 
             st.markdown("#### Step 3. 구조화, 세일즈 타겟팅 및 P&L")
-            with st.container(border=True):
-                st.markdown("**📈 파생상품(옵션) 결합 수익률 시뮬레이터 (Payoff Modeling)**")
+            
+            # [수정] 파생상품(옵션) 선택적 활성화 및 Before & After 실제 궤적 적용
+            with st.expander("➕ 파생상품(옵션) 오버레이 전략 추가하기 (선택형 심화 모듈)", expanded=False):
+                st.markdown("**📈 옵션 결합 수익률 시뮬레이터 (Before & After 실제 궤적 비교)**")
+                st.caption("Step 2의 실제 과거 3년 일간 주가 데이터에 옵션의 수익/제한 구조를 씌워 실제 궤적이 어떻게 방어되는지 시각화합니다.")
+                
                 opt_strategy = st.radio("시뮬레이션 전략 선택:", ["적용 안 함 (순수 대체자산)", "초단기 커버드콜 (Covered Call)", "하방 방어형 (Buffer ETF)"], horizontal=True)
 
                 if opt_strategy != "적용 안 함 (순수 대체자산)":
@@ -1665,29 +1670,31 @@ with col_main:
                     with c_opt1:
                         st.markdown("**⚙️ 옵션 파라미터 설정**")
                         if "Covered Call" in opt_strategy:
-                            strike_pct = st.slider("콜옵션 행사가격 (% OTM)", 0.0, 10.0, 2.0, 0.5)
-                            premium = st.slider("수취 프리미엄 (%)", 0.5, 5.0, 1.5, 0.1)
+                            strike_pct = st.slider("콜옵션 행사가격 (월간 OTM, %)", 0.0, 10.0, 2.0, 0.5) / 100
+                            premium = st.slider("수취 프리미엄 (월간, %)", 0.1, 5.0, 1.5, 0.1) / 100
+                            # 교육 시각화용 간이 일할 변환 적용
+                            d_strike = strike_pct / 21
+                            d_premium = premium / 21
+                            # 옵션 합성 일간 수익률 산출 (콜 매도)
+                            opt_daily = np.where(port_daily > d_strike, d_strike + d_premium, port_daily + d_premium)
                         else:
-                            buffer_pct = st.slider("하방 방어 수준 (Buffer, %)", 5.0, 20.0, 10.0, 1.0)
-                            cap_pct = st.slider("상방 제한 수준 (Cap, %)", 5.0, 15.0, 8.0, 1.0)
+                            buffer_pct = st.slider("하방 방어 수준 (연간 Buffer, %)", 5.0, 20.0, 10.0, 1.0) / 100
+                            cap_pct = st.slider("상방 제한 수준 (연간 Cap, %)", 5.0, 15.0, 8.0, 1.0) / 100
+                            d_buffer = buffer_pct / 252
+                            d_cap = cap_pct / 252
+                            # 버퍼 ETF 합성 일간 수익률 산출
+                            opt_daily = np.where(port_daily > 0, np.minimum(port_daily, d_cap), 
+                                                 np.where(port_daily >= -d_buffer, 0, port_daily + d_buffer))
                     
                     with c_opt2:
-                        x_vals = np.linspace(-30, 30, 200)
-                        if "Covered Call" in opt_strategy:
-                            y_vals = np.where(x_vals < strike_pct, x_vals + premium, strike_pct + premium)
-                            fig_opt = go.Figure()
-                            fig_opt.add_trace(go.Scatter(x=x_vals, y=x_vals, mode='lines', name='기초지수', line=dict(dash='dash', color='gray')))
-                            fig_opt.add_trace(go.Scatter(x=x_vals, y=y_vals, mode='lines', name='커버드콜 수익률', line=dict(color='#4da6ff', width=3)))
-                            fig_opt.update_layout(height=200, margin=dict(t=10,b=10,l=10,r=10), template="plotly_dark", xaxis_title="기초자산 변동 (%)", yaxis_title="ETF 만기 수익 (%)", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                            st.plotly_chart(fig_opt, use_container_width=True)
-                        else:
-                            y_vals = np.where(x_vals > 0, np.minimum(x_vals, cap_pct), np.where(x_vals >= -buffer_pct, 0, x_vals + buffer_pct))
-                            fig_opt = go.Figure()
-                            fig_opt.add_trace(go.Scatter(x=x_vals, y=x_vals, mode='lines', name='기초지수', line=dict(dash='dash', color='gray')))
-                            fig_opt.add_trace(go.Scatter(x=x_vals, y=y_vals, mode='lines', name='버퍼 ETF 수익률', line=dict(color='#ffb04d', width=3)))
-                            fig_opt.add_vrect(x0=-buffer_pct, x1=0, fillcolor="#ffb04d", opacity=0.1, layer="below", line_width=0)
-                            fig_opt.update_layout(height=200, margin=dict(t=10,b=10,l=10,r=10), template="plotly_dark", xaxis_title="기초자산 변동 (%)", yaxis_title="ETF 만기 수익 (%)", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                            st.plotly_chart(fig_opt, use_container_width=True)
+                        base_cum = (1 + port_daily).cumprod() * 100
+                        opt_cum = (1 + opt_daily).cumprod() * 100
+                        
+                        fig_opt = go.Figure()
+                        fig_opt.add_trace(go.Scatter(x=dates, y=base_cum, mode='lines', name='순수 기초자산 (Before)', line=dict(color='gray', dash='dot')))
+                        fig_opt.add_trace(go.Scatter(x=dates, y=opt_cum, mode='lines', name=f'{opt_strategy} 적용 (After)', line=dict(color='#4da6ff' if "Covered" in opt_strategy else '#ffb04d', width=2)))
+                        fig_opt.update_layout(height=230, margin=dict(t=10,b=10,l=10,r=10), template="plotly_dark", xaxis_title="기간", yaxis_title="누적 수익률", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
+                        st.plotly_chart(fig_opt, use_container_width=True)
 
             c_pl1, c_pl2 = st.columns([1, 1.5])
             with c_pl1:
@@ -1701,19 +1708,25 @@ with col_main:
                     annual_yield = 8.0 if "BDC" in asset_class else 6.0
                     net_yield = annual_yield - ter - fx_hedge_cost
 
-                    st.markdown("<br>**📉 환율 전략별 성과 차이 (Mock)**", unsafe_allow_html=True)
-                    np.random.seed(77)
-                    x_idx = np.arange(100)
-                    base_asset = np.linspace(100, 120, 100) + np.random.normal(0, 1, 100)
-                    usd_krw = np.linspace(1, 1.15, 100) + np.random.normal(0, 0.02, 100)
-                    
-                    hedged_perf = base_asset - (x_idx * (fx_hedge_cost/100))
-                    unhedged_perf = base_asset * usd_krw
-                    
-                    df_fx = pd.DataFrame({"기간": x_idx, "환헤지(H)": hedged_perf, "환노출(UH)": unhedged_perf}).melt(id_vars="기간")
-                    fig_fx = px.line(df_fx, x="기간", y="value", color="variable", template="plotly_dark", color_discrete_map={"환헤지(H)": "#4da6ff", "환노출(UH)": "#ff4d4d"})
-                    fig_fx.update_layout(height=200, margin=dict(t=10,b=10,l=10,r=10), yaxis_title="수익률 궤적", xaxis_title="", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                    st.plotly_chart(fig_fx, use_container_width=True)
+                    st.markdown("<br>**📉 환율 전략별 성과 차이 (실제 데이터 적용)**", unsafe_allow_html=True)
+                    with st.spinner("과거 3년 실제 환율(USD/KRW) 데이터를 결합 중입니다..."):
+                        try:
+                            # [수정] 실제 USD/KRW 환율 연동 (가짜 난수 제거)
+                            usdkrw_df = fdr.DataReader('USD/KRW', start_dt, end_dt)['Close']
+                            fx_aligned = usdkrw_df.reindex(dates).ffill().bfill()
+                            fx_cum = fx_aligned / fx_aligned.iloc[0]
+                        except:
+                            # API 예외 상황용 fallback
+                            fx_cum = pd.Series(np.linspace(1, 1.15, len(dates)), index=dates)
+
+                        daily_hedge_cost = (fx_hedge_cost / 100) / 252
+                        hedged_cum = (1 + port_daily - daily_hedge_cost).cumprod() * 100
+                        unhedged_cum = ((1 + port_daily).cumprod() * 100) * fx_cum
+                        
+                        df_fx = pd.DataFrame({"기간": dates, "환헤지(H)": hedged_cum.values, "환노출(UH)": unhedged_cum.values}).melt(id_vars="기간")
+                        fig_fx = px.line(df_fx, x="기간", y="value", color="variable", template="plotly_dark", color_discrete_map={"환헤지(H)": "#4da6ff", "환노출(UH)": "#ff4d4d"})
+                        fig_fx.update_layout(height=200, margin=dict(t=10,b=10,l=10,r=10), yaxis_title="수익률 궤적", xaxis_title="", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                        st.plotly_chart(fig_fx, use_container_width=True)
 
             with c_pl2:
                 with st.container(border=True):
@@ -1797,7 +1810,7 @@ with col_main:
                 with col_sb2:
                     sandbox_div = st.slider("💰 포트폴리오 예상 연 배당수익률 (%)", 0.0, 15.0, 8.5, 0.5, help="배당이 제외된 주가 수익률에 입력하신 배당률을 일할(252일) 계산하여 Total Return을 합성합니다.")
                 with col_sb3:
-                    sandbox_error = st.slider("🌪️ 예상 오차율/마찰 비용 (Tracking Error, ±%)", 0.5, 5.0, 2.0, 0.5)
+                    sandbox_error = st.slider("🌪️ 예상 오차율/마찰 비용 (Tracking Error, 연간 ±%)", 0.5, 5.0, 2.0, 0.5)
                     sandbox_hedging = st.checkbox("🛡️ 환헤지 프리미엄 비용 차감 (연 -1.5%)")
 
             st.markdown("#### 3. 하이브리드 시나리오 차트 (Fan Chart & Sensitivity Analysis)")
@@ -1831,8 +1844,13 @@ with col_main:
                         base_cum_returns = (1 + port_daily_ret).cumprod() * 100
                         dates = base_cum_returns.index
                         
-                        best_cum_returns = base_cum_returns * (1 + (sandbox_error/100))
-                        worst_cum_returns = base_cum_returns * (1 - (sandbox_error/100))
+                        # [수정] 정통 퀀트 방식의 Fan Chart 공식 적용
+                        # 변동성(표준편차)이 시간의 제곱근에 비례해 커지는 원리(Random Walk)를 적용
+                        t_array = np.arange(1, len(dates) + 1) / 252.0
+                        envelope = (sandbox_error / 100) * np.sqrt(t_array)
+                        
+                        best_cum_returns = base_cum_returns * (1 + envelope)
+                        worst_cum_returns = base_cum_returns * (1 - envelope)
                         
                         try:
                             bm_df = fdr.DataReader('US500', start_dt, end_dt)['Close'].pct_change().dropna()
@@ -1880,7 +1898,7 @@ with col_main:
                         cagr_worst = ((final_worst/100)**(1/years)-1)*100 if years > 0 else 0
                         
                         c_m1.metric("Base 연환산 수익률 (CAGR)", f"{cagr_base:.1f}%")
-                        c_m2.metric("최악 시나리오 (Worst Case) 방어력", f"{cagr_worst:.1f}%", f"-{sandbox_error}% 오차 반영", delta_color="inverse")
+                        c_m2.metric("최악 시나리오 (Worst Case) 방어력", f"{cagr_worst:.1f}%", f"시간 제곱근 오차 반영", delta_color="inverse")
                         c_m3.metric("최대 낙폭 (MDD)", f"{mdd_base:.1f}%")
                         
                         st.success("💡 **시각화 분석:** 배당이 재투자된 Total Return 기준, 최악의 시나리오 하단 밴드를 타더라도 하방 방어력이 우수함을 입증합니다.")
