@@ -950,7 +950,7 @@ with col_main:
                     # [순매수 데이터 차트 설정]
                     fig_evt = px.line(df_trend, x='주차', y='전체순매수', color='종목명', markers=True, template="plotly_dark", color_discrete_map={target_etf: '#ff4d4d', comp_etf: '#4da6ff'})
                     
-                    # [추가] 거래대금(거래량) 연동 및 차트 설정
+                    # [수정] 거래대금(거래량) 연동 및 차트 설정 (날짜 오류 완벽 보완)
                     vol_data = []
                     symbols_mapping = get_etf_mapping()
                     sym_target = symbols_mapping.get(target_etf)
@@ -958,14 +958,18 @@ with col_main:
                     
                     data_year = datetime.today().year
                     try:
-                        s_dt_min, _ = parse_week_range(target_sheets[-1], data_year)
-                        _, e_dt_max = parse_week_range(target_sheets[0], data_year)
-                        s_dt_min = s_dt_min - timedelta(days=7)
-                        e_dt_max = e_dt_max + timedelta(days=7)
+                        all_parsed_dates = [parse_week_range(w, data_year) for w in target_sheets]
+                        valid_starts = [d[0] for d in all_parsed_dates if d[0] is not None]
+                        valid_ends = [d[1] for d in all_parsed_dates if d[1] is not None]
                         
-                        df_target_hist = fdr.DataReader(sym_target, s_dt_min, e_dt_max) if sym_target else pd.DataFrame()
-                        df_comp_hist = fdr.DataReader(sym_comp, s_dt_min, e_dt_max) if sym_comp else pd.DataFrame()
-                    except:
+                        if valid_starts and valid_ends:
+                            s_dt_min = min(valid_starts) - timedelta(days=7)
+                            e_dt_max = max(valid_ends) + timedelta(days=7)
+                            df_target_hist = fdr.DataReader(sym_target, s_dt_min, e_dt_max) if sym_target else pd.DataFrame()
+                            df_comp_hist = fdr.DataReader(sym_comp, s_dt_min, e_dt_max) if sym_comp else pd.DataFrame()
+                        else:
+                            df_target_hist, df_comp_hist = pd.DataFrame(), pd.DataFrame()
+                    except Exception as e:
                         df_target_hist = pd.DataFrame()
                         df_comp_hist = pd.DataFrame()
                         
@@ -974,15 +978,16 @@ with col_main:
                         v_target, v_comp = 0, 0
                         if s_dt and e_dt:
                             try:
-                                if not df_target_hist.empty: v_target = df_target_hist.loc[str(s_dt.date()):str(e_dt.date()), 'Volume'].sum()
-                                if not df_comp_hist.empty: v_comp = df_comp_hist.loc[str(s_dt.date()):str(e_dt.date()), 'Volume'].sum()
+                                s_str = s_dt.strftime('%Y-%m-%d')
+                                e_str = e_dt.strftime('%Y-%m-%d')
+                                if not df_target_hist.empty: v_target = df_target_hist.loc[s_str:e_str, 'Volume'].sum()
+                                if not df_comp_hist.empty: v_comp = df_comp_hist.loc[s_str:e_str, 'Volume'].sum()
                             except: pass
                         vol_data.append({'주차': w, '종목명': target_etf, '거래량': v_target})
                         vol_data.append({'주차': w, '종목명': comp_etf, '거래량': v_comp})
                         
                     df_vol = pd.DataFrame(vol_data)
                     
-                    # [추가] 거래대금/거래량용 두 번째 차트
                     fig_vol = px.line(df_vol, x='주차', y='거래량', color='종목명', markers=True, template="plotly_dark", color_discrete_map={target_etf: '#ff4d4d', comp_etf: '#4da6ff'})
 
                     BRAND_COLORS = {
@@ -1023,7 +1028,6 @@ with col_main:
                         
                         if x0_str and x1_str:
                             try:
-                                # [수정] 순매수 차트와 거래량 차트 양쪽 모두에 동일한 이벤트 음영 추가
                                 fig_evt.add_vrect(
                                     x0=x0_str, x1=x1_str, fillcolor=color.replace('0.2', '0.15'), opacity=1, layer="below", 
                                     line_width=1, line_dash="dash", line_color=color.replace('0.2', '0.8'),
@@ -1053,440 +1057,6 @@ with col_main:
                 st.info("👉 우측 패널에 엑셀 데이터를 업로드하시면 성과 분석기 차트가 활성화됩니다.")
 
             st.divider()
-
-            # 2. 마케팅 촉매 임팩트 분석기 
-            st.markdown("### 📊 마케팅 촉매(이벤트/영상) 임팩트 분석기")
-            if not df_trend.empty:
-                selected_ongoing = []
-                selected_ended = []
-                if not df_events.empty and '이벤트명' in df_events.columns:
-                    c_evt1, c_evt2 = st.columns(2)
-                    with c_evt1:
-                        ongoing_list = df_ongoing['이벤트명'].tolist() if not df_ongoing.empty else []
-                        selected_ongoing = st.multiselect("🟢 진행 중인 이벤트 (차트 음영 표시):", options=ongoing_list)
-                    with c_evt2:
-                        ended_list = df_ended['이벤트명'].tolist() if not df_ended.empty else []
-                        selected_ended = st.multiselect("🔴 종료된 이벤트 (차트 음영 표시):", options=ended_list)
-                else:
-                    st.warning("이벤트 시트가 연동되지 않아 음영 매핑 기능이 비활성화되었습니다.")
-
-                with st.spinner("수급 임팩트 데이터를 렌더링하고 있습니다..."):
-                    fig_evt = px.line(df_trend, x='주차', y='전체순매수', color='종목명', markers=True, template="plotly_dark", color_discrete_map={target_etf: '#ff4d4d', comp_etf: '#4da6ff'})
-                    
-                    BRAND_COLORS = {
-                        'KODEX': 'rgba(10, 88, 202, 0.2)',
-                        'TIGER': 'rgba(255, 114, 0, 0.2)',
-                        'ACE': 'rgba(0, 166, 126, 0.2)',
-                        'RISE': 'rgba(255, 186, 0, 0.2)',
-                        'DEFAULT': 'rgba(128, 128, 128, 0.2)'
-                    }
-
-                    def find_closest_week_str(dt, weeks_list):
-                        if pd.isnull(dt) or not weeks_list: return None
-                        best_w = weeks_list[-1]
-                        min_diff = float('inf')
-                        for w in weeks_list:
-                            try:
-                                s_str = w.split('-')[0]
-                                s_m, s_d = map(int, s_str.split('.'))
-                                w_dt = datetime(dt.year, s_m, s_d)
-                                diff = abs((dt - w_dt).days)
-                                if diff < min_diff:
-                                    min_diff = diff
-                                    best_w = w
-                            except: pass
-                        return best_w
-
-                    all_selected = selected_ongoing + selected_ended
-                    for evt_name in all_selected:
-                        evt_row = df_events[df_events['이벤트명'] == evt_name].iloc[0]
-                        e_start = evt_row['시작일']
-                        e_end = evt_row['종료일']
-                        e_brand = evt_row.get('ETF 브랜드', '')
-                        
-                        x0_str = find_closest_week_str(e_start, target_sheets)
-                        x1_str = find_closest_week_str(e_end, target_sheets)
-                        
-                        color = BRAND_COLORS.get(e_brand, BRAND_COLORS['DEFAULT'])
-                        
-                        if x0_str and x1_str:
-                            try:
-                                fig_evt.add_vrect(
-                                    x0=x0_str, x1=x1_str, 
-                                    fillcolor=color.replace('0.2', '0.15'), 
-                                    opacity=1, layer="below", line_width=1, 
-                                    line_dash="dash", line_color=color.replace('0.2', '0.8'),
-                                    annotation_text=evt_name[:10] + '..' if len(evt_name) > 10 else evt_name, 
-                                    annotation_position="top left",
-                                    annotation_font_size=11, annotation_font_color=color.replace('0.2', '1.0')
-                                )
-                            except: pass
-
-                    fig_evt.update_layout(height=450, margin=dict(l=20, r=20, t=20, b=20), xaxis_title=None, yaxis_title="전체 순매수 금액 합계", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
-                    st.plotly_chart(fig_evt, use_container_width=True)
-            else:
-                st.info("👉 우측 패널에 엑셀 데이터를 업로드하시면 성과 분석기 차트가 활성화됩니다.")
-
-            st.divider()
-
-            # 3. 운용사별 이벤트 모니터링
-            st.markdown("### 📢 운용사별 이벤트 모니터링 (Sheet 연동)")
-            if not df_events.empty and '이벤트명' in df_events.columns:
-                evt_tab1, evt_tab2 = st.tabs(["🟢 진행 중인 이벤트", "🔴 종료된 이벤트"])
-                
-                with evt_tab1:
-                    if not df_ongoing.empty:
-                        for brand, group in df_ongoing.groupby('ETF 브랜드'):
-                            with st.expander(f"🔵 {brand} ({len(group)}건)", expanded=True):
-                                for _, row in group.iterrows():
-                                    st.markdown(f"- **{row.get('이벤트명', '')}** (대상: {row.get('대상 ETF의 종목 코드', '')}) | {row['시작일'].strftime('%Y.%m.%d')} ~ {row['종료일'].strftime('%Y.%m.%d')}")
-                    else:
-                        st.write("진행 중인 이벤트가 없습니다.")
-                        
-                with evt_tab2:
-                    if not df_ended.empty:
-                        for brand, group in df_ended.groupby('ETF 브랜드'):
-                            with st.expander(f"🔴 {brand} ({len(group)}건)", expanded=False):
-                                for _, row in group.iterrows():
-                                    st.markdown(f"- **{row.get('이벤트명', '')}** (대상: {row.get('대상 ETF의 종목 코드', '')}) | {row['시작일'].strftime('%Y.%m.%d')} ~ {row['종료일'].strftime('%Y.%m.%d')}")
-                    else:
-                        st.write("종료된 이벤트가 없습니다.")
-            else:
-                st.info("👉 우측 패널 '1. 이벤트 시트 링크' 칸에 구글 스프레드시트 공유 링크를 입력해주세요.")
-            
-            st.divider()
-
-            # 4. 키워드 검색비율 추이 (뉴스&트렌드 탭에서 이동됨)
-            st.markdown("### 📊 키워드 검색비율 추이 (다중 비교 지원)")
-            if uploaded_dls:
-                dl_summaries = []
-                for dl_file in uploaded_dls:
-                    try:
-                        file_name_without_ext = dl_file.name.rsplit('.', 1)[0]
-                        st.markdown(f"#### 📉 {file_name_without_ext}")
-                        df_dl = pd.read_csv(dl_file, skiprows=6, encoding='cp949') if dl_file.name.endswith('csv') else pd.read_excel(dl_file, skiprows=6)
-                        if not df_dl.empty:
-                            master_date = df_dl.iloc[:, 0]
-                            value_cols = [col for col in df_dl.columns if '날짜' not in col and 'Unnamed' not in col]
-                            clean_df = pd.DataFrame({'날짜': master_date})
-                            for col in value_cols: clean_df[col] = df_dl[col]
-                            clean_df['날짜'] = pd.to_datetime(clean_df['날짜'])
-                            recent_14d_mean = clean_df.tail(14).mean(numeric_only=True).round(1)
-                            dl_summaries.append(f"[{file_name_without_ext}]\n" + "\n".join([f"- {idx}: {val}" for idx, val in recent_14d_mean.items()]))
-                            df_melted = clean_df.melt(id_vars=['날짜'], var_name='종목명', value_name='검색량')
-                            with st.container(border=True):
-                                fig_trend = px.line(df_melted, x='날짜', y='검색량', color='종목명', template="plotly_dark")
-                                fig_trend.update_layout(height=350, xaxis_title=None, yaxis_title="상대적 검색량", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5))
-                                st.plotly_chart(fig_trend, use_container_width=True)
-                    except: pass
-                st.session_state['dl_summary'] = "\n\n".join(dl_summaries) if dl_summaries else "데이터랩 연동 오류"
-            else: st.info("👉 우측 패널에 Naver DataLab 파일을 업로드해 주세요.")
-
-            st.divider()
-
-            # 5. 유튜브 사후 성과 분석 
-            st.markdown("### 📺 유튜브 사후 성과 분석 (Post-Hoc Analysis)")
-            current_target = target_etf if 'target_etf' in locals() else "KODEX 200"
-            
-            yt_keywords = {
-                "KODEX (삼성)": "KODEX ETF", 
-                "TIGER (미래에셋)": "TIGER ETF", 
-                "ACE (한국투자)": "ACE ETF", 
-                "RISE (KB)": "RISE ETF",
-                f"🎯 타겟 종목 ({current_target})": current_target
-            }
-            
-            with st.spinner("경쟁사 유튜브 영상 성과 데이터를 실시간으로 파싱 중입니다..."):
-                yt_data = []
-                for brand, kw in yt_keywords.items():
-                    vids = scrape_youtube_search_real(kw)
-                    for v in vids: yt_data.append({"운용사": brand, "영상 제목": v['title'], "조회수": v['views'], "업로드": v['date'], "링크": v['link']})
-                if yt_data:
-                    df_yt = pd.DataFrame(yt_data)
-                    df_yt_sorted = df_yt.sort_values(by="조회수", ascending=False)
-                    
-                    target_vids = df_yt[df_yt['운용사'].str.contains("🎯 타겟")].sort_values(by="조회수", ascending=False)
-                    if not target_vids.empty:
-                        top_vid = target_vids.iloc[0]
-                        st.session_state.yt_target_insights = f"타겟 종목({current_target}) 유튜브 최고 바이럴 영상: '{top_vid['영상 제목']}' (조회수 {top_vid['조회수']:,}회)"
-                    else:
-                        st.session_state.yt_target_insights = f"타겟 종목({current_target}) 관련 유의미한 유튜브 바이럴 없음."
-
-                    c_yt1, c_yt2 = st.columns([1, 1])
-                    with c_yt1:
-                        st.markdown("#### 🏆 주요 검색어별 평균 조회수 (영향력)")
-                        df_agg = df_yt.groupby("운용사")["조회수"].mean().reset_index()
-                        fig_yt = px.bar(df_agg, x="운용사", y="조회수", text_auto='.0f', color="운용사", template="plotly_dark", color_discrete_sequence=px.colors.qualitative.Pastel)
-                        fig_yt.update_layout(height=350, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False)
-                        st.plotly_chart(fig_yt, use_container_width=True)
-                    with c_yt2:
-                        st.markdown("#### 📝 최신 영상 조회수 성과 리스트")
-                        st.dataframe(df_yt_sorted[["운용사", "영상 제목", "조회수", "업로드"]], use_container_width=True, height=350, hide_index=True)
-
-            st.divider()
-
-            # 6. 신규 개편: 운용사별 블로그 포스트 (지난주 기준)
-            st.markdown("### 🏢 운용사별 블로그 포스트")
-            brand_mappings = {
-                "KODEX (삼성)": {"blog": "samsung_fund"}, "TIGER (미래에셋)": {"blog": "m_invest"},
-                "ACE (한국투자)": {"blog": "aceetf"}, "RISE (KB)": {"blog": "riseetf"},
-                "SOL (신한)": {"blog": "soletf"}, "PLUS (한화)": {"blog": "hanwhaasset"},
-                "HANARO (NH아문디)": {"blog": "nh_amundi"}, "1Q (하나)": {"blog": "1qetf"},
-                "TIMEFOLIO (타임폴리오)": {"blog": "timefolioetf"}, "KIWOOM (키움)": {"blog": "kiwoomammkt"},
-                "WON (우리)": {"blog": "wooriam_kr"}
-            }
-            
-            with st.spinner("지난주(일~토) 블로그 포스트를 스크래핑 중입니다..."):
-                kodex_posts = parse_competitor_blog_last_week(brand_mappings["KODEX (삼성)"]["blog"])
-                other_posts = {}
-                for brand, items in brand_mappings.items():
-                    if brand == "KODEX (삼성)": continue
-                    posts = parse_competitor_blog_last_week(items['blog'])
-                    if posts:
-                        other_posts[brand] = posts
-                        
-                c1, c2 = st.columns(2)
-                with c1:
-                    st.markdown("**🔵 KODEX (삼성) 블로그**")
-                    if kodex_posts:
-                        for p in kodex_posts:
-                            st.write(f"- [{p['date']}] [{p['title']}]({p['link']})")
-                    else:
-                        st.info("지난 주 KODEX 블로그에 올라온 포스트가 없습니다.")
-                with c2:
-                    st.markdown("**🔵 기타 운용사 블로그**")
-                    if other_posts:
-                        for brand, posts in other_posts.items():
-                            with st.expander(f"{brand} ({len(posts)}건)"):
-                                for p in posts:
-                                    st.write(f"- [{p['date']}] [{p['title']}]({p['link']})")
-                    else:
-                        st.info("지난 주 기타 운용사 블로그에 올라온 포스트가 없습니다.")
-
-        with sub_tabs[6]:
-            st.markdown("### 🗣️ 고객 Voice (VOC) & 투자자 심리 모니터링")
-            with st.container(border=True):
-                st.markdown("#### 🤖 [Sub-Agent 연동] 네이버 종토방 분석 결과 시각화")
-                if uploaded_voc is not None:
-                    voc_data = {}
-                    try:
-                        xls_voc = pd.ExcelFile(uploaded_voc)
-                        for sheet in xls_voc.sheet_names:
-                            df_raw = pd.read_excel(xls_voc, sheet_name=sheet)
-                            sheet_lower = str(sheet).lower()
-                            if '감성' in sheet_lower:
-                                df_parsed = extract_table(df_raw, ['감성', '비율'])
-                                for c in df_parsed.columns:
-                                    if '감성' in str(c) and str(c) != '평균 감성점수': df_parsed.rename(columns={c: '감성'}, inplace=True)
-                                    if '비율' in str(c): df_parsed.rename(columns={c: '비율(%)'}, inplace=True)
-                                voc_data['sentiment'] = df_parsed
-                            elif '키워드' in sheet_lower:
-                                df_parsed = extract_table(df_raw, ['키워드', '언급'])
-                                for c in df_parsed.columns:
-                                    if '키워드' in str(c): df_parsed.rename(columns={c: '키워드'}, inplace=True)
-                                    if '언급' in str(c): df_parsed.rename(columns={c: '언급횟수'}, inplace=True)
-                                voc_data['keyword'] = df_parsed
-                            elif '시간' in sheet_lower:
-                                df_parsed = extract_table(df_raw, ['시간', '게시글'])
-                                for c in df_parsed.columns:
-                                    if '시간' in str(c): df_parsed.rename(columns={c: '시간대'}, inplace=True)
-                                    if '게시글' in str(c): df_parsed.rename(columns={c: '게시글 수'}, inplace=True)
-                                    if '감성' in str(c): df_parsed.rename(columns={c: '평균 감성점수'}, inplace=True)
-                                voc_data['time'] = df_parsed
-                            elif '인사이트' in sheet_lower or '요약' in sheet_lower:
-                                texts = [" ".join([str(v) for v in row.values if pd.notna(v) and str(v).strip() != '']) for _, row in df_raw.iterrows()]
-                                voc_data['insight'] = "\n\n".join([t for t in texts if t.strip()])
-                            elif '게시글' in sheet_lower or '전체' in sheet_lower or '원문' in sheet_lower:
-                                df_parsed = extract_table(df_raw, ['제목', '본문'])
-                                for c in df_parsed.columns:
-                                    if '제목' in str(c): df_parsed.rename(columns={c: '제목'}, inplace=True)
-                                    if '본문' in str(c): df_parsed.rename(columns={c: '본문'}, inplace=True)
-                                    if '조회' in str(c): df_parsed.rename(columns={c: '조회수'}, inplace=True)
-                                    if '감성' in str(c) and str(c) != '평균 감성점수': df_parsed.rename(columns={c: '감성'}, inplace=True)
-                                    if '작성자' in str(c): df_parsed.rename(columns={c: '작성자'}, inplace=True)
-                                    if '날짜' in str(c): df_parsed.rename(columns={c: '날짜'}, inplace=True)
-                                voc_data['posts'] = df_parsed
-                    except Exception as e: st.error(f"엑셀 파일 파싱 오류: {e}")
-
-                    c_voc1, c_voc2 = st.columns(2)
-                    with c_voc1:
-                        st.markdown("##### 🌡️ 실시간 투자자 심리 온도계")
-                        if 'sentiment' in voc_data and not voc_data['sentiment'].empty:
-                            try:
-                                df_s = voc_data['sentiment'].dropna(subset=['감성'])
-                                fig_s = px.pie(df_s, names='감성', values='비율(%)', hole=0.5, color='감성', color_discrete_map={'긍정':'#4da6ff', '중립':'#cbd5e1', '부정':'#ff4d4d'})
-                                fig_s.update_layout(height=300, template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                                st.plotly_chart(fig_s, use_container_width=True)
-                            except: pass
-                    with c_voc2:
-                        st.markdown("##### 🧠 리테일 투자자 핫 키워드 Top 10")
-                        if 'keyword' in voc_data and not voc_data['keyword'].empty:
-                            try:
-                                df_k = voc_data['keyword'].dropna(subset=['키워드']).head(10)
-                                fig_k = px.bar(df_k, x='언급횟수', y='키워드', orientation='h', template="plotly_dark", color_discrete_sequence=['#ffb04d'])
-                                fig_k.update_layout(yaxis={'categoryorder':'total ascending'}, height=300, template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                                st.plotly_chart(fig_k, use_container_width=True)
-                            except: pass
-
-                    st.divider()
-                    st.markdown("##### ⏰ 커뮤니티 골든 타임 추적기 (시간대별 활동)")
-                    if 'time' in voc_data and not voc_data['time'].empty:
-                        try:
-                            df_t = voc_data['time'].dropna(subset=['시간대'])
-                            fig_t = go.Figure()
-                            fig_t.add_trace(go.Bar(x=df_t['시간대'], y=df_t['게시글 수'], name='게시글 수', marker_color='#4da6ff', yaxis='y1'))
-                            fig_t.add_trace(go.Scatter(x=df_t['시간대'], y=df_t['평균 감성점수'], name='평균 감성점수', mode='lines+markers', marker_color='#ffb04d', yaxis='y2'))
-                            fig_t.update_layout(height=350, template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', yaxis=dict(title='게시글 수', side='left'), yaxis2=dict(title='평균 감성점수', overlaying='y', side='right', range=[1, 5]), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
-                            st.plotly_chart(fig_t, use_container_width=True)
-                        except: pass
-
-                    st.divider()
-                    st.markdown("##### 🗣️ 딥다이브 인사이트 & 날것의 목소리 (Raw VOC)")
-                    with st.container(border=True):
-                        if 'posts' in voc_data and not voc_data['posts'].empty:
-                            try:
-                                df_p = voc_data['posts'].copy()
-                                if '조회수' in df_p.columns:
-                                    df_p['조회수'] = pd.to_numeric(df_p['조회수'], errors='coerce').fillna(0)
-                                    top_posts = df_p.sort_values(by='조회수', ascending=False).head(3)
-                                    for _, row in top_posts.iterrows():
-                                        sentiment_color = "#ff4d4d" if "부정" in str(row.get('감성','')) else ("#4da6ff" if "긍정" in str(row.get('감성','')) else "#cbd5e1")
-                                        st.markdown(f"**<span style='color:{sentiment_color}'>[{row.get('감성', '분류없음')}]</span> {row.get('제목', '제목없음')}** <span style='color:#ffb04d; font-size:12px;'>(👁️ {int(row['조회수'])})</span>", unsafe_allow_html=True)
-                                        content = str(row.get('본문', '')).replace('nan', '')
-                                        st.info(f"{content[:200]}..." if len(content) > 200 else content)
-                            except: pass
-                    
-                    with st.expander("💡 AI Sub-Agent 분석 요약 (클릭하여 펼치기)", expanded=False):
-                        if 'insight' in voc_data and voc_data['insight'].strip():
-                            insight_html = voc_data['insight'].replace(chr(10), '<br>').replace('【', '<br><b style="color:#4da6ff; font-size:16px;">【').replace('】', '】</b><br>')
-                            st.markdown(f"<div style='padding:15px; background:rgba(255,255,255,0.02); border-radius:10px; border:1px solid rgba(255,255,255,0.05);'>{insight_html}</div>", unsafe_allow_html=True)
-                else: st.info("👉 우측 패널에 종목토론방 엑셀 파일을 업로드해주세요.")
-
-            st.divider()
-            
-            # --- 레이아웃 변경 적용 영역 ---
-            st.markdown("### 📰 언론 보도 증권앱/MTS 중대 오류 이슈")
-            with st.spinner("MTS 장애/지연 관련 중대 1년 치 아카이브를 탐색 중입니다..."):
-                df_app_voc = get_realtime_news('"MTS 오류" OR "증권앱 먹통" OR "접속지연"', timeframe="1y", max_items=5)
-                if "링크" in df_app_voc.columns and df_app_voc["링크"].iloc[0] != "":
-                    for idx, row in df_app_voc.iterrows():
-                        with st.container(border=True):
-                            st.markdown(f"🚨 <a href='{row['링크']}' target='_blank' style='color:#ff4d4d; text-decoration:none;'>{row['원본제목']} 🔗</a>", unsafe_allow_html=True)
-                            st.caption(f"📅 {row['게시일 / 출처']}")
-                else: st.info("검색 범위(최대 1년) 내 포착된 리스크성 기사가 없습니다.")
-
-        with sub_tabs[7]:
-            st.markdown("### 🏢 국내 ETF 운용사 AUM 시장 점유율 및 테마별 현황 (실시간 기준)")
-            col_pie, col_table = st.columns([1, 2])
-            pivot_df = pd.DataFrame()
-            with st.spinner("KRX 마켓 캡 데이터를 고속 파싱 중입니다..."):
-                try:
-                    df_all_etf = fdr.StockListing('ETF/KR')
-                    if not df_all_etf.empty:
-                        df_all_etf['브랜드'] = df_all_etf['Name'].apply(lambda x: str(x).split(' ')[0]).replace('KBSTAR', 'RISE')
-                        df_all_etf['AUM(억원)'] = df_all_etf['MarCap'].fillna(0)
-                        with col_pie:
-                            st.markdown("#### 🥧 전체 시장 점유율 (AUM 기준)")
-                            top_n_brands = st.slider("표시할 상위 운용사 수 설정", min_value=3, max_value=15, value=6, step=1)
-                            df_brand_aum = df_all_etf.groupby('브랜드')['AUM(억원)'].sum().reset_index().sort_values(by='AUM(억원)', ascending=False)
-                            if len(df_brand_aum) > top_n_brands:
-                                df_top = df_brand_aum.head(top_n_brands)
-                                df_pie_final = pd.concat([df_top, pd.DataFrame([{'브랜드': "🧩 기타 운용사", 'AUM(억원)': df_brand_aum.iloc[top_n_brands:]['AUM(억원)'].sum()}])], ignore_index=True)
-                            else: df_pie_final = df_brand_aum
-                            fig_market_share = px.pie(df_pie_final, names='브랜드', values='AUM(억원)', hole=0.4, color_discrete_sequence=px.colors.sequential.Blues_r)
-                            fig_market_share.update_traces(textposition='inside', textinfo='percent+label')
-                            fig_market_share.update_layout(height=420, margin=dict(t=20, l=20, r=20, b=20), template="plotly_dark", showlegend=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                            st.plotly_chart(fig_market_share, use_container_width=True)
-                        with col_table:
-                            c_title, c_btn = st.columns([7, 3])
-                            with c_title:
-                                st.markdown("#### 📊 TOP 4 운용사 테마별 AUM 현황")
-                            with c_btn:
-                                st.markdown("<div style='margin-bottom: 5px;'></div>", unsafe_allow_html=True)
-                                
-                            target_brands = ['KODEX', 'TIGER', 'ACE', 'RISE']
-                            df_top_brands = df_all_etf[df_all_etf['브랜드'].isin(target_brands)].copy()
-                            df_top_brands['분류_테마'] = df_top_brands['Name'].apply(assign_auto_theme)
-                            pivot_df = pd.pivot_table(df_top_brands, values='AUM(억원)', index='분류_테마', columns='브랜드', aggfunc='sum', fill_value=0)
-                            pivot_df = pivot_df[[c for col in target_brands if col in pivot_df.columns for c in [col]]].astype(int)
-                            if '📦 기타 섹터/테마' in pivot_df.index: pivot_df = pivot_df.reindex([i for i in pivot_df.index if i != '📦 기타 섹터/테마'] + ['📦 기타 섹터/테마'])
-                            
-                            pivot_df = pivot_df.loc[(pivot_df != 0).any(axis=1)]
-                            pivot_df.loc['총 AUM'] = pivot_df.sum(numeric_only=True)
-                            
-                            with c_btn:
-                                csv_data = pivot_df.to_csv().encode('utf-8-sig')
-                                st.download_button(label="📥 CSV 다운로드", data=csv_data, file_name='AUM_현황.csv', mime='text/csv', use_container_width=True)
-
-                            def style_aum(row):
-                                styles = []
-                                for col in pivot_df.columns:
-                                    s = ""
-                                    if row.name == '총 AUM': s += "color: #ff4d4d; font-weight: bold; "
-                                    if col == 'KODEX': s += "font-weight: bold; "
-                                    styles.append(s)
-                                return styles
-                                
-                            styled_df = pivot_df.style.format("{:,}").apply(style_aum, axis=1)
-                            st.dataframe(styled_df, use_container_width=True)
-                            st.session_state.aum_context_text = pivot_df.to_string()
-                except:
-                    pass
-
-            st.divider()
-            st.markdown("### 📈 테마별 운용사 전체 순매수 트렌드 (과거 추이)")
-            if uploaded_excel is not None and available_weeks[0] != "데이터 없음":
-                col_theme, col_weeks = st.columns(2)
-                with col_theme: selected_theme = st.selectbox("분석할 테마 선택:", list(pivot_df.index) if not pivot_df.empty else ['🤖 AI & 반도체'])
-                with col_weeks: n_weeks = st.slider("조회할 과거 주차 (N주):", min_value=1, max_value=len(available_weeks), value=min(4, len(available_weeks)))
-                trend_data = []
-                for w in available_weeks[:n_weeks][::-1]:
-                    try:
-                        temp_df = load_and_clean_excel(uploaded_excel, w)
-                        if not temp_df.empty and '종목명' in temp_df.columns:
-                            temp_df = temp_df[temp_df['종목명'] != '전체'].copy()
-                            temp_df['브랜드'] = temp_df['종목명'].apply(lambda x: str(x).split(' ')[0]).replace('KBSTAR', 'RISE')
-                            temp_df['분류_테마'] = temp_df['종목명'].apply(assign_auto_theme)
-                            theme_df = temp_df[(temp_df['분류_테마'] == selected_theme) & (temp_df['브랜드'].isin(['KODEX', 'TIGER', 'ACE', 'RISE']))].copy()
-                            theme_df['순매수합계'] = theme_df.get('개인', 0) + theme_df.get('기관', 0) + theme_df.get('외국인', 0)
-                            brand_sum = theme_df.groupby('브랜드')['순매수합계'].sum().reset_index()
-                            brand_sum['주차'] = w
-                            trend_data.append(brand_sum)
-                    except: pass
-                if trend_data:
-                    df_trend = pd.concat(trend_data)
-                    fig_trend = px.line(df_trend, x='주차', y='순매수합계', color='브랜드', markers=True, template="plotly_dark", color_discrete_sequence=px.colors.qualitative.Set2)
-                    fig_trend.update_layout(height=400, yaxis_title="전체 순매수 합계", xaxis_title=None, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                    st.plotly_chart(fig_trend, use_container_width=True)
-            else: st.info("👉 우측 패널에 엑셀 데이터를 업로드하시면 트렌드 그래프가 활성화됩니다.")
-
-            st.markdown("<br><br>", unsafe_allow_html=True)
-            st.markdown("---")
-            
-            st.markdown("### 🇺🇸 글로벌 혁신 구조 공백 분석 (US Mega Trends vs KODEX)")
-            raw_keywords = ["타겟 인컴 ETF 버퍼형", "0DTE 초단기 옵션 커버드콜 ETF", "가상자산 비트코인 현물 ETF", "BDC 기업성장집합투자기구 대체투자", "하방 방어형 100% 버퍼 ETF"]
-            trend_strengths = []
-            with st.spinner("미국 혁신 테마 트렌드를 스캔 중입니다..."):
-                for kw in raw_keywords:
-                    temp_news = get_realtime_news(kw, timeframe="7d", max_items=10)
-                    c = len(temp_news) if not temp_news.empty and temp_news.iloc[0]["게시일 / 출처"] != "-" else 0
-                    trend_strengths.append("🔥🔥🔥 최고조" if c >= 5 else ("🔥🔥 강세" if c >= 2 else "🔥 꾸준함"))
-            st.dataframe(pd.DataFrame({"혁신 상품 구조 (미국 메가 트렌드)": raw_keywords, "최근 뉴스 기반 유입 강도": trend_strengths, "KODEX 라인업 현황": ["공백 (0개)", "일부 유사 (1개)", "규제 한계 (0개)", "규제 한계 (0개)", "공백 (0개)"], "전략적 제언 (Action Plan)": ["즉시 벤치마킹 기획 가동", "분배율 메시지 고도화", "정책 완화 시그널 추적", "법안 통과 즉시 선점", "하락장 방어 포트폴리오 설계"]}), use_container_width=True, hide_index=True)
-            
-            st.divider()
-            selected_trend_label = st.selectbox("🔍 뉴스 검색망 가동할 혁신 구조 선택:", options=raw_keywords, index=2)
-            st.session_state['selected_trend_label'] = selected_trend_label
-            st.markdown(f"#### 📡 `[실시간 정책 시그널]` {selected_trend_label} 관련 완화 동향")
-            with st.spinner("규제 완화 뉴스 스크랩 중..."):
-                df_gap_news = get_realtime_news(selected_trend_label + " 금융위 규제", timeframe="7d")
-                if "링크" in df_gap_news.columns and df_gap_news["링크"].iloc[0] != "":
-                    cols_grid = st.columns(2)
-                    for idx, row in df_gap_news.iterrows():
-                        with cols_grid[idx % 2]:
-                            with st.container(border=True):
-                                st.caption(f"📅 {row['게시일 / 출처']}")
-                                st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:14px; font-weight:bold; color:#ffb04d; text-decoration:none;'>[규제] {row['원본제목']} 🔗</a>", unsafe_allow_html=True)
-                else: st.info("관련된 최신 정책 뉴스 피드가 존재하지 않습니다.")
 
 # =========================================================================
     # Big 탭 2: 글로벌 상품 기획 시뮬레이터
