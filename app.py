@@ -1188,10 +1188,12 @@ with col_main:
 
             st.divider()
 
-            # 6. 블로그 포스트 (원래 위치 복구)
+# 6. 블로그 포스트
             st.markdown("### 🏢 운용사별 블로그 포스트")
             brand_mappings = {
-                "KODEX (삼성)": {"blog": "samsung_fund"}, "TIGER (미래에셋)": {"blog": "m_invest"},
+                # [수정됨] KODEX 블로그 ID를 samsung_fund에서 etf_kodex로 정확히 변경
+                "KODEX (삼성)": {"blog": "etf_kodex"}, 
+                "TIGER (미래에셋)": {"blog": "m_invest"},
                 "ACE (한국투자)": {"blog": "aceetf"}, "RISE (KB)": {"blog": "riseetf"},
                 "SOL (신한)": {"blog": "soletf"}, "PLUS (한화)": {"blog": "hanwhaasset"},
                 "HANARO (NH아문디)": {"blog": "nh_amundi"}, "1Q (하나)": {"blog": "1qetf"},
@@ -1202,30 +1204,40 @@ with col_main:
             with st.spinner("지난주(일~토) 블로그 포스트를 스크래핑 중입니다..."):
                 kodex_posts = parse_competitor_blog_last_week(brand_mappings["KODEX (삼성)"]["blog"])
                 other_posts = {}
+                empty_brands = [] # [신규] 포스팅이 없는 운용사를 담을 리스트
+                
                 for brand, items in brand_mappings.items():
                     if brand == "KODEX (삼성)": continue
                     posts = parse_competitor_blog_last_week(items['blog'])
                     if posts:
                         other_posts[brand] = posts
+                    else:
+                        empty_brands.append(brand.split(' ')[0]) # KODEX, TIGER 등 앞 이름만 깔끔하게 저장
                         
                 c1, c2 = st.columns(2)
                 with c1:
                     st.markdown("**🔵 KODEX (삼성) 블로그**")
                     if kodex_posts:
                         for p in kodex_posts:
-                            st.write(f"- [{p['date']}] [{p['title']}]({p['link']})")
+                            st.markdown(f"- [{p['date']}] <a href='{p['link']}' target='_blank' style='color:#4da6ff; text-decoration:none;'>{p['title']}</a>", unsafe_allow_html=True)
                     else:
                         st.info("지난 주 KODEX 블로그에 올라온 포스트가 없습니다.")
+                        
                 with c2:
                     st.markdown("**🔵 기타 운용사 블로그**")
                     if other_posts:
                         for brand, posts in other_posts.items():
                             with st.expander(f"{brand} ({len(posts)}건)"):
                                 for p in posts:
-                                    st.write(f"- [{p['date']}] [{p['title']}]({p['link']})")
+                                    st.markdown(f"- [{p['date']}] <a href='{p['link']}' target='_blank' style='color:#4da6ff; text-decoration:none;'>{p['title']}</a>", unsafe_allow_html=True)
                     else:
                         st.info("지난 주 기타 운용사 블로그에 올라온 포스트가 없습니다.")
-
+                    
+                    # [신규] 지난 주 활동이 없는 운용사 하단 표시
+                    if empty_brands:
+                        st.markdown("<br>", unsafe_allow_html=True)
+                        st.caption(f"💤 **지난주 신규 포스팅 없음:** {', '.join(empty_brands)}")
+                        
         with sub_tabs[5]:
             st.markdown("### 🗣️ 고객 Voice (VOC) & 투자자 심리 모니터링")
             with st.container(border=True):
