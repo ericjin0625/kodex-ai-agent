@@ -1939,15 +1939,22 @@ with col_main:
             tgt = st.session_state.get('p_target_etf', '타겟 ETF')
             cmp = st.session_state.get('p_comp_etf', '경쟁 ETF')
 
-            # [수정] Numpy bool JSON 직렬화 에러 해결: LLM이 읽기 쉬운 Plain Text로 변환
+            # [데이터 주입 보완 1] 뉴스 링크 포함 및 매크로 텍스트화
             macro_raw = get_macro_snapshot()
             macro_text = ""
             for cat, items in macro_raw.items():
                 for k, v in items.items():
                     if v['val'] != "정보 불가":
                         macro_text += f"- {k}: {v['val']} (변동: {v.get('pct', '')})\n"
-            if not macro_text:
-                macro_text = "현재 수집된 매크로 데이터 없음"
+            if not macro_text: macro_text = "현재 수집된 매크로 데이터 없음"
+
+            df_news = st.session_state.get('df_real_news', pd.DataFrame())
+            news_text = ""
+            if not df_news.empty and "링크" in df_news.columns and df_news["링크"].iloc[0] != "":
+                for _, row in df_news.head(5).iterrows():
+                    news_text += f"- [{row['원본제목']}]({row['링크']})\n"
+            else:
+                news_text = "뉴스 데이터 없음"
 
             st.markdown("**📌 [Step 1: Market & Macro Overview (시장 및 거시 환경 분석)]**")
             p1_step1 = f"""[Step 1: Market & Macro Overview (시장 및 거시 환경 분석)]
@@ -1955,10 +1962,9 @@ with col_main:
 
 [실시간 매크로 지표 및 환율 동향]:
 {macro_text}
-[이번 주 핵심 타겟 ETF 관련 뉴스 요약]:
-{st.session_state.get('weekly_dynamic_news', '뉴스 데이터 없음')}
-
-위 Raw Data를 바탕으로, 현재 거시 경제(금리/환율) 흐름이 ETF 시장 전반의 투자 심리 및 특정 테마 쏠림에 어떤 영향을 미치고 있는지 3줄로 진단하시오. (다음 단계들을 위해 분석 결과를 메모리에 유지할 것)"""
+[이번 주 핵심 타겟 ETF 관련 뉴스 (링크 포함)]:
+{news_text}
+위 Raw Data와 첨부된 링크 내용들을 바탕으로, 현재 거시 경제(금리/환율) 흐름이 ETF 시장 전반의 투자 심리 및 특정 테마 쏠림에 어떤 영향을 미치고 있는지 3줄로 진단하시오. (다음 단계들을 위해 분석 결과를 메모리에 유지할 것)"""
             st.code(p1_step1, language="text")
 
             st.markdown("**📌 [Step 2: AUM & Flow Analysis (수급 및 점유율 동향)]**")
@@ -1976,11 +1982,22 @@ with col_main:
 추가로, 내가 함께 첨부한 '수익률 vs 순매수 산점도(Scatter Plot)' 이미지를 판독하여, 이번 주 리테일 자금이 '과거 수익률(T-1, T-2)'을 쫓아 들어왔는지, '당일 테마(T-0)'에 직각적으로 반응했는지 자금 유입의 성격을 진단하시오."""
             st.code(p1_step2, language="text")
 
+            # [데이터 주입 보완 2] 이벤트 리스트 직접 주입
+            sheet_url = st.session_state.get('sheet_url_global', '')
+            df_events = load_event_sheet(sheet_url)
+            event_text = ""
+            if not df_events.empty and '이벤트명' in df_events.columns:
+                for _, row in df_events.head(5).iterrows():
+                    event_text += f"- [{row.get('ETF 브랜드', '운용사')}] {row.get('이벤트명', '')} (기간: {row.get('시작일', '')}~{row.get('종료일', '')})\n"
+            if not event_text: event_text = "최근 진행된 주요 마케팅 이벤트 시트 데이터 없음"
+
             st.markdown("**📌 [Step 3: Marketing Impact & Attribution (마케팅 기여도 검증)]**")
             st.warning("📸 **[필수 스크린샷 첨부 2]** 1번 상위 탭의 [이벤트 및 성과 검증] 하위 탭에 있는 **'이벤트 기반 전체 순매수 추이 궤적'** 차트 캡처 이미지를 AI 대화창에 업로드하세요!")
             p1_step3 = f"""[Step 3: Marketing Impact & Attribution (마케팅 기여도 검증)]
-다음은 시스템이 연산한 마케팅 인과관계 통계(이중차분, DiD) Raw Data입니다.
+다음은 시스템이 연산한 마케팅 인과관계 통계(이중차분, DiD) Raw Data와 최근 실행된 마케팅 이벤트 리스트입니다.
 
+[최근 실행된 마케팅 이벤트 리스트]:
+{event_text}
 [타겟 ETF({tgt}) 순매수 변동(순수 설정효과)]: {st.session_state.get('stat_net_inflow', 0)} 억원
 [대조군({cmp}) 대비 이중차분(DiD) 성과 배수]: {st.session_state.get('stat_did_multiplier', 0)} 배
 [통계적 유의성 (Welch's t-test p-value)]: {st.session_state.get('stat_p_value', 1.0)}
@@ -1989,18 +2006,27 @@ with col_main:
 또한 내가 함께 첨부한 '전체 순매수 추이 궤적' 차트 이미지를 시각적으로 분석하고, DiD 성과 배수 및 p-value를 근거로 최근 실행된 이벤트/마케팅 액션이 경쟁사 대비 얼마나 실질적인 수급 타격을 주었는지 수학적으로 평가하시오."""
             st.code(p1_step3, language="text")
 
+            # [데이터 주입 보완 3] 유튜브 링크 추가
+            vids = scrape_youtube_search_real(tgt)
+            yt_text = ""
+            if vids:
+                top_vid = vids[0]
+                yt_text = f"- 타겟 종목({tgt}) 최고 바이럴 영상: [{top_vid['title']}]({top_vid['link']}) (조회수 {top_vid['views']:,}회)"
+            else:
+                yt_text = st.session_state.get('yt_target_insights', '유튜브 바이럴 데이터 없음')
+
             st.markdown("**📌 [Step 4: Retail VOC & Competitor Media (투자자 심리 및 경쟁사 동향)]**")
             st.error("📥 **[필수 엑셀 파일 첨부]** 1번 상위 탭 우측 패널에 업로드했던 **'종토방 VOC 엑셀 파일'**을 프롬프트와 함께 AI 대화창에 그대로 업로드해 주세요!")
             p1_step4 = f"""[Step 4: Retail VOC & Competitor Media (투자자 심리 및 경쟁사 동향)]
 다음은 시스템이 수집한 경쟁사 유튜브 바이럴 및 브랜드 검색량 Raw Data입니다.
 
-[타겟/경쟁사 유튜브 검색 바이럴 최상위 영상 성과]:
-{st.session_state.get('yt_target_insights', '유튜브 바이럴 데이터 없음')}
+[타겟/경쟁사 유튜브 검색 바이럴 최상위 영상 성과 (링크 포함)]:
+{yt_text}
 
 [네이버 데이터랩 주요 키워드 검색량 추이 요약]:
 {st.session_state.get('dl_summary', '데이터랩 요약 없음')}
 
-내가 첨부한 '종토방 VOC 엑셀 파일'의 원문 데이터와 위 미디어 Raw Data를 모두 크로스체크하여 분석하시오. 
+내가 첨부한 '종토방 VOC 엑셀 파일'의 원문 데이터와 위 미디어/유튜브 링크 Raw Data를 모두 크로스체크하여 분석하시오. 
 1) VOC 엑셀 데이터를 바탕으로 [{tgt}]에 대한 리테일 투자자들의 페인 포인트(불만)나 열광하는 핵심 키워드를 추출할 것.
 2) 위 유튜브 및 데이터랩 추이를 바탕으로 경쟁사 [{cmp}]가 최근 어떤 테마를 집중적으로 밀고 있는지(차기 마케팅 테마) 예측할 것."""
             st.code(p1_step4, language="text")
@@ -2030,17 +2056,42 @@ with col_main:
             else:
                 csv_directive = f"구체적인 개별 종목 데이터가 없으므로, 아래 펀더멘털 필터링 룰(LTV {st.session_state.p_ltv}% 이하, FCF 마진 {st.session_state.p_fcf}% 이상)을 적용했을 때 편입될 수 있는 대표적인 우량 기초자산들의 예시와 해당 필터링 방식의 논리적 타당성을 퀀트적 관점에서 서술할 것."
 
+            # [데이터 주입 보완 4] 정책 뉴스 링크 주입
+            trend_label = st.session_state.get('selected_trend_label', '혁신 타겟 인컴')
+            search_kw_map_plan = {
+                "사모신용 (BDC)": '"사모신용" OR "BDC"',
+                "대출채권담보부증권 (CLO)": '"CLO" OR "대출채권담보부증권"',
+                "에너지 인프라 (MLP)": '"MLP" OR "에너지 인프라"',
+                "상장 실물자산 (Listed Real Assets)": '"리츠" OR "실물자산" OR "부동산 ETF"',
+                "타겟 인컴 ETF 버퍼형": '"타겟 인컴" OR "버퍼형" OR "인컴 ETF"',
+                "0DTE 초단기 옵션 커버드콜 ETF": '"0DTE" OR "초단기" OR "위클리 커버드콜"',
+                "가상자산 비트코인 현물 ETF": '"비트코인 현물" OR "가상자산 ETF"',
+                "BDC 기업성장집합투자기구 대체투자": '"BDC" OR "사모신용"',
+                "하방 방어형 100% 버퍼 ETF": '"하방 방어" OR "버퍼 ETF"'
+            }
+            policy_query = f'({search_kw_map_plan.get(trend_label, trend_label)}) AND ("금융위" OR "규제" OR "법안" OR "가이드라인")'
+            df_gap_news = get_realtime_news(policy_query, timeframe="30d", max_items=5)
+            policy_news_text = ""
+            if not df_gap_news.empty and "링크" in df_gap_news.columns and df_gap_news["링크"].iloc[0] != "":
+                for _, row in df_gap_news.iterrows():
+                    policy_news_text += f"- [{row['원본제목']}]({row['링크']})\n"
+            else:
+                policy_news_text = "최근 30일 내 관련 규제/정책 뉴스 없음"
+
             st.markdown("**📌 [Step 1: 기획 배경 및 글로벌 트렌드]**")
+            st.warning("📁 **[권장 첨부 파일]** 기초자산 스크리닝이 완료된 **엑셀/CSV 유니버스 파일**이 있다면 프롬프트와 함께 업로드해 주세요.")
             p2_step1 = f"""너는 최고 수준의 자산운용사 ETF 상품개발(PD) 시니어 수석 매니저야. 첫 번째 작업으로 아래 Raw Data와 지시사항을 바탕으로 **[1. 기획 배경 및 글로벌 트렌드]** 파트를 아주 상세하게(약 1페이지 분량) 작성해 줘.
 
 [기획 의도]: 
 {user_idea}
 
-[시장 배경 (미국 메가트렌드 및 규제 시그널)]: 
-현재 미국 시장에서는 '{st.session_state.get('selected_trend_label', '혁신 타겟 인컴')}' 테마가 강세로 자금을 강하게 흡수하고 있으나, 당사 라인업은 공백 상태임.
+[시장 배경 (미국 메가트렌드 및 최근 규제 동향 뉴스)]: 
+현재 미국 시장에서는 '{trend_label}' 테마가 강세로 자금을 강하게 흡수하고 있으나, 당사 라인업은 공백 상태임.
+다음은 해당 테마와 관련된 최근 국내 정책/규제 뉴스(링크 포함)임.
+{policy_news_text}
 
 [지시사항]: 
-위 기획 의도와 지정된 글로벌 메가트렌드 시그널을 근거로, 왜 지금 당장 이 상품을 선제적으로 기획하여 국내 시장에 출시해야 하는지 '출시 당위성 및 거시적 배경'을 논리적으로 작성할 것."""
+위 기획 의도와 첨부된 규제 뉴스 링크 내용들을 근거로, 왜 지금 당장 이 상품을 선제적으로 기획하여 국내 시장에 출시해야 하는지 '출시 당위성 및 거시적 배경'을 논리적으로 작성할 것."""
             st.code(p2_step1, language="text")
 
             st.markdown("**📌 [Step 2: 지수 산출 방법론 및 유니버스]**")
