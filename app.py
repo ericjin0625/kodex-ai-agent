@@ -15,6 +15,7 @@ from collections import Counter
 import io
 import streamlit.components.v1 as components
 import scipy.stats as stats  
+import yfinance as yf
 
 # ==========================================
 # 1. 페이지 레이아웃 및 전역 변수 초기화
@@ -1539,6 +1540,9 @@ Step 1(자금 유입 원인)과 Step 2(미디어 성과 평가)의 분석을 종
 
         # === 2. 기존 프록시 기반 상품 구조화 (Proxy Simulator) ===
         with sub_tabs_plan[1]:
+            # [수정] Step 1과 Step 2의 연관성을 명확히 하는 안내 문구 추가
+            st.info("💡 **안내:** 본 대시보드의 하단 백테스트 차트(Step 2)는 선택하신 '프록시 ETF'의 실제 과거 수익률을 추종합니다. Step 1 슬라이더로 설정한 펀더멘털 룰은 차트를 실시간으로 변경하지 않으며, 최종 기획서 작성을 위한 'AI 마스터 프롬프트(Step 4)'에 조건값으로 주입되어 활용됩니다.")
+            
             st.markdown("#### Step 1. 테마 퓨리티, 펀더멘털 스크리닝 및 가중치 모델 설정")
             col_p1, col_p2 = st.columns([1, 1.2])
             with col_p1:
@@ -1591,17 +1595,31 @@ Step 1(자금 유입 원인)과 Step 2(미디어 성과 평가)의 분석을 종
                     end_dt = datetime.today()
                     start_dt = end_dt - timedelta(days=365*3)
                     
-                    annual_yield = 0.08 if "BDC" in asset_class else (0.06 if "CLO" in asset_class else 0.04)
-                    
                     with st.spinner(f"해외 API에서 {st.session_state.p_proxy} 데이터를 불러옵니다..."):
                         try:
-                            port_df = fdr.DataReader(st.session_state.p_proxy, start_dt, end_dt)
-                            if len(port_df) > 10:
-                                port_daily = port_df['Close'].pct_change().dropna()
+                            import yfinance as yf # [수정] 배당 수익 역산을 위해 yfinance 호출
+                            ticker_data = yf.download(st.session_state.p_proxy, start=start_dt, end=end_dt)
+                            
+                            if len(ticker_data) > 10:
+                                # yf.download 멀티인덱스 처리 및 단일 시리즈 추출
+                                price_series = ticker_data['Close'].squeeze().dropna()
+                                adj_series = ticker_data['Adj Close'].squeeze().dropna()
                                 
-                                port_cum = (1 + port_daily).cumprod() * 100
+                                # 일간 수익률은 배당이 재투자된 수정종가 기준
+                                port_daily = adj_series.pct_change().dropna()
+                                
+                                # 누적 자본 차익 (Price Return) 및 총 수익률 계산
+                                price_return = (price_series / price_series.iloc[0]) * 100 - 100
+                                total_return_pct = (adj_series / adj_series.iloc[0]) * 100 - 100
+                                
+                                # 마찰 비용 할인 반영 (수정종가 기준 총수익률에 적용)
+                                port_cum = total_return_pct + 100
                                 discount_array = (1 - lp_cost/100) ** (np.arange(len(port_cum)) / 252)
                                 port_cum = port_cum * discount_array
+                                
+                                # 최종 할인 반영된 총수익률 및 역산된 실제 인컴 수익
+                                total_return_pct = port_cum - 100
+                                income_return = total_return_pct - price_return
                                 
                                 dates = port_cum.index
                                 port_vol = np.std(port_daily) * np.sqrt(252)
@@ -1617,14 +1635,9 @@ Step 1(자금 유입 원인)과 Step 2(미디어 성과 평가)의 분석을 종
                     if backtest_success:
                         st.session_state.p_sharpe = round(sharpe, 2)
                         st.session_state.p_mdd = round(mdd, 1)
-
-                        daily_yield = annual_yield / 252
-                        income_return = (np.cumprod(1 + np.full(len(port_cum), daily_yield)) * 100) - 100
-                        total_return_pct = port_cum.values - 100
-                        price_return = total_return_pct - income_return
                         
                         fig_decomp = go.Figure()
-                        fig_decomp.add_trace(go.Scatter(x=dates, y=income_return, mode='lines', stackgroup='one', name=f'누적 배당/이자 (연 {annual_yield*100:.1f}%)', line=dict(color='#ffb04d')))
+                        fig_decomp.add_trace(go.Scatter(x=dates, y=income_return, mode='lines', stackgroup='one', name=f'누적 배당/이자 (실제 인컴 반영)', line=dict(color='#ffb04d')))
                         fig_decomp.add_trace(go.Scatter(x=dates, y=price_return, mode='lines', stackgroup='one', name='누적 자본 차익 (가격변동)', line=dict(color='#4da6ff')))
                         fig_decomp.update_layout(height=280, margin=dict(t=10,b=10,l=10,r=10), yaxis_title="누적 수익률 (%)", xaxis_title="", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                         st.plotly_chart(fig_decomp, use_container_width=True)
@@ -1675,8 +1688,9 @@ Step 1(자금 유입 원인)과 Step 2(미디어 성과 평가)의 분석을 종
             st.markdown("#### Step 3. 구조화, 세일즈 타겟팅 및 P&L")
             
             with st.expander("➕ 파생상품(옵션) 오버레이 전략 추가하기 (선택형 심화 모듈)", expanded=False):
-                st.markdown("**📈 옵션 결합 수익률 시뮬레이터 (Before & After 실제 궤적 비교)**")
-                st.caption("Step 2의 실제 과거 3년 일간 주가 데이터에 옵션의 수익/제한 구조를 씌워 실제 궤적이 어떻게 방어되는지 시각화합니다.")
+                # [수정] 옵션 시뮬레이터 한계점 명시 및 제목 변경
+                st.markdown("**📈 개념적 옵션 결합 수익률 시뮬레이터 (Heuristic Model)**")
+                st.caption("💡 **한계 명시:** 실시간 옵션 내재변동성(IV) 및 프리미엄 데이터의 한계로 인해, 본 시뮬레이터는 일간 주가 수익률 변동성에 고정 프리미엄 수취 및 캡(Cap)을 씌워 단순화한 '개념적(Heuristic) 모델'로 작동합니다. 실제 상품화 시에는 옵션 프라이싱 모델을 통한 정밀 검증이 필요합니다.")
                 
                 opt_strategy = st.radio("시뮬레이션 전략 선택:", ["적용 안 함 (순수 대체자산)", "초단기 커버드콜 (Covered Call)", "하방 방어형 (Buffer ETF)"], horizontal=True)
 
