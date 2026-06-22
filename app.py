@@ -28,6 +28,9 @@ if 'df_volume_summary_text' not in st.session_state: st.session_state.df_volume_
 if 'aum_context_text' not in st.session_state: st.session_state.aum_context_text = "데이터 없음"
 if 'media_context' not in st.session_state: st.session_state.media_context = "데이터 없음"
 
+if 'p_target_etf' not in st.session_state: st.session_state.p_target_etf = "KODEX 200"
+if 'p_comp_etf' not in st.session_state: st.session_state.p_comp_etf = "TIGER 200"
+
 if 'p_proxy' not in st.session_state: st.session_state.p_proxy = "데이터 없음"
 if 'p_proxy_reason' not in st.session_state: st.session_state.p_proxy_reason = "데이터 없음"
 if 'p_purity' not in st.session_state: st.session_state.p_purity = "데이터 없음"
@@ -406,7 +409,6 @@ with col_main:
         st.markdown("## 📊 ETF Market Intelligence")
         st.caption("국내외 거시 경제, 경쟁사 수급, 마케팅 액션 및 리테일 투자자 심리를 종합적으로 모니터링합니다.")
         
-        # [수정] 프롬프트 탭 삭제 후 7개로 복구
         sub_tabs = st.tabs(["🏠 Home", "📊 Weekly Info", "📈 순매수/거래대금 및 수익률", "📰 뉴스 & 트렌드", "📺 이벤트 및 성과 검증", "🗣️ 고객 UX", "🥧 ETF/AUM 현황"])
 
         with sub_tabs[0]:
@@ -718,8 +720,12 @@ with col_main:
                         st.markdown("**1. 분석 대상 ETF 선택**")
                         default_target_idx = all_etf_names.index("KODEX 200") if "KODEX 200" in all_etf_names else 0
                         default_comp_idx = all_etf_names.index("TIGER 200") if "TIGER 200" in all_etf_names else (1 if len(all_etf_names) > 1 else 0)
+                        
                         target_etf = st.selectbox("🎯 Target 연동 (자사):", options=all_etf_names, index=default_target_idx)
+                        st.session_state.p_target_etf = target_etf
+                        
                         comp_etf = st.selectbox("⚔️ Competitor ETF (타사):", options=all_etf_names, index=default_comp_idx)
+                        st.session_state.p_comp_etf = comp_etf
                     with col_sel2:
                         st.markdown("**2. 차트 조회 기간 설정**")
                         c_a1, c_a2 = st.columns(2)
@@ -1472,7 +1478,6 @@ with col_main:
             
             st.divider()
             
-            # [수정] 정책 시그널 와이드 배치 및 불필요한 신규 지수 영역 삭제
             st.markdown(f"### 📡 `[정책 시그널]` 핵심 혁신 구조 규제 완화 동향")
             selected_trend_label = st.selectbox("🔍 규제 모니터링망 가동할 혁신 구조 선택:", options=raw_keywords, index=3)
             st.session_state['selected_trend_label'] = selected_trend_label
@@ -1492,7 +1497,6 @@ with col_main:
             
             st.divider()
             
-            # [수정] 뉴스 검색 옵션을 넓히고 자산군 및 혁신 테마 뉴스까지 커버 (지난주 일~토 필터링)
             st.markdown(f"### 📰 핵심 동향 모니터링 (지난주 일~토)")
             news_options = ["사모신용 (BDC)", "대출채권담보부증권 (CLO)", "에너지 인프라 (MLP)", "상장 실물자산 (Listed Real Assets)"] + raw_keywords
             selected_news_kw = st.selectbox("🔍 뉴스 검색망 가동할 핵심 키워드 선택:", options=news_options, index=0)
@@ -1529,7 +1533,6 @@ with col_main:
         # === 2. 기존 프록시 기반 상품 구조화 (Proxy Simulator) ===
         with sub_tabs_plan[1]:
             st.markdown("#### Step 1. 펀더멘털 스크리닝 및 가중치 모델 설정")
-            # [수정] 빈 공간 제거를 위한 단일 컨테이너 내부 병합 배치
             with st.container(border=True):
                 c_s1, c_s2 = st.columns(2)
                 with c_s1:
@@ -1563,7 +1566,6 @@ with col_main:
             backtest_success = False
             
             with c_bt1:
-                # [수정] 박스 높이 동일화 (height 파라미터 적용)
                 with st.container(height=550, border=True):
                     st.markdown(f"**📈 {st.session_state.p_proxy} 과거 3년 백테스트 (자본차익 vs 배당수익 분해)**")
                     
@@ -1616,7 +1618,6 @@ with col_main:
                         cc2.metric("실증 최대 낙폭(MDD)", f"{st.session_state.p_mdd}%")
 
             with c_bt2:
-                # [수정] 박스 높이 동일화
                 with st.container(height=550, border=True):
                     st.markdown("**🌪️ 매크로 스트레스 테스트 시나리오**")
                     scenario = st.selectbox("과거 위기 시나리오 국면을 선택하세요:", [
@@ -1655,7 +1656,6 @@ with col_main:
 
             st.divider()
 
-            # [수정] Step 3 레이아웃 개편: FX 와이드 배치 및 하단 2분할
             st.markdown("#### Step 3. 구조화, 세일즈 타겟팅 및 P&L")
             
             with st.expander("➕ 파생상품(옵션) 오버레이 전략 추가하기 (선택형 심화 모듈)", expanded=False):
@@ -1698,7 +1698,6 @@ with col_main:
                         else:
                             st.warning("상단 백테스트 데이터가 없어 옵션 오버레이를 그릴 수 없습니다.")
 
-            # 환율 전략 와이드 배치
             with st.container(border=True):
                 st.markdown("**💱 환율 전략 및 비용 시뮬레이터**")
                 
@@ -1732,7 +1731,6 @@ with col_main:
                     else:
                         st.warning("상단 백테스트 데이터가 없어 환율 궤적을 그릴 수 없습니다.")
 
-            # 하단 P&L 및 팩트시트 좌우 병렬 배치
             c_pl_left, c_pl_right = st.columns(2)
             with c_pl_left:
                 with st.container(height=480, border=True):
@@ -1802,7 +1800,6 @@ with col_main:
             st.markdown("### 💡 가상 지수 샌드박스 (Synthetic Index Simulator)")
             st.caption("실제 지수 편입 종목을 시뮬레이션하고, S&P 500 등 벤치마크 대비 복제 오차(TE)와 상관관계를 검증합니다.")
 
-            # [수정] 프롬프트 제너레이터 부분 완전히 삭제 및 탭 3으로 이관
             with st.container(border=True):
                 st.markdown("#### 1. 퀀트 시뮬레이션 컨트롤 패널 (Total Return 기반)")
                 
@@ -1932,55 +1929,58 @@ with col_main:
         st.markdown("### 🧠 모듈형 AI 프롬프트 컨트롤 타워")
         st.caption("각 단계별 목적에 맞게 외부 AI(LLM)에게 전달할 최적화된 프롬프트를 체인(Chain) 형태로 분리하여 제공합니다.")
         
-        prompt_tabs = st.tabs(["📊 1. 주간 모니터링 체인 프롬프트", "🌟 2. 상품 기획 RAG 마스터 프롬프트 (최종 결과물)"])
+        prompt_tabs = st.tabs(["📊 1. 주간 모니터링 5-Step 체인 프롬프트", "🌟 2. 상품 기획 RAG 마스터 프롬프트 (최종 결과물)"])
         
-        # --- 주간 모니터링 프롬프트 ---
+        # --- 주간 모니터링 프롬프트 (5-Step) ---
         with prompt_tabs[0]:
-            st.markdown("#### [주간 시장 요약 및 세일즈 리포트 프롬프트 - 3-Step 체인]")
-            st.info("💡 대시보드의 실시간 데이터를 바탕으로 AI에게 주간 리포트를 지시하는 3단계 체인 프롬프트입니다. 한 번에 하나씩 복사하여 제미나이(Gemini)나 GPT에 입력하세요.")
+            st.markdown("#### [주간 세일즈 & 마케팅 브리핑 프롬프트 - 5-Step 체인]")
+            st.info("💡 대시보드의 실시간 데이터를 바탕으로 AI에게 완벽한 주간 리포트를 지시하는 5단계 체인 프롬프트입니다. 한 번에 하나씩 복사하여 제미나이(Gemini)나 GPT에 입력하세요.")
             
-            st.markdown("**📌 [Step 1: 매크로 환경 및 수급 원인 분석]**")
-            p1_step1 = f"""[Step 1: 시장 환경 및 자금 유입 원인 분석]
-이번 주 ETF 시장의 핵심 키워드는 다음과 같으며, 타겟 ETF에는 {st.session_state.get('stat_net_inflow', 0)}억 원이 순유입되었습니다.
-다음은 이번 주 시장 및 핵심 테마와 관련된 언론 보도(뉴스 크롤링) 내용입니다.
-[주요 뉴스]:
-{st.session_state.get('weekly_dynamic_news', '뉴스 데이터 없음')}
+            tgt = st.session_state.get('p_target_etf', '타겟 ETF')
+            cmp = st.session_state.get('p_comp_etf', '경쟁 ETF')
 
-위 뉴스 데이터를 바탕으로, 이번 주 리테일 투자자들의 자금이 왜 특정 테마와 상품으로 쏠렸는지 그 '거시적/심리적 원인'을 3줄로 진단하시오."""
+            st.markdown("**📌 [Step 1: Market & Macro Overview (시장 및 거시 환경 분석)]**")
+            p1_step1 = f"""[Step 1: Market & Macro Overview (시장 및 거시 환경 분석)]
+대시보드에서 파악된 이번 주 핵심 매크로(금리/환율) 지표 동향과 일반 ETF 트렌드 뉴스 데이터를 바탕으로, 현재 거시 경제 흐름이 ETF 시장 전반의 투자 심리에 어떤 영향을 미치고 있는지 3줄로 진단하시오.
+(다음 단계들을 위해 분석 결과를 저장해둘 것)"""
             st.code(p1_step1, language="text")
 
-            st.divider()
-
-            st.markdown("**📌 [Step 2: 미디어 바이럴 및 마케팅 임팩트 평가]**")
-            p1_step2 = f"""[Step 2: 미디어 바이럴 및 마케팅 성과 평가]
-이번 주 타겟 ETF 및 경쟁사의 미디어 마케팅 성과를 크롤링한 결과는 다음과 같습니다.
-[유튜브 바이럴 최상위 영상]: {st.session_state.get('yt_target_insights', '데이터 없음')}
-[커뮤니티 심리(VOC) 핵심]: {st.session_state.get('media_context', '데이터 없음')}
-
-위 미디어 노출이 실제로 타겟 ETF의 경쟁사 대비 이중차분(DiD) 성과({st.session_state.get('stat_did_multiplier', 0)}배)에 얼마나 기여했는지, 통계적 유의성(p-value: {st.session_state.get('stat_p_value', 1.0)})을 근거로 객관적으로 평가하시오. 미디어 바이럴이 실제 순매수를 견인했는지 결론을 내려야 합니다."""
+            st.markdown("**📌 [Step 2: AUM & Flow Analysis (수급 및 점유율 동향)]**")
+            p1_step2 = f"""[Step 2: AUM & Flow Analysis (수급 및 점유율 동향)]
+타겟 ETF인 [{tgt}]와 경쟁 대조군인 [{cmp}] 간의 전반적인 AUM 현황 및 주간 순매수 동향을 비교 분석하시오. 
+특히, T-0, T-1, T-2 산점도 수익률 반응도 데이터를 근거로 이번 주 리테일 자금이 '과거 수익률(T-1, T-2)'을 쫓아 들어왔는지, '당일 테마(T-0)'에 직각적으로 반응했는지 자금 유입의 성격을 진단하시오."""
             st.code(p1_step2, language="text")
 
-            st.divider()
-
-            st.markdown("**📌 [Step 3: 최종 주간 마케팅 리포트 산출]**")
-            p1_step3 = """[Step 3: 최종 리테일 마케팅 본부 보고서 산출]
-Step 1(자금 유입 원인)과 Step 2(미디어 성과 평가)의 분석을 종합하여, 마케팅 본부장에게 보고할 '주간 세일즈 액션 플랜 리포트'를 마크다운 형식으로 작성하시오. 
-특히, 다음 주 자사 ETF의 순매수를 끌어올리기 위해 우리가 즉시 섭외해야 할 유튜브 채널 타겟(콘텐츠 방향성 포함)과 블로그 이벤트 기획 아이디어를 반드시 1가지씩 포함하여 제안할 것."""
+            st.markdown("**📌 [Step 3: Marketing Impact & Attribution (마케팅 기여도 검증)]**")
+            p1_step3 = f"""[Step 3: Marketing Impact & Attribution (마케팅 기여도 검증)]
+[{tgt}]에 유입된 전체 순매수 중, 단순 시장 지수 상승에 기댄 '시장효과'와 마케팅/영업의 순수 기여분인 '설정효과'를 분해하여 설명하시오.
+또한 최근 실행된 이벤트/마케팅 액션이 경쟁사 [{cmp}] 대비 얼마나 실질적인 타격을 주었는지 이중차분(DiD) 성과 배수({st.session_state.get('stat_did_multiplier', 0)}배)와 통계적 유의성(p-value: {st.session_state.get('stat_p_value', 1.0)})을 근거로 수학적으로 평가하시오."""
             st.code(p1_step3, language="text")
+
+            st.markdown("**📌 [Step 4: Retail VOC & Competitor Media (투자자 심리 및 경쟁사 동향)]**")
+            p1_step4 = f"""[Step 4: Retail VOC & Competitor Media (투자자 심리 및 경쟁사 동향)]
+네이버 종토방 감성 분석을 통해 [{tgt}]에 대한 리테일 투자자들의 페인 포인트(불만)나 열광하는 요소를 추출하시오. 
+동시에 경쟁사 [{cmp}]의 최근 유튜브 영상 바이럴 및 블로그 포스팅 동향을 파악하여 그들이 다음 주에 밀고자 하는 차기 마케팅 테마를 예측하고, 증권앱/MTS 오류 등 세일즈 방해 리스크가 존재하는지 보고하시오."""
+            st.code(p1_step4, language="text")
+
+            st.markdown("**📌 [Step 5: Actionable Insights (투트랙 세일즈 & 마케팅 액션 플랜)]**")
+            p1_step5 = f"""[Step 5: Actionable Insights (투트랙 세일즈 & 마케팅 액션 플랜)]
+위 1~4단계 분석을 총합하여, 다음 주 영업/마케팅 본부가 즉시 실행해야 할 액션 플랜을 2가지 타겟으로 분리하여 제시하시오.
+1. 리테일 타겟 (마케팅/콘텐츠): 종토방 심리와 트렌드 뉴스를 찌를 수 있는 자사 유튜브/블로그 후킹(Hooking) 콘텐츠 주제 1가지를 제안할 것.
+2. 기관 타겟 (세일즈/영업): [{tgt}]의 [{cmp}] 대비 강점(AUM 규모, 보수율 등)을 엮어, 법인영업팀 및 PB들이 거액 자산가/기관에게 던질 수 있는 강력한 '원 라이너(1-liner) 세일즈 멘트'를 도출할 것."""
+            st.code(p1_step5, language="text")
             
-        # --- 상품 기획 프롬프트 ---
+        # --- 상품 기획 프롬프트 (5-Step) ---
         with prompt_tabs[1]:
             st.markdown("#### [글로벌 대체자산 ETF 상품기획 프롬프트 - 5-Step 체인]")
             st.caption("고품질의 상세한 상품 기획서(5~6페이지 분량)를 도출하기 위해, 실제 자산운용사 제안서 목차에 맞춘 5단계 체인 프롬프트입니다. 한 번에 하나씩 복사하여 프로급 AI(ChatGPT, Gemini 등)에 순서대로 입력하세요.")
 
-            # [수정] 샌드박스의 프롬프트 제너레이터를 이곳으로 통합
             with st.container(border=True):
                 st.markdown("##### 💡 0. 기획 아이디어 입력 (Pre-Step)")
                 st.caption("아래 텍스트 박스에 입력한 기획 의도가 Step 1 프롬프트에 자동으로 스며들어 AI에게 지시됩니다.")
                 user_idea = st.text_area("✍️ 기획하고자 하는 ETF의 핵심 아이디어를 자유롭게 적어주세요:", 
                                          value="미국 사모신용 자산 중에서 부채비율(LTV)이 낮고 현금흐름이 탄탄해서 배당 지속성이 높은 우량 BDC 종목들을 모아서 지수를 짜고 싶어. 커버드콜 옵션도 살짝 섞을 거야.", height=80)
 
-            # [수정] 체크박스 상태 연동 안내 (임시 안내 문구 포함)
             if st.session_state.get('p_has_csv', False):
                 st.info("💡 **안내:** 시뮬레이터에서 '외부 AI에 엑셀 첨부' 옵션을 체크하셨습니다. 프롬프트 입력 시 다운로드하신 '기초자산 유니버스 엑셀(CSV) 파일'을 대화창에 반드시 함께 업로드해 주세요.")
                 csv_directive = f"첨부된 유니버스 엑셀(CSV) 데이터를 분석하여, 위 펀더멘털 필터링 룰(LTV {st.session_state.p_ltv}% 이하, FCF 마진 {st.session_state.p_fcf}% 이상)을 통과한 최종 편입 종목 10개의 리스트를 기획서 포트폴리오 섹션에 표 형태로 출력할 것."
