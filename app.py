@@ -28,12 +28,7 @@ if 'df_volume_summary_text' not in st.session_state: st.session_state.df_volume_
 if 'aum_context_text' not in st.session_state: st.session_state.aum_context_text = "데이터 없음"
 if 'media_context' not in st.session_state: st.session_state.media_context = "데이터 없음"
 
-if 'kw_data_df' not in st.session_state:
-    st.session_state.kw_data_df = pd.DataFrame({
-        "키워드": ["절세", "복리", "월배당", "퇴직연금", "빅테크", "파이어족", "소액적립", "레버리지", "안전마진", "스마트베타"],
-        "4060 시니어": [85, 50, 95, 88, 45, 5, 20, 15, 75, 2],
-        "2030 MZ": [65, 55, 30, 15, 90, 85, 75, 70, 10, 3]
-    })
+# [수정] 불필요한 더미 데이터(kw_data_df) 완전 삭제 완료
 
 if 'p_proxy' not in st.session_state: st.session_state.p_proxy = "데이터 없음"
 if 'p_proxy_reason' not in st.session_state: st.session_state.p_proxy_reason = "데이터 없음"
@@ -98,19 +93,14 @@ st.markdown(glassmorphism_css, unsafe_allow_html=True)
 # 3. 파싱 및 연산 함수 모음 
 # ==========================================
 def extract_keywords_from_titles(titles, top_n=6):
-    """단순 텍스트 처리 기반 안전한 뉴스 키워드 추출기 (할루시네이션 방지)"""
     try:
         words = []
-        # 불용어(의미 없는 단어) 필터링 리스트
         stop_words = {'etf', '투자', '증권', '주식', '시장', '종목', '상장', '수익', '수익률', '특징주', '주가', '펀드', '전망', '관련주', '테마', '대비', '위해', '대한', '관련', '가운데', '가장', '지금', '어떤', '이유', '내년', '올해', '최대', '최고', '코스피', '코스닥', '국내', '미국', '글로벌'}
         for t in titles:
-            # 특수문자 제거 후 띄어쓰기 기준으로 단어 분할
             clean_t = re.sub(r'[^\w\s]', '', str(t))
             for w in clean_t.split():
-                # 두 글자 이상, 숫자가 아닌 단어만 추출
                 if len(w) >= 2 and w.lower() not in stop_words and not w.isdigit():
                     words.append(w)
-        # 출현 빈도수 계산
         counter = Counter(words)
         return [word for word, count in counter.most_common(top_n)]
     except:
@@ -228,40 +218,6 @@ def get_realtime_news(keyword="ETF", timeframe="7d", max_items=12):
         if not news_list: return pd.DataFrame([{"게시일 / 출처": "-", "원본제목": f"'{keyword}' 관련 뉴스가 없습니다.", "링크": ""}])
         return pd.DataFrame(news_list)
     except: return pd.DataFrame([{"게시일 / 출처": "오류", "원본제목": "실시간 뉴스를 불러올 수 수 없습니다.", "링크": ""}])
-
-@st.cache_data(ttl=1800)
-def get_app_reviews():
-    all_reviews = []
-    headers = {"User-Agent": "Mozilla/5.0"}
-    ios_apps = {"삼성증권 mPOP": "418064117", "미래에셋 M-STOCK": "1619623868", "한국투자증권": "364506828", "KB증권 M-able": "1198642398"}
-    for app_name, app_id in ios_apps.items():
-        for page in range(1, 3):
-            try:
-                url = f"https://itunes.apple.com/kr/rss/customerreviews/page={page}/id={app_id}/sortby=mostrecent/limit=50/json"
-                res = requests.get(url, headers=headers, timeout=5)
-                if res.status_code == 200:
-                    entries = res.json().get("feed", {}).get("entry", [])
-                    if isinstance(entries, dict): entries = [entries]
-                    for e in entries:
-                        if e.get("im:rating"):
-                            score = int(e["im:rating"]["label"])
-                            title = e.get("title", {}).get("label", "제목 없음")
-                            content = e.get("content", {}).get("label", "")
-                            date_str = e.get("updated", {}).get("label", "")[:10]
-                            all_reviews.append({"app": app_name, "os": "🍎 iOS", "score": score, "date": date_str, "title": title, "content": content})
-            except: pass
-            time.sleep(0.2)
-    aos_apps = {"삼성증권 mPOP": "com.samsung.mstock.11", "미래에셋 M-STOCK": "com.miraeasset.trade", "한국투자증권": "com.truefriend.coreapp", "KB증권 M-able": "com.kbsec.mts.iplustar"}
-    try:
-        from google_play_scraper import Sort, reviews
-        for app_name, app_id in aos_apps.items():
-            result, _ = reviews(app_id, lang='ko', country='kr', sort=Sort.NEWEST, count=30)
-            for r in result:
-                all_reviews.append({"app": app_name, "os": "🤖 AOS", "score": r['score'], "date": r['at'].strftime("%Y-%m-%d"), "title": "구글플레이 리뷰", "content": r['content']})
-    except:
-        all_reviews.append({"app": "System", "os": "⚠️ Error", "score": 0, "date": "-", "title": "AOS 수집 라이브러리 누락", "content": "로컬 환경 터미널에서 'pip install google-play-scraper'를 실행하시면 안드로이드 리뷰가 정상 수집됩니다."})
-    all_reviews.sort(key=lambda x: x['date'], reverse=True)
-    return all_reviews[:40]
 
 @st.cache_data(ttl=1800)
 def parse_competitor_blog_last_week(blog_id):
@@ -693,7 +649,6 @@ with col_main:
             df_general_news = get_realtime_news("ETF", timeframe="7d", max_items=12)
             if "링크" in df_general_news.columns and df_general_news["링크"].iloc[0] != "":
                 
-                # [신규] 할루시네이션 방지용 단순 키워드 태그 추출 로직 적용
                 titles_gen = df_general_news["원본제목"].tolist()
                 kws_gen = extract_keywords_from_titles(titles_gen, top_n=7)
                 if kws_gen:
@@ -723,7 +678,6 @@ with col_main:
             
             if "링크" in df_dynamic_news.columns and df_dynamic_news["링크"].iloc[0] != "":
                 
-                # [신규] 동적 테마 뉴스용 키워드 태그 추출 적용
                 titles_dyn = df_dynamic_news["원본제목"].tolist()
                 kws_dyn = extract_keywords_from_titles(titles_dyn, top_n=7)
                 if kws_dyn:
@@ -742,7 +696,6 @@ with col_main:
             else: st.dataframe(df_dynamic_news, use_container_width=True, hide_index=True)
 
         with sub_tabs[4]:
-            # 이벤트 시트 데이터 사전 로딩
             sheet_url = st.session_state.get('sheet_url_global', '')
             df_events = load_event_sheet(sheet_url)
             df_ongoing, df_ended = pd.DataFrame(), pd.DataFrame()
@@ -751,7 +704,6 @@ with col_main:
                 df_ongoing = df_events[df_events['종료일'] >= today]
                 df_ended = df_events[df_events['종료일'] < today]
 
-            # 1. 심화 분석 영역을 맨 위로 
             st.markdown("### 🔍 [심화 분석] 마케팅 인과관계 통계 검증 (이중차분 & 시차 상관관계)")
             st.caption("업로드된 실제 데이터(Excel, DataLab)를 바탕으로 Pandas와 Scipy 라이브러리를 통해 진짜 통계 수치를 산출합니다.")
             
@@ -800,7 +752,6 @@ with col_main:
                             st.info(f"**DiD 설계:** '{event_start_week}' 이전 기간을 **Pre**, 이후 기간을 **Post**로 지정하여 실제 순매수 증감을 계산합니다.")
                     
                     with st.spinner("Scipy 및 Pandas로 실제 통계값을 연산 중입니다..."):
-                        # 1) DiD 연산 로직 
                         pre_weeks = target_sheets[:target_sheets.index(event_start_week)]
                         post_weeks = target_sheets[target_sheets.index(event_start_week):]
                         
@@ -818,7 +769,6 @@ with col_main:
                         elif comp_diff == 0:
                             real_did_multiplier = round(target_diff, 2)
 
-                        # 2) DataLab 연동 p-value 및 시차분석 
                         calc_p_value = None
                         brand_search_inc = None
                         lag_corrs = []
@@ -964,7 +914,6 @@ with col_main:
 
             st.divider()
 
-            # 2. 마케팅 촉매 임팩트 분석기 
             st.markdown("### 📊 마케팅 촉매(이벤트/영상) 임팩트 분석기")
             if not df_trend.empty:
                 selected_ongoing = []
@@ -981,10 +930,8 @@ with col_main:
                     st.warning("이벤트 시트가 연동되지 않아 음영 매핑 기능이 비활성화되었습니다.")
 
                 with st.spinner("수급 임팩트 데이터를 렌더링하고 있습니다..."):
-                    # [순매수 데이터 차트 설정]
                     fig_evt = px.line(df_trend, x='주차', y='전체순매수', color='종목명', markers=True, template="plotly_dark", color_discrete_map={target_etf: '#ff4d4d', comp_etf: '#4da6ff'})
                     
-                    # [거래대금(거래량) 연동 및 차트 설정]
                     vol_data = []
                     symbols_mapping = get_etf_mapping()
                     sym_target = symbols_mapping.get(target_etf)
@@ -1092,7 +1039,6 @@ with col_main:
 
             st.divider()
 
-            # 3. 운용사별 이벤트 모니터링 (원래 위치 복구)
             st.markdown("### 📢 운용사별 이벤트 모니터링 (Sheet 연동)")
             if not df_events.empty and '이벤트명' in df_events.columns:
                 evt_tab1, evt_tab2 = st.tabs(["🟢 진행 중인 이벤트", "🔴 종료된 이벤트"])
@@ -1119,7 +1065,6 @@ with col_main:
             
             st.divider()
 
-            # 4. 키워드 검색비율 추이 (원래 위치 복구)
             st.markdown("### 📊 키워드 검색비율 추이 (다중 비교 지원)")
             if uploaded_dls:
                 dl_summaries = []
@@ -1147,51 +1092,68 @@ with col_main:
 
             st.divider()
 
-            # 5. 유튜브 사후 성과 분석 (원래 위치 복구)
+            # [수정] 유튜브 사후 성과 분석 (타겟/대조군 맞춤형 매치업 적용)
             st.markdown("### 📺 유튜브 사후 성과 분석 (Post-Hoc Analysis)")
             current_target = target_etf if 'target_etf' in locals() else "KODEX 200"
+            current_comp = comp_etf if 'comp_etf' in locals() else "TIGER 200"
+            
+            top_keyword = "ETF"
+            if uploaded_excel is not None and selected_week != "데이터 없음":
+                try:
+                    df_temp = load_and_clean_excel(uploaded_excel, selected_week)
+                    df_temp['테마'] = df_temp['종목명'].apply(assign_auto_theme)
+                    top_theme = df_temp[df_temp['종목명'] != '전체'].groupby('테마')['개인'].sum().idxmax()
+                    top_keyword = re.sub(r'[^\w\s]', '', top_theme).strip()
+                except:
+                    pass
+            current_theme = top_keyword
             
             yt_keywords = {
-                "KODEX (삼성)": "KODEX ETF", 
-                "TIGER (미래에셋)": "TIGER ETF", 
-                "ACE (한국투자)": "ACE ETF", 
-                "RISE (KB)": "RISE ETF",
-                f"🎯 타겟 종목 ({current_target})": current_target
+                f"🎯 자사 타겟 ({current_target})": current_target, 
+                f"⚔️ 경쟁 대조군 ({current_comp})": current_comp,
+                f"🔥 주간 핫 테마 ({current_theme} ETF)": f"{current_theme} ETF"
             }
             
-            with st.spinner("경쟁사 유튜브 영상 성과 데이터를 실시간으로 파싱 중입니다..."):
+            with st.spinner("타겟 종목 및 경쟁사 유튜브 영상 성과를 실시간으로 비교 파싱 중입니다..."):
                 yt_data = []
                 for brand, kw in yt_keywords.items():
                     vids = scrape_youtube_search_real(kw)
-                    for v in vids: yt_data.append({"운용사": brand, "영상 제목": v['title'], "조회수": v['views'], "업로드": v['date'], "링크": v['link']})
+                    for v in vids: yt_data.append({"검색 타겟": brand, "영상 제목": v['title'], "조회수": v['views'], "업로드": v['date'], "링크": v['link']})
+                
                 if yt_data:
                     df_yt = pd.DataFrame(yt_data)
                     df_yt_sorted = df_yt.sort_values(by="조회수", ascending=False)
                     
-                    target_vids = df_yt[df_yt['운용사'].str.contains("🎯 타겟")].sort_values(by="조회수", ascending=False)
+                    target_vids = df_yt[df_yt['검색 타겟'].str.contains("🎯")].sort_values(by="조회수", ascending=False)
                     if not target_vids.empty:
                         top_vid = target_vids.iloc[0]
-                        st.session_state.yt_target_insights = f"타겟 종목({current_target}) 유튜브 최고 바이럴 영상: '{top_vid['영상 제목']}' (조회수 {top_vid['조회수']:,}회)"
+                        st.session_state.yt_target_insights = f"타겟 종목({current_target}) 최고 바이럴 영상: '{top_vid['영상 제목']}' (조회수 {top_vid['조회수']:,}회) - 업로드 시기: {top_vid['업로드']}"
                     else:
                         st.session_state.yt_target_insights = f"타겟 종목({current_target}) 관련 유의미한 유튜브 바이럴 없음."
 
                     c_yt1, c_yt2 = st.columns([1, 1])
                     with c_yt1:
-                        st.markdown("#### 🏆 주요 검색어별 평균 조회수 (영향력)")
-                        df_agg = df_yt.groupby("운용사")["조회수"].mean().reset_index()
-                        fig_yt = px.bar(df_agg, x="운용사", y="조회수", text_auto='.0f', color="운용사", template="plotly_dark", color_discrete_sequence=px.colors.qualitative.Pastel)
-                        fig_yt.update_layout(height=350, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False)
+                        st.markdown("#### 🏆 타겟 vs 대조군 관련 영상 평균 조회수")
+                        df_agg = df_yt.groupby("검색 타겟")["조회수"].mean().reset_index()
+                        
+                        color_map = {
+                            f"🎯 자사 타겟 ({current_target})": '#ff4d4d',
+                            f"⚔️ 경쟁 대조군 ({current_comp})": '#4da6ff',
+                            f"🔥 주간 핫 테마 ({current_theme} ETF)": '#ffb04d'
+                        }
+                        
+                        fig_yt = px.bar(df_agg, x="검색 타겟", y="조회수", text_auto='.0f', color="검색 타겟", color_discrete_map=color_map, template="plotly_dark")
+                        fig_yt.update_layout(height=350, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False, xaxis_title=None)
                         st.plotly_chart(fig_yt, use_container_width=True)
                     with c_yt2:
-                        st.markdown("#### 📝 최신 영상 조회수 성과 리스트")
-                        st.dataframe(df_yt_sorted[["운용사", "영상 제목", "조회수", "업로드"]], use_container_width=True, height=350, hide_index=True)
+                        st.markdown("#### 📝 실시간 영상 성과 및 업로드 타이밍")
+                        st.dataframe(df_yt_sorted[["검색 타겟", "영상 제목", "조회수", "업로드"]], use_container_width=True, height=350, hide_index=True)
 
             st.divider()
 
-# 6. 블로그 포스트
+            # [수정] 블로그 포스트 가로 배치 및 미포스팅 띄우기
             st.markdown("### 🏢 운용사별 블로그 포스트")
             brand_mappings = {
-                # [수정됨] KODEX 블로그 ID를 samsung_fund에서 etf_kodex로 정확히 변경
                 "KODEX (삼성)": {"blog": "etf_kodex"}, 
                 "TIGER (미래에셋)": {"blog": "m_invest"},
                 "ACE (한국투자)": {"blog": "aceetf"}, "RISE (KB)": {"blog": "riseetf"},
@@ -1204,7 +1166,7 @@ with col_main:
             with st.spinner("지난주(일~토) 블로그 포스트를 스크래핑 중입니다..."):
                 kodex_posts = parse_competitor_blog_last_week(brand_mappings["KODEX (삼성)"]["blog"])
                 other_posts = {}
-                empty_brands = [] # [신규] 포스팅이 없는 운용사를 담을 리스트
+                empty_brands = []
                 
                 for brand, items in brand_mappings.items():
                     if brand == "KODEX (삼성)": continue
@@ -1212,7 +1174,7 @@ with col_main:
                     if posts:
                         other_posts[brand] = posts
                     else:
-                        empty_brands.append(brand.split(' ')[0]) # KODEX, TIGER 등 앞 이름만 깔끔하게 저장
+                        empty_brands.append(brand.split(' ')[0])
                         
                 c1, c2 = st.columns(2)
                 with c1:
@@ -1232,12 +1194,12 @@ with col_main:
                                     st.markdown(f"- [{p['date']}] <a href='{p['link']}' target='_blank' style='color:#4da6ff; text-decoration:none;'>{p['title']}</a>", unsafe_allow_html=True)
                     else:
                         st.info("지난 주 기타 운용사 블로그에 올라온 포스트가 없습니다.")
-                    
-                    # [신규] 지난 주 활동이 없는 운용사 하단 표시
-                    if empty_brands:
-                        st.markdown("<br>", unsafe_allow_html=True)
-                        st.caption(f"💤 **지난주 신규 포스팅 없음:** {', '.join(empty_brands)}")
-                        
+                
+                # [수정] 포스팅 없는 브랜드를 컬럼 바깥쪽(전체 가로 폭)으로 분리 배치
+                if empty_brands:
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    st.warning(f"💤 **지난주 신규 포스팅 없음 (모니터링 대상):** {', '.join(empty_brands)}")
+
         with sub_tabs[5]:
             st.markdown("### 🗣️ 고객 Voice (VOC) & 투자자 심리 모니터링")
             with st.container(border=True):
@@ -1465,7 +1427,6 @@ with col_main:
 # =========================================================================
     # Big 탭 2: 글로벌 상품 기획 시뮬레이터
     # =========================================================================
-
     elif big_tab == "글로벌 상품 기획 시뮬레이터":
         st.markdown("## 🌍 Global Alternative ETF Structuring Simulator")
         st.caption("해외 자산을 융합하여 실제 주가 기반 백테스트 및 수지 분석(P&L)을 거친 실무형 팩트시트를 도출합니다.")
@@ -1561,6 +1522,12 @@ with col_main:
                 st.plotly_chart(fig_heat, use_container_width=True)
 
             c_bt1, c_bt2 = st.columns([1.2, 1])
+            
+            # [수정] 백테스트 시 API 실패에 대한 명확한 에러 핸들링 (더미 방지)
+            port_daily = None
+            dates = None
+            backtest_success = False
+            
             with c_bt1:
                 with st.container(border=True):
                     st.markdown(f"**📈 {st.session_state.p_proxy} 과거 3년 백테스트 (자본차익 vs 배당수익 분해)**")
@@ -1576,28 +1543,25 @@ with col_main:
                     with st.spinner(f"해외 API에서 {st.session_state.p_proxy} 데이터를 불러옵니다..."):
                         try:
                             port_df = fdr.DataReader(st.session_state.p_proxy, start_dt, end_dt)
-                            port_daily = port_df['Close'].pct_change().dropna()
+                            if len(port_df) > 10:
+                                port_daily = port_df['Close'].pct_change().dropna()
+                                
+                                port_cum = (1 + port_daily).cumprod() * 100
+                                discount_array = (1 - lp_cost/100) ** (np.arange(len(port_cum)) / 252)
+                                port_cum = port_cum * discount_array
+                                
+                                dates = port_cum.index
+                                port_vol = np.std(port_daily) * np.sqrt(252)
+                                ann_ret = (port_cum.iloc[-1] / 100) ** (1/3) - 1
+                                sharpe = (ann_ret - 0.035) / port_vol if port_vol > 0 else 0
+                                mdd = (port_cum / np.maximum.accumulate(port_cum) - 1).min() * 100
+                                backtest_success = True
+                            else:
+                                st.error("🚨 야후 파이낸스(API)에서 유효한 주가 데이터를 불러오지 못했습니다.")
+                        except Exception as e:
+                            st.error("🚨 야후 파이낸스(API) 서버 응답 지연으로 데이터를 불러올 수 없습니다. 잠시 후 다시 시도해 주세요.")
                             
-                            port_cum = (1 + port_daily).cumprod() * 100
-                            discount_array = (1 - lp_cost/100) ** (np.arange(len(port_cum)) / 252)
-                            port_cum = port_cum * discount_array
-                            
-                            dates = port_cum.index
-                            port_vol = np.std(port_daily) * np.sqrt(252)
-                            ann_ret = (port_cum.iloc[-1] / 100) ** (1/3) - 1
-                            sharpe = (ann_ret - 0.035) / port_vol if port_vol > 0 else 0
-                            mdd = (port_cum / np.maximum.accumulate(port_cum) - 1).min() * 100
-                        except:
-                            st.warning("API 지연으로 자체 퀀트 모델 합성값이 도출됩니다.")
-                            np.random.seed(42)
-                            dates = pd.date_range(start=start_dt, end=end_dt, periods=756)
-                            port_daily = pd.Series(np.random.normal(0.0003, 0.008, 756), index=dates)
-                            port_cum = pd.Series((1 + port_daily).cumprod() * 100, index=dates)
-                            
-                            discount_array = (1 - lp_cost/100) ** (np.arange(len(port_cum)) / 252)
-                            port_cum = port_cum * discount_array
-                            sharpe, mdd = 1.24 - (lp_cost*0.5), -15.4 - lp_cost
-                            
+                    if backtest_success:
                         st.session_state.p_sharpe = round(sharpe, 2)
                         st.session_state.p_mdd = round(mdd, 1)
                         st.session_state.p_corr = round(sp500_corr, 2)
@@ -1613,10 +1577,10 @@ with col_main:
                         fig_decomp.update_layout(height=280, margin=dict(t=10,b=10,l=10,r=10), yaxis_title="누적 수익률 (%)", xaxis_title="", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                         st.plotly_chart(fig_decomp, use_container_width=True)
 
-                    cc1, cc2, cc3 = st.columns(3)
-                    cc1.metric("샤프 비율", f"{st.session_state.p_sharpe}")
-                    cc2.metric("실증 최대 낙폭(MDD)", f"{st.session_state.p_mdd}%")
-                    cc3.metric("S&P 상관계수", f"{st.session_state.p_corr}")
+                        cc1, cc2, cc3 = st.columns(3)
+                        cc1.metric("샤프 비율", f"{st.session_state.p_sharpe}")
+                        cc2.metric("실증 최대 낙폭(MDD)", f"{st.session_state.p_mdd}%")
+                        cc3.metric("S&P 상관계수", f"{st.session_state.p_corr}")
 
             with c_bt2:
                 with st.container(border=True):
@@ -1642,17 +1606,16 @@ with col_main:
                             
                             sp_drop = (sp_df / sp_df.cummax() - 1).min() * 100
                             my_drop = (my_df / my_df.cummax() - 1).min() * 100
-                        except:
-                            if "코로나" in scenario: sp_drop, my_drop = -33.9, -25.4
-                            elif "금리" in scenario: sp_drop, my_drop = -19.4, -12.8
-                            else: sp_drop, my_drop = -10.2, -4.2
                             
-                    df_bar = pd.DataFrame({"자산": ["S&P 500", f"기획 Proxy ({st.session_state.p_proxy})"], "최대 낙폭 (%)": [sp_drop, my_drop]})
-                    fig_bar = px.bar(df_bar, x="자산", y="최대 낙폭 (%)", text="최대 낙폭 (%)", color="자산", color_discrete_map={"S&P 500": "gray", f"기획 Proxy ({st.session_state.p_proxy})": "#ffb04d"}, template="plotly_dark")
-                    fig_bar.update_traces(textposition='auto', texttemplate='%{text:.1f}%')
-                    fig_bar.update_layout(height=280, margin=dict(t=10, b=10, l=10, r=10), showlegend=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                    st.plotly_chart(fig_bar, use_container_width=True)
-                    st.info(f"💡 **AI 프롬프트 연동:** {desc} 로직이 자동 탑재됩니다.")
+                            df_bar = pd.DataFrame({"자산": ["S&P 500", f"기획 Proxy ({st.session_state.p_proxy})"], "최대 낙폭 (%)": [sp_drop, my_drop]})
+                            fig_bar = px.bar(df_bar, x="자산", y="최대 낙폭 (%)", text="최대 낙폭 (%)", color="자산", color_discrete_map={"S&P 500": "gray", f"기획 Proxy ({st.session_state.p_proxy})": "#ffb04d"}, template="plotly_dark")
+                            fig_bar.update_traces(textposition='auto', texttemplate='%{text:.1f}%')
+                            fig_bar.update_layout(height=280, margin=dict(t=10, b=10, l=10, r=10), showlegend=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                            st.plotly_chart(fig_bar, use_container_width=True)
+                            st.info(f"💡 **AI 프롬프트 연동:** {desc} 로직이 자동 탑재됩니다.")
+                        except Exception as e:
+                            # [수정] 스트레스 테스트 에러 시 가짜 데이터 로직 완전 제거
+                            st.error("🚨 야후 파이낸스(API) 서버 연결 실패로 과거 낙폭 데이터를 계산할 수 없습니다. 잠시 후 다시 시도해 주세요.")
 
             st.divider()
 
@@ -1670,27 +1633,32 @@ with col_main:
                         st.markdown("**⚙️ 옵션 파라미터 설정**")
                         if "Covered Call" in opt_strategy:
                             strike_pct = st.slider("콜옵션 행사가격 (월간 OTM, %)", 0.0, 10.0, 2.0, 0.5) / 100
-                            premium = st.slider("수취 프리미 프리미엄 (월간, %)", 0.1, 5.0, 1.5, 0.1) / 100
+                            premium = st.slider("수취 프리미엄 (월간, %)", 0.1, 5.0, 1.5, 0.1) / 100
                             d_strike = strike_pct / 21
                             d_premium = premium / 21
-                            opt_daily = np.where(port_daily > d_strike, d_strike + d_premium, port_daily + d_premium)
+                            if backtest_success:
+                                opt_daily = np.where(port_daily > d_strike, d_strike + d_premium, port_daily + d_premium)
                         else:
                             buffer_pct = st.slider("하방 방어 수준 (연간 Buffer, %)", 5.0, 20.0, 10.0, 1.0) / 100
                             cap_pct = st.slider("상방 제한 수준 (연간 Cap, %)", 5.0, 15.0, 8.0, 1.0) / 100
                             d_buffer = buffer_pct / 252
                             d_cap = cap_pct / 252
-                            opt_daily = np.where(port_daily > 0, np.minimum(port_daily, d_cap), 
-                                                 np.where(port_daily >= -d_buffer, 0, port_daily + d_buffer))
+                            if backtest_success:
+                                opt_daily = np.where(port_daily > 0, np.minimum(port_daily, d_cap), 
+                                                     np.where(port_daily >= -d_buffer, 0, port_daily + d_buffer))
                     
                     with c_opt2:
-                        base_cum = (1 + port_daily).cumprod() * 100
-                        opt_cum = (1 + opt_daily).cumprod() * 100
-                        
-                        fig_opt = go.Figure()
-                        fig_opt.add_trace(go.Scatter(x=dates, y=base_cum, mode='lines', name='순수 기초자산 (Before)', line=dict(color='gray', dash='dot')))
-                        fig_opt.add_trace(go.Scatter(x=dates, y=opt_cum, mode='lines', name=f'{opt_strategy} 적용 (After)', line=dict(color='#4da6ff' if "Covered" in opt_strategy else '#ffb04d', width=2)))
-                        fig_opt.update_layout(height=230, margin=dict(t=10,b=10,l=10,r=10), template="plotly_dark", xaxis_title="기간", yaxis_title="누적 수익률", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
-                        st.plotly_chart(fig_opt, use_container_width=True)
+                        if backtest_success:
+                            base_cum = (1 + port_daily).cumprod() * 100
+                            opt_cum = (1 + opt_daily).cumprod() * 100
+                            
+                            fig_opt = go.Figure()
+                            fig_opt.add_trace(go.Scatter(x=dates, y=base_cum, mode='lines', name='순수 기초자산 (Before)', line=dict(color='gray', dash='dot')))
+                            fig_opt.add_trace(go.Scatter(x=dates, y=opt_cum, mode='lines', name=f'{opt_strategy} 적용 (After)', line=dict(color='#4da6ff' if "Covered" in opt_strategy else '#ffb04d', width=2)))
+                            fig_opt.update_layout(height=230, margin=dict(t=10,b=10,l=10,r=10), template="plotly_dark", xaxis_title="기간", yaxis_title="누적 수익률", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
+                            st.plotly_chart(fig_opt, use_container_width=True)
+                        else:
+                            st.warning("상단 백테스트 데이터가 없어 옵션 오버레이를 그릴 수 없습니다.")
 
             c_pl1, c_pl2 = st.columns([1, 1.5])
             with c_pl1:
@@ -1705,22 +1673,26 @@ with col_main:
                     net_yield = annual_yield - ter - fx_hedge_cost
 
                     st.markdown("<br>**📉 환율 전략별 성과 차이 (실제 데이터 적용)**", unsafe_allow_html=True)
-                    with st.spinner("과거 3년 실제 환율(USD/KRW) 데이터를 결합 중입니다..."):
-                        try:
-                            usdkrw_df = fdr.DataReader('USD/KRW', start_dt, end_dt)['Close']
-                            fx_aligned = usdkrw_df.reindex(dates).ffill().bfill()
-                            fx_cum = fx_aligned / fx_aligned.iloc[0]
-                        except:
-                            fx_cum = pd.Series(np.linspace(1, 1.15, len(dates)), index=dates)
+                    if backtest_success:
+                        with st.spinner("과거 3년 실제 환율(USD/KRW) 데이터를 결합 중입니다..."):
+                            try:
+                                usdkrw_df = fdr.DataReader('USD/KRW', start_dt, end_dt)['Close']
+                                fx_aligned = usdkrw_df.reindex(dates).ffill().bfill()
+                                fx_cum = fx_aligned / fx_aligned.iloc[0]
+                            except Exception:
+                                st.error("🚨 환율(USD/KRW) 데이터를 불러오지 못했습니다. 환율 변동이 없다고 가정합니다.")
+                                fx_cum = pd.Series(1.0, index=dates)
 
-                        daily_hedge_cost = (fx_hedge_cost / 100) / 252
-                        hedged_cum = (1 + port_daily - daily_hedge_cost).cumprod() * 100
-                        unhedged_cum = ((1 + port_daily).cumprod() * 100) * fx_cum
-                        
-                        df_fx = pd.DataFrame({"기간": dates, "환헤지(H)": hedged_cum.values, "환노출(UH)": unhedged_cum.values}).melt(id_vars="기간")
-                        fig_fx = px.line(df_fx, x="기간", y="value", color="variable", template="plotly_dark", color_discrete_map={"환헤지(H)": "#4da6ff", "환노출(UH)": "#ff4d4d"})
-                        fig_fx.update_layout(height=200, margin=dict(t=10,b=10,l=10,r=10), yaxis_title="수익률 궤적", xaxis_title="", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                        st.plotly_chart(fig_fx, use_container_width=True)
+                            daily_hedge_cost = (fx_hedge_cost / 100) / 252
+                            hedged_cum = (1 + port_daily - daily_hedge_cost).cumprod() * 100
+                            unhedged_cum = ((1 + port_daily).cumprod() * 100) * fx_cum
+                            
+                            df_fx = pd.DataFrame({"기간": dates, "환헤지(H)": hedged_cum.values, "환노출(UH)": unhedged_cum.values}).melt(id_vars="기간")
+                            fig_fx = px.line(df_fx, x="기간", y="value", color="variable", template="plotly_dark", color_discrete_map={"환헤지(H)": "#4da6ff", "환노출(UH)": "#ff4d4d"})
+                            fig_fx.update_layout(height=200, margin=dict(t=10,b=10,l=10,r=10), yaxis_title="수익률 궤적", xaxis_title="", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                            st.plotly_chart(fig_fx, use_container_width=True)
+                    else:
+                        st.warning("상단 백테스트 데이터가 없어 환율 궤적을 그릴 수 없습니다.")
 
             with c_pl2:
                 with st.container(border=True):
@@ -1728,7 +1700,7 @@ with col_main:
                     st.metric("최종 타겟 배당수익률 (Net Yield)", f"{net_yield:.2f}%")
                     
                     risk_level = "보통 위험 (Medium Risk)" if "환헤지" in fx_strategy else "높은 위험 (High Risk)"
-                    fx_desc = f"달러 변동성 제거 (헤지 프리미엄 연 약 {fx_hedge_cost}% 발생)" if "환헤지" in fx_strategy else "달러 강세 시 환차익 추가 향유 가능 (변동성 노출)"
+                    fx_desc = f"달러 변동성 제거 (헤지 프리미 연 약 {fx_hedge_cost}% 발생)" if "환헤지" in fx_strategy else "달러 강세 시 환차익 추가 향유 가능 (변동성 노출)"
                     tax_desc = "퇴직연금(IRP/DC) 내 안전자산(30%) 룸 편입용" if "환헤지" in fx_strategy else "배당소득세 및 종합과세 방어를 위한 ISA 계좌 편입용"
                     
                     st.write(f"- **위험 등급:** {risk_level}")
@@ -1854,14 +1826,15 @@ with col_main:
                         best_cum_returns = base_cum_returns * (1 + envelope)
                         worst_cum_returns = base_cum_returns * (1 - envelope)
                         
+                        # [수정] 벤치마크 S&P 500 에러 핸들링
                         try:
                             bm_df = fdr.DataReader('US500', start_dt, end_dt)['Close'].pct_change().dropna()
                             bm_df = bm_df.reindex(dates).fillna(0)
                             bm_df += (1.5 / 100 / 252)
                             bm_cum_returns = (1 + bm_df).cumprod() * 100
-                        except:
-                            bm_returns = np.random.normal(0.0003, 0.015, len(dates))
-                            bm_cum_returns = pd.Series((1 + bm_returns).cumprod() * 100, index=dates)
+                        except Exception:
+                            st.error("🚨 야후 파이낸스(API) 연결 오류로 벤치마크(S&P 500) 데이터를 불러오지 못했습니다.")
+                            bm_cum_returns = pd.Series(100, index=dates)
 
                         fig_fan = go.Figure()
 
@@ -1909,7 +1882,7 @@ with col_main:
                             missing = set(sandbox_tickers) - set(valid_tickers)
                             st.warning(f"⚠️ 일부 티커({', '.join(missing)})는 API에서 데이터를 찾을 수 없어 연산에서 제외되었습니다.")
                     else:
-                        st.error("입력하신 티커들의 데이터를 불러올 수 없습니다. 올바른 티커인지 확인해 주세요.")
+                        st.error("🚨 입력하신 티커들의 데이터를 불러올 수 없습니다. 올바른 티커인지 확인해 주세요.")
             else:
                 st.info("👉 편입할 티커를 하나 이상 입력해주세요.")
                 
@@ -1942,7 +1915,7 @@ with col_main:
             p1_step2 = f"""[Step 2: 미디어 바이럴 및 마케팅 성과 평가]
 이번 주 타겟 ETF 및 경쟁사의 미디어 마케팅 성과를 크롤링한 결과는 다음과 같습니다.
 [유튜브 바이럴 최상위 영상]: {st.session_state.get('yt_target_insights', '데이터 없음')}
-[커뮤니 심리(VOC) 핵심]: {st.session_state.get('media_context', '데이터 없음')}
+[커뮤니티 심리(VOC) 핵심]: {st.session_state.get('media_context', '데이터 없음')}
 
 위 미디어 노출이 실제로 타겟 ETF의 경쟁사 대비 이중차분(DiD) 성과({st.session_state.get('stat_did_multiplier', 0)}배)에 얼마나 기여했는지, 통계적 유의성(p-value: {st.session_state.get('stat_p_value', 1.0)})을 근거로 객관적으로 평가하시오. 미디어 바이럴이 실제 순매수를 견인했는지 결론을 내려야 합니다."""
             st.code(p1_step2, language="text")
