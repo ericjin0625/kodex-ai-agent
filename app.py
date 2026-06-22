@@ -1469,8 +1469,7 @@ Step 1(자금 유입 원인)과 Step 2(미디어 성과 평가)의 분석을 종
         sub_tabs_plan = st.tabs([
             "📡 1. 글로벌 규제 공백 및 신상품 모니터링", 
             "🔍 2. 기존 프록시 기반 상품 구조화 (Proxy Simulator)", 
-            "💡 3. 가상 지수 샌드박스 (Index Sandbox)",
-            "🤖 4. AI 기획서 프롬프트"
+            "💡 3. 가상 지수 샌드박스 (Index Sandbox)"
         ])
 
         # === 1. 글로벌 규제 공백 및 신상품 모니터링 ===
@@ -1505,34 +1504,38 @@ Step 1(자금 유입 원인)과 Step 2(미디어 성과 평가)의 분석을 종
             
             st.divider()
             
-            col_mon1, col_mon2 = st.columns(2)
-            with col_mon1:
-                selected_trend_label = st.selectbox("🔍 뉴스 검색망 가동할 혁신 구조 선택:", options=raw_keywords, index=3)
-                st.session_state['selected_trend_label'] = selected_trend_label
-                st.markdown(f"#### 📡 `[정책 시그널]` {selected_trend_label} 완화 동향")
-                with st.spinner("규제 완화 뉴스 스크랩 중..."):
-                    policy_query = f'({search_kw_map[selected_trend_label]}) AND ("금융위" OR "규제" OR "법안" OR "가이드라인")'
-                    df_gap_news = get_realtime_news(policy_query, timeframe="30d")
-                    if "링크" in df_gap_news.columns and df_gap_news["링크"].iloc[0] != "":
-                        for idx, row in df_gap_news.iterrows():
+            # [수정] 신규 지수 뉴스 삭제 및 자산군 기반 주간 뉴스 2xN 그리드 배치
+            st.markdown(f"### 📰 `[{asset_class}]` 지난주(일~토) 핵심 동향 뉴스")
+            with st.spinner("해당 자산군의 지난주 뉴스를 정확히 필터링 중입니다..."):
+                asset_query = asset_class.split(" ")[0] # 예: "사모신용 (BDC)" -> "사모신용"
+                raw_news_df = get_realtime_news(asset_query, timeframe="14d", max_items=20)
+                
+                today = datetime.today()
+                # 월요일 기준(0)으로 지난주 일~토 계산
+                last_sat = today - timedelta(days=today.weekday() + 2)
+                last_sun = last_sat - timedelta(days=6)
+                
+                filtered_news = []
+                if "링크" in raw_news_df.columns and raw_news_df["링크"].iloc[0] != "":
+                    for _, row in raw_news_df.iterrows():
+                        try:
+                            # '22 Jun 2026' 형태의 날짜 추출 및 파싱
+                            date_str = row['게시일 / 출처'].split(' / ')[0].strip()
+                            pub_date = datetime.strptime(date_str, "%d %b %Y").date()
+                            if last_sun.date() <= pub_date <= last_sat.date():
+                                filtered_news.append(row)
+                        except:
+                            pass
+                
+                if filtered_news:
+                    cols_grid = st.columns(2)
+                    for idx, row in enumerate(filtered_news):
+                        with cols_grid[idx % 2]:
                             with st.container(border=True):
                                 st.caption(f"📅 {row['게시일 / 출처']}")
-                                st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:14px; font-weight:bold; color:#ffb04d; text-decoration:none;'>[규제] {row['원본제목']} 🔗</a>", unsafe_allow_html=True)
-                    else: 
-                        st.info("관련된 최신 정책 뉴스 피드가 존재하지 않습니다.")
-                        
-            with col_mon2:
-                st.markdown("#### 🔔 `[신규 지수]` 국내 화이트 라벨링 승인 모니터링")
-                with st.spinner("에프앤가이드 및 KRX 지수 발표 뉴스를 스크랩 중..."):
-                    index_query = f'({search_kw_map[selected_trend_label]}) AND ("에프앤가이드" OR "한국거래소" OR "지수 산출" OR "지수 발표")'
-                    df_idx_news = get_realtime_news(index_query, timeframe="30d", max_items=5)
-                    if "링크" in df_idx_news.columns and df_idx_news["링크"].iloc[0] != "":
-                        for idx, row in df_idx_news.iterrows():
-                            with st.container(border=True):
-                                st.caption(f"📅 {row['게시일 / 출처']}")
-                                st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:14px; font-weight:bold; color:#4da6ff; text-decoration:none;'>[지수] {row['원본제목']} 🔗</a>", unsafe_allow_html=True)
-                    else: 
-                        st.info(f"'{selected_trend_label}' 관련 신규 승인된 국내 지수 기사가 없습니다.")
+                                st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:14px; font-weight:bold; color:#4da6ff; text-decoration:none;'>{row['원본제목']} 🔗</a>", unsafe_allow_html=True)
+                else:
+                    st.info(f"선택하신 '{asset_class}' 관련 지난주(일~토) 기사가 존재하지 않습니다.")
 
         # === 2. 기존 프록시 기반 상품 구조화 (Proxy Simulator) ===
         with sub_tabs_plan[1]:
@@ -1547,16 +1550,11 @@ Step 1(자금 유입 원인)과 Step 2(미디어 성과 평가)의 분석을 종
                     st.session_state.p_ltv = ltv_limit
                     st.session_state.p_fcf = fcf_limit
                     
-                    # [수정] 1. 슬라이더 조작 시 데이터-차트 괴리에 대한 명시적 안내 문구 추가
                     st.info("💡 **안내:** 본 대시보드의 백테스트 차트는 대표 프록시 ETF의 실제 과거 수익률을 추종합니다. 위 슬라이더로 설정한 펀더멘털 룰은 차트를 실시간으로 변경하지 않으며, 하단의 'AI 기획서 프롬프트'에 조건값으로 주입되어 최종 기획서 작성에 활용됩니다.")
                     
-                    st.markdown("<br>**📂 유니버스 데이터 업로드 (선택사항)**", unsafe_allow_html=True)
-                    uploaded_univ = st.file_uploader("블룸버그/Finviz 스크리너 결과 (CSV/Excel)", type=['csv', 'xlsx'])
-                    st.session_state.p_has_csv = uploaded_univ is not None
-                    if st.session_state.p_has_csv:
-                        st.success("✅ 파일 업로드 감지: AI가 첨부된 데이터를 읽어 최종 종목을 직접 추출합니다.")
-                    else:
-                        st.info("💡 미업로드 시: AI가 룰을 바탕으로 가상의 포트폴리오 제안 논리를 구축합니다.")
+                    # [수정] 업로더 제거 및 단순 체크박스로 변경
+                    st.markdown("<br>**📂 유니버스 데이터 연동 설정**", unsafe_allow_html=True)
+                    st.session_state.p_has_csv = st.checkbox("외부 AI(ChatGPT 등)에 유니버스 엑셀 파일을 직접 첨부할 예정입니다.", value=True)
 
             with col_p2:
                 with st.container(border=True):
@@ -1675,7 +1673,6 @@ Step 1(자금 유입 원인)과 Step 2(미디어 성과 평가)의 분석을 종
             st.markdown("#### Step 3. 구조화, 세일즈 타겟팅 및 P&L")
             
             with st.expander("➕ 파생상품(옵션) 오버레이 전략 추가하기 (선택형 심화 모듈)", expanded=False):
-                # [수정] 2. 커버드콜 시뮬레이터 단순화 문제 (Heuristic Model 명시)
                 st.markdown("**📈 개념적 옵션 결합 수익률 시뮬레이터 (Heuristic Model)**")
                 st.caption("Step 2의 실제 과거 3년 일간 주가 데이터에 옵션의 수익/제한 구조를 씌워 실제 궤적이 어떻게 방어되는지 시각화합니다.")
                 st.info("💡 실시간 옵션 내재변동성(IV) 및 프리미엄 데이터의 한계로 인해, 본 시뮬레이터는 일간 변동성에 고정 프리미엄 수취 및 캡(Cap)을 씌운 개념적(Heuristic) 모델로 작동합니다. 실제 상품화 시에는 옵션 프라이싱 모델(Black-Scholes 등)을 통한 정밀 검증이 필요합니다.")
@@ -1946,18 +1943,62 @@ Step 1(자금 유입 원인)과 Step 2(미디어 성과 평가)의 분석을 종
             else:
                 st.info("👉 편입할 티커를 하나 이상 입력해주세요.")
 
-        # === 4. AI 기획서 프롬프트 ===
-        with sub_tabs_plan[3]:
-            st.markdown("### 🤖 글로벌 대체자산 ETF 상품기획 마스터 프롬프트 (5-Step)")
+# -------------------------------------------------------------------------
+    # Big 탭 3: 🤖 AI 프롬프트 (마스터 프롬프트 추출소)
+    # -------------------------------------------------------------------------
+    elif big_tab == "🤖 AI 프롬프트":
+        st.markdown("### 🧠 모듈형 AI 프롬프트 컨트롤 타워")
+        st.caption("각 단계별 목적에 맞게 외부 AI(LLM)에게 전달할 최적화된 프롬프트를 체인(Chain) 형태로 분리하여 제공합니다.")
+        
+        prompt_tabs = st.tabs(["📊 1. 주간 모니터링 체인 프롬프트", "🌟 2. 상품 기획 RAG 마스터 프롬프트 (최종 결과물)"])
+        
+        # --- 주간 모니터링 프롬프트 ---
+        with prompt_tabs[0]:
+            st.markdown("#### [주간 시장 요약 및 세일즈 리포트 프롬프트 - 3-Step 체인]")
+            st.info("💡 대시보드의 실시간 데이터를 바탕으로 AI에게 주간 리포트를 지시하는 3단계 체인 프롬프트입니다. 한 번에 하나씩 복사하여 제미나이(Gemini)나 GPT에 입력하세요.")
+            
+            st.markdown("**📌 [Step 1: 매크로 환경 및 수급 원인 분석]**")
+            p1_step1 = f"""[Step 1: 시장 환경 및 자금 유입 원인 분석]
+이번 주 ETF 시장의 핵심 키워드는 다음과 같으며, 타겟 ETF에는 {st.session_state.get('stat_net_inflow', 0)}억 원이 순유입되었습니다.
+다음은 이번 주 시장 및 핵심 테마와 관련된 언론 보도(뉴스 크롤링) 내용입니다.
+[주요 뉴스]:
+{st.session_state.get('weekly_dynamic_news', '뉴스 데이터 없음')}
+
+위 뉴스 데이터를 바탕으로, 이번 주 리테일 투자자들의 자금이 왜 특정 테마와 상품으로 쏠렸는지 그 '거시적/심리적 원인'을 3줄로 진단하시오."""
+            st.code(p1_step1, language="text")
+
+            st.divider()
+
+            st.markdown("**📌 [Step 2: 미디어 바이럴 및 마케팅 임팩트 평가]**")
+            p1_step2 = f"""[Step 2: 미디어 바이럴 및 마케팅 성과 평가]
+이번 주 타겟 ETF 및 경쟁사의 미디어 마케팅 성과를 크롤링한 결과는 다음과 같습니다.
+[유튜브 바이럴 최상위 영상]: {st.session_state.get('yt_target_insights', '데이터 없음')}
+[커뮤니티 심리(VOC) 핵심]: {st.session_state.get('media_context', '데이터 없음')}
+
+위 미디어 노출이 실제로 타겟 ETF의 경쟁사 대비 이중차분(DiD) 성과({st.session_state.get('stat_did_multiplier', 0)}배)에 얼마나 기여했는지, 통계적 유의성(p-value: {st.session_state.get('stat_p_value', 1.0)})을 근거로 객관적으로 평가하시오. 미디어 바이럴이 실제 순매수를 견인했는지 결론을 내려야 합니다."""
+            st.code(p1_step2, language="text")
+
+            st.divider()
+
+            st.markdown("**📌 [Step 3: 최종 주간 마케팅 리포트 산출]**")
+            p1_step3 = """[Step 3: 최종 리테일 마케팅 본부 보고서 산출]
+Step 1(자금 유입 원인)과 Step 2(미디어 성과 평가)의 분석을 종합하여, 마케팅 본부장에게 보고할 '주간 세일즈 액션 플랜 리포트'를 마크다운 형식으로 작성하시오. 
+특히, 다음 주 자사 ETF의 순매수를 끌어올리기 위해 우리가 즉시 섭외해야 할 유튜브 채널 타겟(콘텐츠 방향성 포함)과 블로그 이벤트 기획 아이디어를 반드시 1가지씩 포함하여 제안할 것."""
+            st.code(p1_step3, language="text")
+            
+        # --- 상품 기획 프롬프트 ---
+        with prompt_tabs[1]:
+            st.markdown("#### [글로벌 대체자산 ETF 상품기획 프롬프트 - 5-Step 체인]")
             st.caption("고품질의 상세한 상품 기획서(5~6페이지 분량)를 도출하기 위해, 실제 자산운용사 제안서 목차에 맞춘 5단계 체인 프롬프트입니다. 한 번에 하나씩 복사하여 프로급 AI(ChatGPT, Gemini 등)에 순서대로 입력하세요.")
 
-            if st.session_state.p_has_csv:
+            # [수정] 체크박스 상태에 따른 안내문구 및 프롬프트 변수 동기화
+            if st.session_state.get('p_has_csv', False):
+                st.info("💡 **안내:** '외부 AI에 엑셀 첨부' 옵션을 체크하셨습니다. 프롬프트 입력 시 다운로드하신 '기초자산 유니버스 엑셀(CSV) 파일'을 반드시 함께 업로드해 주세요.")
                 csv_directive = f"첨부된 유니버스 엑셀(CSV) 데이터를 분석하여, 위 펀더멘털 필터링 룰(LTV {st.session_state.p_ltv}% 이하, FCF 마진 {st.session_state.p_fcf}% 이상)을 통과한 최종 편입 종목 10개의 리스트를 기획서 포트폴리오 섹션에 표 형태로 출력할 것."
             else:
                 csv_directive = f"구체적인 개별 종목 데이터가 없으므로, 위 펀더멘털 필터링 룰(LTV {st.session_state.p_ltv}% 이하, FCF 마진 {st.session_state.p_fcf}% 이상)을 적용했을 때 편입될 수 있는 대표적인 우량 기초자산들의 예시와 해당 필터링 방식의 논리적 타당성을 서술할 것."
 
             st.markdown("**📌 [Step 1: 유니버스 선정 및 지수 산출 방법론]**")
-            st.caption("📁 **권장 첨부 파일:** 기초자산 스크리닝이 완료된 엑셀/CSV 유니버스 파일 (보유하고 있는 경우에만)")
             p2_step1 = f"""너는 최고 수준의 자산운용사 ETF 상품개발(PD) 시니어 수석 매니저야. 첫 번째 작업으로 아래 데이터를 바탕으로 **[1. 기초자산 유니버스 및 지수 산출 방법론]** 파트를 아주 상세하게(약 1페이지 분량) 작성해 줘.
 
 - 기초자산 프록시: {st.session_state.p_proxy}
