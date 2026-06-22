@@ -492,7 +492,7 @@ with col_main:
             else: st.info("👉 우측 패널에 ETF 순매수 엑셀 데이터를 업로드해주세요.")
 
         with sub_tabs[2]:
-            if uploaded_excel is not None and selected_week != "데이터 없음" and len(available_weeks) > 1:
+            if uploaded_excel is not None and selected_week != "데이터 없음":
                 st.markdown("### 📈 기간별 ETF 순매수 현황")
                 col_start, col_text, col_slider, col_space, col_inv = st.columns([1.5, 3, 2.5, 0.5, 1.5])
                 with col_start: start_week = st.selectbox("시작 주차:", options=available_weeks[::-1], index=0, key="start_week")
@@ -504,18 +504,19 @@ with col_main:
                 
                 st.divider()
                 df_tab2_combined = pd.DataFrame()
-                start_idx, end_idx = available_weeks.index(start_week), available_weeks.index(selected_week)
-                if start_idx >= end_idx:
-                    target_sheets = available_weeks[end_idx:start_idx+1]
-                    all_sheets_data = []
-                    for sheet in target_sheets:
-                        temp_df = load_and_clean_excel(uploaded_excel, sheet)
-                        if not temp_df.empty and '종목명' in temp_df.columns:
-                            temp_df = temp_df[temp_df['종목명'] != '전체']
-                            temp_df['전체순매수'] = temp_df.get('개인', 0) + temp_df.get('기관', 0) + temp_df.get('외국인', 0)
-                            all_sheets_data.append(temp_df[['종목명', '전체순매수', '개인', '기관', '외국인']])
-                    if all_sheets_data: 
-                        df_tab2_combined = pd.concat(all_sheets_data).groupby('종목명').sum().reset_index()
+                if start_week in available_weeks and selected_week in available_weeks:
+                    start_idx, end_idx = available_weeks.index(start_week), available_weeks.index(selected_week)
+                    if start_idx >= end_idx:
+                        target_sheets = available_weeks[end_idx:start_idx+1]
+                        all_sheets_data = []
+                        for sheet in target_sheets:
+                            temp_df = load_and_clean_excel(uploaded_excel, sheet)
+                            if not temp_df.empty and '종목명' in temp_df.columns:
+                                temp_df = temp_df[temp_df['종목명'] != '전체']
+                                temp_df['전체순매수'] = temp_df.get('개인', 0) + temp_df.get('기관', 0) + temp_df.get('외국인', 0)
+                                all_sheets_data.append(temp_df[['종목명', '전체순매수', '개인', '기관', '외국인']])
+                        if all_sheets_data: 
+                            df_tab2_combined = pd.concat(all_sheets_data).groupby('종목명').sum().reset_index()
 
                 if not df_tab2_combined.empty:
                     col_chart1, col_chart2 = st.columns(2)
@@ -535,56 +536,92 @@ with col_main:
                             fig_inv.update_layout(xaxis_title=f"{inv_type_tab2} 순매수 금액 (억원)", yaxis={'categoryorder':'total ascending'}, height=500, template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                             st.plotly_chart(fig_inv, use_container_width=True)
 
-                    st.divider()
-                    st.markdown("### 🎯 주간 수익률 vs. 투자자별 순매수 증감률 산점도 (실시간 연동)")
-                    col_subject_tab2_scatter, _ = st.columns([2, 8])
-                    with col_subject_tab2_scatter: 
-                        subject_tab2_scatter = st.selectbox("산점도 분석 주체 선택:", ["개인", "기관", "외국인"], key="subject_tab2_scatter")
+                st.divider()
+                st.markdown("### 🎯 시차별 수익률 vs. AUM 대비 순매수 산점도 (T-0, T-1, T-2)")
+                col_subject_tab2_scatter, _ = st.columns([2, 8])
+                with col_subject_tab2_scatter: 
+                    subject_tab2_scatter = st.selectbox("산점도 분석 주체 선택:", ["개인", "기관", "외국인"], key="subject_tab2_scatter")
 
-                    current_idx = available_weeks.index(selected_week)
-                    if current_idx + 1 < len(available_weeks):
-                        prev_week = available_weeks[current_idx + 1]
-                        df_curr = load_and_clean_excel(uploaded_excel, selected_week)
-                        df_prev = load_and_clean_excel(uploaded_excel, prev_week)
-                        
-                        if not df_curr.empty and not df_prev.empty and '종목명' in df_curr.columns and '종목명' in df_prev.columns:
-                            df_c = df_curr[df_curr['종목명'] != '전체'][['종목명', subject_tab2_scatter]].rename(columns={subject_tab2_scatter: '이번주'})
-                            df_p = df_prev[df_prev['종목명'] != '전체'][['종목명', subject_tab2_scatter]].rename(columns={subject_tab2_scatter: '지난주'})
-                            df_merged = pd.merge(df_c, df_p, on='종목명', how='inner')
-                            df_merged['순매수 증감률(%)'] = np.where(df_merged['지난주'] != 0, ((df_merged['이번주'] - df_merged['지난주']) / df_merged['지난주'].abs()) * 100, 0).clip(-300, 300)
-                            
-                            all_etfs_scatter = df_merged['종목명'].dropna().tolist()
-                            default_selection = all_etfs_scatter[:10] if len(all_etfs_scatter) >= 10 else all_etfs_scatter
-                            selected_scatter_etfs = st.multiselect("📍 산점도에 표시할 ETF를 검색/선택하세요:", options=all_etfs_scatter, default=default_selection, key="scatter_multiselect_tab2")
-                            
-                            if selected_scatter_etfs:
-                                with st.spinner("선택된 종목의 실시간 수익률을 불러오는 중입니다..."):
-                                    symbols_mapping = get_etf_mapping()
-                                    real_returns = get_real_returns(symbols_mapping, selected_scatter_etfs)
-                                    df_scatter_filtered = df_merged[df_merged['종목명'].isin(selected_scatter_etfs)].copy()
-                                    df_scatter_filtered['주간 수익률(%)'] = df_scatter_filtered['종목명'].map(real_returns)
-                                    
-                                    st.session_state.df_scatter = df_scatter_filtered.dropna()
-                                    df_sc = st.session_state.df_scatter
-                                    
-                                    fig_scatter = px.scatter(df_sc, x="주간 수익률(%)", y="순매수 증감률(%)", text="종목명", hover_data=["이번주", "지난주"], title=f"**실제 수익률 vs. {subject_tab2_scatter} 순매수 증감률**")
-                                    
-                                    if len(df_sc) > 1:
-                                        x_data, y_data = df_sc["주간 수익률(%)"], df_sc["순매수 증감률(%)"]
-                                        r_value = np.corrcoef(x_data, y_data)[0, 1]
-                                        z = np.polyfit(x_data, y_data, 1)
-                                        p = np.poly1d(z)
-                                        fig_scatter.add_scatter(x=x_data, y=p(x_data), mode='lines', name='추세선 (Trendline)', line=dict(color='#ff4d4d', dash='dot'))
-                                        
-                                        st.info(f"💡 **상관관계 분석:** 피어슨 상관계수 **{r_value:.2f}**")
+                df_curr = load_and_clean_excel(uploaded_excel, selected_week)
+                if not df_curr.empty and '종목명' in df_curr.columns:
+                    df_c = df_curr[df_curr['종목명'] != '전체'][['종목명', subject_tab2_scatter]].rename(columns={subject_tab2_scatter: '이번주'})
+                    all_etfs_scatter = df_c['종목명'].dropna().tolist()
+                    default_selection = all_etfs_scatter[:10] if len(all_etfs_scatter) >= 10 else all_etfs_scatter
+                    selected_scatter_etfs = st.multiselect("📍 산점도에 표시할 ETF를 검색/선택하세요:", options=all_etfs_scatter, default=default_selection, key="scatter_multiselect_tab2")
+                    
+                    if selected_scatter_etfs:
+                        with st.spinner("실시간 KRX AUM 및 과거 3주 치 수익률 데이터를 연동 중입니다..."):
+                            try:
+                                df_etf = fdr.StockListing('ETF/KR')
+                                aum_mapping = dict(zip(df_etf['Name'], df_etf['MarCap']))
+                                symbols_mapping = dict(zip(df_etf['Name'], df_etf['Symbol']))
+                            except:
+                                aum_mapping, symbols_mapping = {}, {}
 
-                                    fig_scatter.update_traces(textposition='top center', marker=dict(size=10, color='#4da6ff', opacity=0.7), textfont=dict(size=11, color='lightgray'))
-                                    fig_scatter.add_vline(x=0, line_dash="dash", line_color="gray", opacity=0.5)
-                                    fig_scatter.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
-                                    fig_scatter.update_layout(height=600, template="plotly_dark", xaxis_title="실제 주간 수익률 (%)", yaxis_title=f"{subject_tab2_scatter} 순매수 증감률 (%)", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                                    st.plotly_chart(fig_scatter, use_container_width=True)
-                    else: st.warning("직전 주차 데이터가 없어 증감률을 비교할 수 없습니다.")
-            else: st.info("👉 우측 패널에 엑셀 데이터를 업로드해주세요. (비교를 위해 2주 이상의 데이터가 필요합니다)")
+                            scatter_data = []
+                            end_date = datetime.today()
+                            start_date = end_date - timedelta(days=40)
+                            
+                            for etf in selected_scatter_etfs:
+                                this_week_val = df_c[df_c['종목명'] == etf]['이번주'].values[0]
+                                aum_raw = aum_mapping.get(etf, 0)
+                                if pd.isna(aum_raw) or aum_raw == 0:
+                                    ratio = 0
+                                else:
+                                    aum_100m = aum_raw / 100_000_000 # KRW 원을 억원 단위로 변환
+                                    ratio = (this_week_val / aum_100m) * 100 if aum_100m > 0 else 0
+                                
+                                sym = symbols_mapping.get(etf)
+                                ret_t0, ret_t1, ret_t2 = 0.0, 0.0, 0.0
+                                if sym:
+                                    try:
+                                        df_hist = fdr.DataReader(sym, start_date, end_date)
+                                        if len(df_hist) >= 15:
+                                            p0 = df_hist['Close'].iloc[-1]
+                                            p1 = df_hist['Close'].iloc[-6]
+                                            p2 = df_hist['Close'].iloc[-11]
+                                            p3 = df_hist['Close'].iloc[-16]
+                                            ret_t0 = ((p0 - p1) / p1) * 100
+                                            ret_t1 = ((p1 - p2) / p2) * 100
+                                            ret_t2 = ((p2 - p3) / p3) * 100
+                                    except: pass
+                                    
+                                scatter_data.append({
+                                    "종목명": etf,
+                                    "이번주 순매수": this_week_val,
+                                    "AUM 대비 순매수(%)": ratio,
+                                    "T-0 수익률(%)": ret_t0,
+                                    "T-1 수익률(%)": ret_t1,
+                                    "T-2 수익률(%)": ret_t2
+                                })
+                            
+                            df_scatter = pd.DataFrame(scatter_data)
+                            
+                            c_s1, c_s2, c_s3 = st.columns(3)
+                            
+                            def draw_scatter(col, x_col, title):
+                                with col:
+                                    fig = px.scatter(df_scatter, x=x_col, y="AUM 대비 순매수(%)", text="종목명", hover_data=["이번주 순매수"], title=title)
+                                    if len(df_scatter) > 1:
+                                        x_data, y_data = df_scatter[x_col], df_scatter["AUM 대비 순매수(%)"]
+                                        std_x, std_y = np.std(x_data), np.std(y_data)
+                                        if std_x > 0 and std_y > 0:
+                                            r_val = np.corrcoef(x_data, y_data)[0, 1]
+                                            z = np.polyfit(x_data, y_data, 1)
+                                            p = np.poly1d(z)
+                                            fig.add_scatter(x=x_data, y=p(x_data), mode='lines', name='추세선', line=dict(color='#ff4d4d', dash='dot'))
+                                            fig.add_annotation(x=0.05, y=0.95, xref="paper", yref="paper", text=f"상관계수 r = {r_val:.2f}", showarrow=False, font=dict(color="#ffb04d", size=14), bgcolor="rgba(0,0,0,0.5)")
+                                    
+                                    fig.update_traces(textposition='top center', marker=dict(size=9, color='#4da6ff', opacity=0.7), textfont=dict(size=11, color='lightgray'))
+                                    fig.add_vline(x=0, line_dash="dash", line_color="gray", opacity=0.5)
+                                    fig.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
+                                    fig.update_layout(height=450, margin=dict(l=10,r=10,t=40,b=10), template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                                    st.plotly_chart(fig, use_container_width=True)
+                            
+                            draw_scatter(c_s1, "T-0 수익률(%)", "**T-0 (이번주 수익률) 반응**")
+                            draw_scatter(c_s2, "T-1 수익률(%)", "**T-1 (지난주 수익률) 반응**")
+                            draw_scatter(c_s3, "T-2 수익률(%)", "**T-2 (지지난주 수익률) 반응**")
+            else: st.info("👉 우측 패널에 엑셀 데이터를 업로드해주세요.")
 
         with sub_tabs[3]:
             st.markdown("### 📰 실시간 뉴스 리스트")
