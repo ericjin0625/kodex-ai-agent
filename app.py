@@ -1425,8 +1425,8 @@ with col_main:
                 else: st.info("관련된 최신 정책 뉴스 피드가 존재하지 않습니다.")
 
 # =========================================================================
-    # Big 탭 2: 글로벌 상품 기획 시뮬레이터
-    # =========================================================================
+# Big 탭 2: 글로벌 상품 기획 시뮬레이터
+# =========================================================================
     elif big_tab == "글로벌 상품 기획 시뮬레이터":
         st.markdown("## 🌍 Global Alternative ETF Structuring Simulator")
         st.caption("해외 자산을 융합하여 실제 주가 기반 백테스트 및 수지 분석(P&L)을 거친 실무형 팩트시트를 도출합니다.")
@@ -1462,10 +1462,67 @@ with col_main:
             
         st.info(f"💡 **프록시 선정 논리(AI 프롬프트 연동):** {st.session_state.p_proxy_reason}")
 
-        sub_tabs_plan = st.tabs(["🔍 1. 기존 프록시 기반 상품 구조화 (Proxy Simulator)", "💡 2. 가상 지수 샌드박스 (Index Sandbox)"])
+        # [구조 개편] Sub 탭 3개로 확장 및 순서 재배치
+        sub_tabs_plan = st.tabs([
+            "📡 1. 글로벌 규제 공백 및 신상품 모니터링", 
+            "🔍 2. 기존 프록시 기반 상품 구조화 (Proxy Simulator)", 
+            "💡 3. 가상 지수 샌드박스 (Index Sandbox)"
+        ])
 
-        # === 1. 기존 프록시 기반 상품 구조화 (Proxy Simulator) ===
+        # === 1. 글로벌 규제 공백 및 신상품 모니터링 ===
         with sub_tabs_plan[0]:
+            st.markdown("### 🇺🇸 글로벌 혁신 구조 공백 분석 (US Mega Trends vs KODEX)")
+            st.caption("해외 시장에서 자금이 유입되는 혁신 테마 중, 국내 시장 및 자사 라인업에 공백이 있는 영역을 모니터링합니다.")
+            
+            raw_keywords = ["타겟 인컴 ETF 버퍼형", "0DTE 초단기 옵션 커버드콜 ETF", "가상자산 비트코인 현물 ETF", "BDC 기업성장집합투자기구 대체투자", "하방 방어형 100% 버퍼 ETF"]
+            trend_strengths = []
+            
+            with st.spinner("미국 혁신 테마 트렌드를 스캔 중입니다..."):
+                for kw in raw_keywords:
+                    temp_news = get_realtime_news(kw, timeframe="7d", max_items=5)
+                    c = len(temp_news) if not temp_news.empty and temp_news.iloc[0]["게시일 / 출처"] != "-" else 0
+                    trend_strengths.append("🔥🔥🔥 최고조" if c >= 3 else ("🔥🔥 강세" if c >= 1 else "🔥 꾸준함"))
+                    
+            st.dataframe(pd.DataFrame({
+                "혁신 상품 구조 (미국 메가 트렌드)": raw_keywords, 
+                "최근 뉴스 기반 유입 강도": trend_strengths, 
+                "KODEX 라인업 현황": ["공백 (0개)", "일부 유사 (1개)", "규제 한계 (0개)", "규제 한계 (0개)", "공백 (0개)"], 
+                "전략적 제언 (Action Plan)": ["즉시 벤치마킹 기획 가동", "분배율 메시지 고도화", "정책 완화 시그널 추적", "법안 통과 즉시 선점", "하락장 방어 포트폴리오 설계"]
+            }), use_container_width=True, hide_index=True)
+            
+            st.divider()
+            
+            col_mon1, col_mon2 = st.columns(2)
+            with col_mon1:
+                selected_trend_label = st.selectbox("🔍 뉴스 검색망 가동할 혁신 구조 선택:", options=raw_keywords, index=3)
+                st.session_state['selected_trend_label'] = selected_trend_label
+                st.markdown(f"#### 📡 `[정책 시그널]` {selected_trend_label} 완화 동향")
+                with st.spinner("규제 완화 뉴스 스크랩 중..."):
+                    df_gap_news = get_realtime_news(selected_trend_label + " 금융위 규제", timeframe="7d")
+                    if "링크" in df_gap_news.columns and df_gap_news["링크"].iloc[0] != "":
+                        for idx, row in df_gap_news.iterrows():
+                            with st.container(border=True):
+                                st.caption(f"📅 {row['게시일 / 출처']}")
+                                st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:14px; font-weight:bold; color:#ffb04d; text-decoration:none;'>[규제] {row['원본제목']} 🔗</a>", unsafe_allow_html=True)
+                    else: 
+                        st.info("관련된 최신 정책 뉴스 피드가 존재하지 않습니다.")
+                        
+            with col_mon2:
+                # [신규 추가] 지수 승인 및 화이트 라벨링 모니터링
+                st.markdown("#### 🔔 `[신규 지수]` 국내 화이트 라벨링 승인 모니터링")
+                with st.spinner("에프앤가이드 및 KRX 지수 발표 뉴스를 스크랩 중..."):
+                    # "에프앤가이드 지수" OR "한국거래소 신규 지수" 검색
+                    df_idx_news = get_realtime_news('"에프앤가이드" 지수 발표 OR "한국거래소" 신규 지수', timeframe="14d", max_items=5)
+                    if "링크" in df_idx_news.columns and df_idx_news["링크"].iloc[0] != "":
+                        for idx, row in df_idx_news.iterrows():
+                            with st.container(border=True):
+                                st.caption(f"📅 {row['게시일 / 출처']}")
+                                st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:14px; font-weight:bold; color:#4da6ff; text-decoration:none;'>[지수] {row['원본제목']} 🔗</a>", unsafe_allow_html=True)
+                    else: 
+                        st.info("최근 14일 내 신규 승인된 국내 지수 발표 기사가 없습니다.")
+
+        # === 2. 기존 프록시 기반 상품 구조화 (Proxy Simulator) ===
+        with sub_tabs_plan[1]:
             st.markdown("#### Step 1. 테마 퓨리티, 펀더멘털 스크리닝 및 가중치 모델 설정")
             col_p1, col_p2 = st.columns([1, 1.2])
             with col_p1:
@@ -1502,28 +1559,8 @@ with col_main:
             st.divider()
 
             st.markdown("#### Step 2. 퀀트 기반 백테스팅 및 리스크")
-            st.markdown("##### 🔗 핵심 자산군 상관관계 (다각화 증명)")
-            c_corr_desc, c_corr_map = st.columns([1, 1.5])
-            with c_corr_desc:
-                st.write(f"기존 전통 자산(주식, 채권) 포트폴리오에 **{selected_proxy}**를 편입했을 때 발생하는 다각화 효과를 직관적으로 증명합니다.")
-                st.info("💡 대체투자 자산은 주식(S&P 500) 및 채권(US Aggregate)과 상관계수가 낮아 포트폴리오 전체의 변동성을 낮추는 핵심 역할을 합니다.")
-            with c_corr_map:
-                sp500_corr = 0.55 if "BDC" in asset_class else (0.25 if "CLO" in asset_class else 0.40)
-                agg_corr = 0.15 if "BDC" in asset_class else (0.45 if "CLO" in asset_class else 0.30)
-                
-                corr_data = {
-                    selected_proxy: [1.00, sp500_corr, agg_corr],
-                    "S&P 500 (주식)": [sp500_corr, 1.00, -0.10],
-                    "US Agg (채권)": [agg_corr, -0.10, 1.00]
-                }
-                df_heat = pd.DataFrame(corr_data, index=[selected_proxy, "S&P 500 (주식)", "US Agg (채권)"])
-                fig_heat = px.imshow(df_heat, text_auto=".2f", color_continuous_scale="Blues", template="plotly_dark", aspect="auto")
-                fig_heat.update_layout(height=200, margin=dict(t=10,b=10,l=10,r=10), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                st.plotly_chart(fig_heat, use_container_width=True)
-
             c_bt1, c_bt2 = st.columns([1.2, 1])
             
-            # [수정] 백테스트 시 API 실패에 대한 명확한 에러 핸들링 (더미 방지)
             port_daily = None
             dates = None
             backtest_success = False
@@ -1564,7 +1601,6 @@ with col_main:
                     if backtest_success:
                         st.session_state.p_sharpe = round(sharpe, 2)
                         st.session_state.p_mdd = round(mdd, 1)
-                        st.session_state.p_corr = round(sp500_corr, 2)
 
                         daily_yield = annual_yield / 252
                         income_return = (np.cumprod(1 + np.full(len(port_cum), daily_yield)) * 100) - 100
@@ -1577,10 +1613,9 @@ with col_main:
                         fig_decomp.update_layout(height=280, margin=dict(t=10,b=10,l=10,r=10), yaxis_title="누적 수익률 (%)", xaxis_title="", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                         st.plotly_chart(fig_decomp, use_container_width=True)
 
-                        cc1, cc2, cc3 = st.columns(3)
+                        cc1, cc2 = st.columns(2)
                         cc1.metric("샤프 비율", f"{st.session_state.p_sharpe}")
                         cc2.metric("실증 최대 낙폭(MDD)", f"{st.session_state.p_mdd}%")
-                        cc3.metric("S&P 상관계수", f"{st.session_state.p_corr}")
 
             with c_bt2:
                 with st.container(border=True):
@@ -1604,18 +1639,20 @@ with col_main:
                             sp_df = fdr.DataReader('US500', s_start, s_end)['Close']
                             my_df = fdr.DataReader(st.session_state.p_proxy, s_start, s_end)['Close']
                             
-                            sp_drop = (sp_df / sp_df.cummax() - 1).min() * 100
-                            my_drop = (my_df / my_df.cummax() - 1).min() * 100
-                            
-                            df_bar = pd.DataFrame({"자산": ["S&P 500", f"기획 Proxy ({st.session_state.p_proxy})"], "최대 낙폭 (%)": [sp_drop, my_drop]})
-                            fig_bar = px.bar(df_bar, x="자산", y="최대 낙폭 (%)", text="최대 낙폭 (%)", color="자산", color_discrete_map={"S&P 500": "gray", f"기획 Proxy ({st.session_state.p_proxy})": "#ffb04d"}, template="plotly_dark")
-                            fig_bar.update_traces(textposition='auto', texttemplate='%{text:.1f}%')
-                            fig_bar.update_layout(height=280, margin=dict(t=10, b=10, l=10, r=10), showlegend=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                            st.plotly_chart(fig_bar, use_container_width=True)
-                            st.info(f"💡 **AI 프롬프트 연동:** {desc} 로직이 자동 탑재됩니다.")
+                            if len(sp_df) > 0 and len(my_df) > 0:
+                                sp_drop = (sp_df / sp_df.cummax() - 1).min() * 100
+                                my_drop = (my_df / my_df.cummax() - 1).min() * 100
+                                
+                                df_bar = pd.DataFrame({"자산": ["S&P 500", f"기획 Proxy ({st.session_state.p_proxy})"], "최대 낙폭 (%)": [sp_drop, my_drop]})
+                                fig_bar = px.bar(df_bar, x="자산", y="최대 낙폭 (%)", text="최대 낙폭 (%)", color="자산", color_discrete_map={"S&P 500": "gray", f"기획 Proxy ({st.session_state.p_proxy})": "#ffb04d"}, template="plotly_dark")
+                                fig_bar.update_traces(textposition='auto', texttemplate='%{text:.1f}%')
+                                fig_bar.update_layout(height=280, margin=dict(t=10, b=10, l=10, r=10), showlegend=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                                st.plotly_chart(fig_bar, use_container_width=True)
+                                st.info(f"💡 **AI 프롬프트 연동:** {desc} 로직이 자동 탑재됩니다.")
+                            else:
+                                st.error("🚨 해당 시기의 데이터가 API에 존재하지 않습니다.")
                         except Exception as e:
-                            # [수정] 스트레스 테스트 에러 시 가짜 데이터 로직 완전 제거
-                            st.error("🚨 야후 파이낸스(API) 서버 연결 실패로 과거 낙폭 데이터를 계산할 수 없습니다. 잠시 후 다시 시도해 주세요.")
+                            st.error("🚨 야후 파이낸스(API) 서버 응답 지연으로 과거 낙폭 데이터를 계산할 수 없습니다. 잠시 후 다시 시도해 주세요.")
 
             st.divider()
 
@@ -1679,18 +1716,17 @@ with col_main:
                                 usdkrw_df = fdr.DataReader('USD/KRW', start_dt, end_dt)['Close']
                                 fx_aligned = usdkrw_df.reindex(dates).ffill().bfill()
                                 fx_cum = fx_aligned / fx_aligned.iloc[0]
-                            except Exception:
-                                st.error("🚨 환율(USD/KRW) 데이터를 불러오지 못했습니다. 환율 변동이 없다고 가정합니다.")
-                                fx_cum = pd.Series(1.0, index=dates)
 
-                            daily_hedge_cost = (fx_hedge_cost / 100) / 252
-                            hedged_cum = (1 + port_daily - daily_hedge_cost).cumprod() * 100
-                            unhedged_cum = ((1 + port_daily).cumprod() * 100) * fx_cum
-                            
-                            df_fx = pd.DataFrame({"기간": dates, "환헤지(H)": hedged_cum.values, "환노출(UH)": unhedged_cum.values}).melt(id_vars="기간")
-                            fig_fx = px.line(df_fx, x="기간", y="value", color="variable", template="plotly_dark", color_discrete_map={"환헤지(H)": "#4da6ff", "환노출(UH)": "#ff4d4d"})
-                            fig_fx.update_layout(height=200, margin=dict(t=10,b=10,l=10,r=10), yaxis_title="수익률 궤적", xaxis_title="", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                            st.plotly_chart(fig_fx, use_container_width=True)
+                                daily_hedge_cost = (fx_hedge_cost / 100) / 252
+                                hedged_cum = (1 + port_daily - daily_hedge_cost).cumprod() * 100
+                                unhedged_cum = ((1 + port_daily).cumprod() * 100) * fx_cum
+                                
+                                df_fx = pd.DataFrame({"기간": dates, "환헤지(H)": hedged_cum.values, "환노출(UH)": unhedged_cum.values}).melt(id_vars="기간")
+                                fig_fx = px.line(df_fx, x="기간", y="value", color="variable", template="plotly_dark", color_discrete_map={"환헤지(H)": "#4da6ff", "환노출(UH)": "#ff4d4d"})
+                                fig_fx.update_layout(height=200, margin=dict(t=10,b=10,l=10,r=10), yaxis_title="수익률 궤적", xaxis_title="", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                                st.plotly_chart(fig_fx, use_container_width=True)
+                            except Exception:
+                                st.error("🚨 야후 파이낸스(API) 서버 응답 지연으로 환율(USD/KRW) 데이터를 불러오지 못했습니다.")
                     else:
                         st.warning("상단 백테스트 데이터가 없어 환율 궤적을 그릴 수 없습니다.")
 
@@ -1700,7 +1736,7 @@ with col_main:
                     st.metric("최종 타겟 배당수익률 (Net Yield)", f"{net_yield:.2f}%")
                     
                     risk_level = "보통 위험 (Medium Risk)" if "환헤지" in fx_strategy else "높은 위험 (High Risk)"
-                    fx_desc = f"달러 변동성 제거 (헤지 프리미 연 약 {fx_hedge_cost}% 발생)" if "환헤지" in fx_strategy else "달러 강세 시 환차익 추가 향유 가능 (변동성 노출)"
+                    fx_desc = f"달러 변동성 제거 (헤지 프리미엄 연 약 {fx_hedge_cost}% 발생)" if "환헤지" in fx_strategy else "달러 강세 시 환차익 추가 향유 가능 (변동성 노출)"
                     tax_desc = "퇴직연금(IRP/DC) 내 안전자산(30%) 룸 편입용" if "환헤지" in fx_strategy else "배당소득세 및 종합과세 방어를 위한 ISA 계좌 편입용"
                     
                     st.write(f"- **위험 등급:** {risk_level}")
@@ -1755,10 +1791,10 @@ with col_main:
                     fig_wf.update_layout(height=200, margin=dict(t=20, b=10, l=10, r=10), template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                     st.plotly_chart(fig_wf, use_container_width=True)
 
-        # === 2. 가상 지수 샌드박스 ===
-        with sub_tabs_plan[1]:
+        # === 3. 가상 지수 샌드박스 ===
+        with sub_tabs_plan[2]:
             st.markdown("### 💡 가상 지수 샌드박스 (Synthetic Index Simulator)")
-            st.caption("프롬프트 제너레이터를 통해 아이디어를 구체화하고, 팬 차트(Fan Chart)를 통해 오차 범위가 반영된 지수 방어력을 실증합니다.")
+            st.caption("실제 지수 편입 종목을 시뮬레이션하고, S&P 500 등 벤치마크 대비 복제 오차(TE)와 상관관계를 검증합니다.")
 
             with st.container(border=True):
                 st.markdown("#### 1. 기획 아이디어 입력 및 AI 매칭 (Prompt Generator)")
@@ -1787,7 +1823,7 @@ with col_main:
                     
                 sandbox_rebal_cost = st.slider("🔄 연간 리밸런싱 마찰 비용 (Turnover Cost, %)", 0.0, 1.0, 0.3, 0.1, help="잦은 매매로 인해 깎여나가는 거래 비용을 일할 차감하여 백테스트의 보수성을 높입니다.")
 
-            st.markdown("#### 3. 하이브리드 시나리오 차트 (Fan Chart & Sensitivity Analysis)")
+            st.markdown("#### 3. 하이브리드 시나리오 차트 및 복제 오차(TE) 모니터링")
             if len(sandbox_tickers) > 0:
                 with st.spinner("해외 API에서 실제 주가 데이터를 수집하여 Total Return 지수를 합성하고 있습니다..."):
                     end_dt = datetime.today()
@@ -1826,58 +1862,67 @@ with col_main:
                         best_cum_returns = base_cum_returns * (1 + envelope)
                         worst_cum_returns = base_cum_returns * (1 - envelope)
                         
-                        # [수정] 벤치마크 S&P 500 에러 핸들링
+                        # [수정] 벤치마크 에러 핸들링 (가상 더미 제거)
+                        api_error = False
                         try:
                             bm_df = fdr.DataReader('US500', start_dt, end_dt)['Close'].pct_change().dropna()
                             bm_df = bm_df.reindex(dates).fillna(0)
                             bm_df += (1.5 / 100 / 252)
                             bm_cum_returns = (1 + bm_df).cumprod() * 100
+                            
+                            # [신규] 상관계수 및 추적오차(TE) 계산 (지수 샌드박스 통합)
+                            corr_with_bm = port_daily_ret.corr(bm_df)
+                            tracking_error_annual = np.std(port_daily_ret - bm_df) * np.sqrt(252) * 100
+                            st.session_state.p_corr = round(corr_with_bm, 2)
+                            
                         except Exception:
-                            st.error("🚨 야후 파이낸스(API) 연결 오류로 벤치마크(S&P 500) 데이터를 불러오지 못했습니다.")
-                            bm_cum_returns = pd.Series(100, index=dates)
+                            api_error = True
+                            st.error("🚨 야후 파이낸스(API) 서버 오류로 벤치마크(S&P 500) 데이터를 불러오지 못했습니다.")
 
-                        fig_fan = go.Figure()
+                        if not api_error:
+                            fig_fan = go.Figure()
+                            fig_fan.add_trace(go.Scatter(x=dates, y=bm_cum_returns, mode='lines', name='S&P 500 (BM 가상)', line=dict(color='gray', width=1, dash='dot')))
+                            fig_fan.add_trace(go.Scatter(x=dates, y=worst_cum_returns, mode='lines', name=f'Worst Case (-{sandbox_error}%)', line=dict(color='#ff4d4d', width=1, dash='dash')))
+                            fig_fan.add_trace(go.Scatter(x=dates, y=best_cum_returns, mode='lines', name=f'Best Case (+{sandbox_error}%)', fill='tonexty', fillcolor='rgba(77, 166, 255, 0.15)', line=dict(color='#4da6ff', width=1, dash='dash')))
+                            fig_fan.add_trace(go.Scatter(x=dates, y=base_cum_returns, mode='lines', name='Base Case (가상 합성지수)', line=dict(color='#4da6ff', width=3)))
 
-                        fig_fan.add_trace(go.Scatter(x=dates, y=bm_cum_returns, mode='lines', name='S&P 500 (TR 가상)', line=dict(color='gray', width=1, dash='dot')))
-                        fig_fan.add_trace(go.Scatter(x=dates, y=worst_cum_returns, mode='lines', name=f'Worst Case (-{sandbox_error}%)', line=dict(color='#ff4d4d', width=1, dash='dash')))
-                        fig_fan.add_trace(go.Scatter(x=dates, y=best_cum_returns, mode='lines', name=f'Best Case (+{sandbox_error}%)', fill='tonexty', fillcolor='rgba(77, 166, 255, 0.15)', line=dict(color='#4da6ff', width=1, dash='dash')))
-                        fig_fan.add_trace(go.Scatter(x=dates, y=base_cum_returns, mode='lines', name='Base Case (합성 지수)', line=dict(color='#4da6ff', width=3)))
-
-                        fig_fan.update_xaxes(
-                            rangeselector=dict(
-                                buttons=list([
-                                    dict(count=6, label="6개월", step="month", stepmode="backward"),
-                                    dict(count=1, label="1년", step="year", stepmode="backward"),
-                                    dict(step="all", label="전체(3년)")
-                                ]),
-                                bgcolor="#1e3a8a", activecolor="#3b82f6", font=dict(color="white")
+                            fig_fan.update_xaxes(
+                                rangeselector=dict(
+                                    buttons=list([
+                                        dict(count=6, label="6개월", step="month", stepmode="backward"),
+                                        dict(count=1, label="1년", step="year", stepmode="backward"),
+                                        dict(step="all", label="전체(3년)")
+                                    ]),
+                                    bgcolor="#1e3a8a", activecolor="#3b82f6", font=dict(color="white")
+                                )
                             )
-                        )
 
-                        fig_fan.update_layout(
-                            title=f"**실제 주가 기반 가상 지수 수익률 (편입 종목: {', '.join(valid_tickers)})**",
-                            height=450, margin=dict(t=40, b=20, l=20, r=20),
-                            yaxis_title="누적 수익률 (Pt, Base=100)", xaxis_title="",
-                            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
-                            template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
-                        )
-                        st.plotly_chart(fig_fan, use_container_width=True)
+                            fig_fan.update_layout(
+                                title=f"**실제 주가 기반 가상 지수 수익률 (편입 종목: {', '.join(valid_tickers)})**",
+                                height=450, margin=dict(t=40, b=20, l=20, r=20),
+                                yaxis_title="누적 수익률 (Pt, Base=100)", xaxis_title="",
+                                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
+                                template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
+                            )
+                            st.plotly_chart(fig_fan, use_container_width=True)
 
-                        c_m1, c_m2, c_m3 = st.columns(3)
-                        final_base = base_cum_returns.iloc[-1]
-                        final_worst = worst_cum_returns.iloc[-1]
-                        mdd_base = (base_cum_returns / np.maximum.accumulate(base_cum_returns) - 1).min() * 100
-                        
-                        years = len(dates) / 252
-                        cagr_base = ((final_base/100)**(1/years)-1)*100 if years > 0 else 0
-                        cagr_worst = ((final_worst/100)**(1/years)-1)*100 if years > 0 else 0
-                        
-                        c_m1.metric("Base 연환산 수익률 (CAGR)", f"{cagr_base:.1f}%")
-                        c_m2.metric("최악 시나리오 (Worst Case) 방어력", f"{cagr_worst:.1f}%", f"시간 제곱근 오차 반영", delta_color="inverse")
-                        c_m3.metric("최대 낙폭 (MDD)", f"{mdd_base:.1f}%")
-                        
-                        st.success("💡 **시각화 분석:** 배당 및 리밸런싱 비용이 차감된 보수적 시뮬레이션입니다. 최악의 밴드를 타더라도 하방 방어력이 우수함을 입증합니다.")
-                        
+                            # [신규] 통계 지표 확장: 기존 수익률 + 상관계수/TE 모니터링 포함
+                            c_m1, c_m2, c_m3, c_m4 = st.columns(4)
+                            final_base = base_cum_returns.iloc[-1]
+                            mdd_base = (base_cum_returns / np.maximum.accumulate(base_cum_returns) - 1).min() * 100
+                            years = len(dates) / 252
+                            cagr_base = ((final_base/100)**(1/years)-1)*100 if years > 0 else 0
+                            
+                            c_m1.metric("Base 연환산 수익률 (CAGR)", f"{cagr_base:.1f}%")
+                            c_m2.metric("최대 낙폭 (MDD)", f"{mdd_base:.1f}%")
+                            
+                            # 상관관계 및 추적오차 표시
+                            corr_color = "normal" if corr_with_bm < 0.5 else "off"
+                            c_m3.metric("S&P 500 상관계수 (분산도)", f"{corr_with_bm:.2f}", "수치가 낮을수록 헷지 우수", delta_color=corr_color)
+                            c_m4.metric("복제 추적오차 (Tracking Error)", f"{tracking_error_annual:.1f}%", "벤치마크 대비 변동성 차이", delta_color="inverse")
+                            
+                            st.success("💡 **QC(품질 관리) 모니터링:** 벤치마크 대비 상관계수와 추적오차가 적정 수준인지 검증하여, 마케팅 시 세일즈 포인트(낮은 상관관계에 따른 분산투자 효과)로 활용할 수 있습니다.")
+                            
                         if len(valid_tickers) < len(sandbox_tickers):
                             missing = set(sandbox_tickers) - set(valid_tickers)
                             st.warning(f"⚠️ 일부 티커({', '.join(missing)})는 API에서 데이터를 찾을 수 없어 연산에서 제외되었습니다.")
