@@ -1092,7 +1092,6 @@ with col_main:
 
             st.divider()
 
-            # [수정] 유튜브 사후 성과 분석 (타겟/대조군 맞춤형 매치업 적용)
             st.markdown("### 📺 유튜브 사후 성과 분석 (Post-Hoc Analysis)")
             current_target = target_etf if 'target_etf' in locals() else "KODEX 200"
             current_comp = comp_etf if 'comp_etf' in locals() else "TIGER 200"
@@ -1151,7 +1150,6 @@ with col_main:
 
             st.divider()
 
-            # [수정] 블로그 포스트 가로 배치 및 미포스팅 띄우기
             st.markdown("### 🏢 운용사별 블로그 포스트")
             brand_mappings = {
                 "KODEX (삼성)": {"blog": "etf_kodex"}, 
@@ -1195,7 +1193,6 @@ with col_main:
                     else:
                         st.info("지난 주 기타 운용사 블로그에 올라온 포스트가 없습니다.")
                 
-                # [수정] 포스팅 없는 브랜드를 컬럼 바깥쪽(전체 가로 폭)으로 분리 배치
                 if empty_brands:
                     st.markdown("<br>", unsafe_allow_html=True)
                     st.warning(f"💤 **지난주 신규 포스팅 없음 (모니터링 대상):** {', '.join(empty_brands)}")
@@ -1396,34 +1393,6 @@ with col_main:
                     st.plotly_chart(fig_trend, use_container_width=True)
             else: st.info("👉 우측 패널에 엑셀 데이터를 업로드하시면 트렌드 그래프가 활성화됩니다.")
 
-            st.markdown("<br><br>", unsafe_allow_html=True)
-            st.markdown("---")
-            
-            st.markdown("### 🇺🇸 글로벌 혁신 구조 공백 분석 (US Mega Trends vs KODEX)")
-            raw_keywords = ["타겟 인컴 ETF 버퍼형", "0DTE 초단기 옵션 커버드콜 ETF", "가상자산 비트코인 현물 ETF", "BDC 기업성장집합투자기구 대체투자", "하방 방어형 100% 버퍼 ETF"]
-            trend_strengths = []
-            with st.spinner("미국 혁신 테마 트렌드를 스캔 중입니다..."):
-                for kw in raw_keywords:
-                    temp_news = get_realtime_news(kw, timeframe="7d", max_items=10)
-                    c = len(temp_news) if not temp_news.empty and temp_news.iloc[0]["게시일 / 출처"] != "-" else 0
-                    trend_strengths.append("🔥🔥🔥 최고조" if c >= 5 else ("🔥🔥 강세" if c >= 2 else "🔥 꾸준함"))
-            st.dataframe(pd.DataFrame({"혁신 상품 구조 (미국 메가 트렌드)": raw_keywords, "최근 뉴스 기반 유입 강도": trend_strengths, "KODEX 라인업 현황": ["공백 (0개)", "일부 유사 (1개)", "규제 한계 (0개)", "규제 한계 (0개)", "공백 (0개)"], "전략적 제언 (Action Plan)": ["즉시 벤치마킹 기획 가동", "분배율 메시지 고도화", "정책 완화 시그널 추적", "법안 통과 즉시 선점", "하락장 방어 포트폴리오 설계"]}), use_container_width=True, hide_index=True)
-            
-            st.divider()
-            selected_trend_label = st.selectbox("🔍 뉴스 검색망 가동할 혁신 구조 선택:", options=raw_keywords, index=2)
-            st.session_state['selected_trend_label'] = selected_trend_label
-            st.markdown(f"#### 📡 `[실시간 정책 시그널]` {selected_trend_label} 관련 완화 동향")
-            with st.spinner("규제 완화 뉴스 스크랩 중..."):
-                df_gap_news = get_realtime_news(selected_trend_label + " 금융위 규제", timeframe="7d")
-                if "링크" in df_gap_news.columns and df_gap_news["링크"].iloc[0] != "":
-                    cols_grid = st.columns(2)
-                    for idx, row in df_gap_news.iterrows():
-                        with cols_grid[idx % 2]:
-                            with st.container(border=True):
-                                st.caption(f"📅 {row['게시일 / 출처']}")
-                                st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:14px; font-weight:bold; color:#ffb04d; text-decoration:none;'>[규제] {row['원본제목']} 🔗</a>", unsafe_allow_html=True)
-                else: st.info("관련된 최신 정책 뉴스 피드가 존재하지 않습니다.")
-
 # =========================================================================
 # Big 탭 2: 글로벌 상품 기획 시뮬레이터
 # =========================================================================
@@ -1462,7 +1431,6 @@ with col_main:
             
         st.info(f"💡 **프록시 선정 논리(AI 프롬프트 연동):** {st.session_state.p_proxy_reason}")
 
-        # [구조 개편] Sub 탭 3개로 확장 및 순서 재배치
         sub_tabs_plan = st.tabs([
             "📡 1. 글로벌 규제 공백 및 신상품 모니터링", 
             "🔍 2. 기존 프록시 기반 상품 구조화 (Proxy Simulator)", 
@@ -1475,11 +1443,22 @@ with col_main:
             st.caption("해외 시장에서 자금이 유입되는 혁신 테마 중, 국내 시장 및 자사 라인업에 공백이 있는 영역을 모니터링합니다.")
             
             raw_keywords = ["타겟 인컴 ETF 버퍼형", "0DTE 초단기 옵션 커버드콜 ETF", "가상자산 비트코인 현물 ETF", "BDC 기업성장집합투자기구 대체투자", "하방 방어형 100% 버퍼 ETF"]
+            
+            # [신규 추가] 언론사 검색용 느슨한 키워드 매핑
+            search_kw_map = {
+                "타겟 인컴 ETF 버퍼형": '"타겟 인컴" OR "버퍼형" OR "버퍼 ETF"',
+                "0DTE 초단기 옵션 커버드콜 ETF": '"0DTE" OR "초단기" OR "커버드콜"',
+                "가상자산 비트코인 현물 ETF": '"비트코인 현물" OR "가상자산 ETF"',
+                "BDC 기업성장집합투자기구 대체투자": '"BDC" OR "기업성장집합투자기구" OR "대체투자"',
+                "하방 방어형 100% 버퍼 ETF": '"하방 방어" OR "버퍼 ETF" OR "방어형 ETF"'
+            }
             trend_strengths = []
             
             with st.spinner("미국 혁신 테마 트렌드를 스캔 중입니다..."):
                 for kw in raw_keywords:
-                    temp_news = get_realtime_news(kw, timeframe="7d", max_items=5)
+                    # [수정] 빡빡한 원문 대신 매핑된 느슨한 키워드로 검색
+                    search_query = search_kw_map[kw]
+                    temp_news = get_realtime_news(search_query, timeframe="14d", max_items=5)
                     c = len(temp_news) if not temp_news.empty and temp_news.iloc[0]["게시일 / 출처"] != "-" else 0
                     trend_strengths.append("🔥🔥🔥 최고조" if c >= 3 else ("🔥🔥 강세" if c >= 1 else "🔥 꾸준함"))
                     
@@ -1498,7 +1477,9 @@ with col_main:
                 st.session_state['selected_trend_label'] = selected_trend_label
                 st.markdown(f"#### 📡 `[정책 시그널]` {selected_trend_label} 완화 동향")
                 with st.spinner("규제 완화 뉴스 스크랩 중..."):
-                    df_gap_news = get_realtime_news(selected_trend_label + " 금융위 규제", timeframe="7d")
+                    # [수정] 선택된 테마의 매핑 키워드와 규제 관련어 조합
+                    policy_query = f'({search_kw_map[selected_trend_label]}) AND ("금융위" OR "규제" OR "완화" OR "가이드라인")'
+                    df_gap_news = get_realtime_news(policy_query, timeframe="30d")
                     if "링크" in df_gap_news.columns and df_gap_news["링크"].iloc[0] != "":
                         for idx, row in df_gap_news.iterrows():
                             with st.container(border=True):
@@ -1508,18 +1489,18 @@ with col_main:
                         st.info("관련된 최신 정책 뉴스 피드가 존재하지 않습니다.")
                         
             with col_mon2:
-                # [신규 추가] 지수 승인 및 화이트 라벨링 모니터링
                 st.markdown("#### 🔔 `[신규 지수]` 국내 화이트 라벨링 승인 모니터링")
                 with st.spinner("에프앤가이드 및 KRX 지수 발표 뉴스를 스크랩 중..."):
-                    # "에프앤가이드 지수" OR "한국거래소 신규 지수" 검색
-                    df_idx_news = get_realtime_news('"에프앤가이드" 지수 발표 OR "한국거래소" 신규 지수', timeframe="14d", max_items=5)
+                    # [수정] 선택된 테마의 매핑 키워드와 지수 발표 관련어 조합 (무지성 스크랩 방지)
+                    index_query = f'({search_kw_map[selected_trend_label]}) AND ("에프앤가이드" OR "한국거래소" OR "지수" OR "출시")'
+                    df_idx_news = get_realtime_news(index_query, timeframe="30d", max_items=5)
                     if "링크" in df_idx_news.columns and df_idx_news["링크"].iloc[0] != "":
                         for idx, row in df_idx_news.iterrows():
                             with st.container(border=True):
                                 st.caption(f"📅 {row['게시일 / 출처']}")
                                 st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:14px; font-weight:bold; color:#4da6ff; text-decoration:none;'>[지수] {row['원본제목']} 🔗</a>", unsafe_allow_html=True)
                     else: 
-                        st.info("최근 14일 내 신규 승인된 국내 지수 발표 기사가 없습니다.")
+                        st.info(f"'{selected_trend_label}' 관련 신규 승인된 국내 지수 기사가 없습니다.")
 
         # === 2. 기존 프록시 기반 상품 구조화 (Proxy Simulator) ===
         with sub_tabs_plan[1]:
@@ -1870,7 +1851,7 @@ with col_main:
                             bm_df += (1.5 / 100 / 252)
                             bm_cum_returns = (1 + bm_df).cumprod() * 100
                             
-                            # [신규] 상관계수 및 추적오차(TE) 계산 (지수 샌드박스 통합)
+                            # 상관계수 및 추적오차(TE) 계산 (지수 샌드박스 통합)
                             corr_with_bm = port_daily_ret.corr(bm_df)
                             tracking_error_annual = np.std(port_daily_ret - bm_df) * np.sqrt(252) * 100
                             st.session_state.p_corr = round(corr_with_bm, 2)
@@ -1906,7 +1887,7 @@ with col_main:
                             )
                             st.plotly_chart(fig_fan, use_container_width=True)
 
-                            # [신규] 통계 지표 확장: 기존 수익률 + 상관계수/TE 모니터링 포함
+                            # 통계 지표 확장: 기존 수익률 + 상관계수/TE 모니터링 포함
                             c_m1, c_m2, c_m3, c_m4 = st.columns(4)
                             final_base = base_cum_returns.iloc[-1]
                             mdd_base = (base_cum_returns / np.maximum.accumulate(base_cum_returns) - 1).min() * 100
@@ -1916,7 +1897,6 @@ with col_main:
                             c_m1.metric("Base 연환산 수익률 (CAGR)", f"{cagr_base:.1f}%")
                             c_m2.metric("최대 낙폭 (MDD)", f"{mdd_base:.1f}%")
                             
-                            # 상관관계 및 추적오차 표시
                             corr_color = "normal" if corr_with_bm < 0.5 else "off"
                             c_m3.metric("S&P 500 상관계수 (분산도)", f"{corr_with_bm:.2f}", "수치가 낮을수록 헷지 우수", delta_color=corr_color)
                             c_m4.metric("복제 추적오차 (Tracking Error)", f"{tracking_error_annual:.1f}%", "벤치마크 대비 변동성 차이", delta_color="inverse")
