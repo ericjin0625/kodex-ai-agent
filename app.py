@@ -97,6 +97,25 @@ st.markdown(glassmorphism_css, unsafe_allow_html=True)
 # ==========================================
 # 3. 파싱 및 연산 함수 모음 
 # ==========================================
+def extract_keywords_from_titles(titles, top_n=6):
+    """단순 텍스트 처리 기반 안전한 뉴스 키워드 추출기 (할루시네이션 방지)"""
+    try:
+        words = []
+        # 불용어(의미 없는 단어) 필터링 리스트
+        stop_words = {'etf', '투자', '증권', '주식', '시장', '종목', '상장', '수익', '수익률', '특징주', '주가', '펀드', '전망', '관련주', '테마', '대비', '위해', '대한', '관련', '가운데', '가장', '지금', '어떤', '이유', '내년', '올해', '최대', '최고', '코스피', '코스닥', '국내', '미국', '글로벌'}
+        for t in titles:
+            # 특수문자 제거 후 띄어쓰기 기준으로 단어 분할
+            clean_t = re.sub(r'[^\w\s]', '', str(t))
+            for w in clean_t.split():
+                # 두 글자 이상, 숫자가 아닌 단어만 추출
+                if len(w) >= 2 and w.lower() not in stop_words and not w.isdigit():
+                    words.append(w)
+        # 출현 빈도수 계산
+        counter = Counter(words)
+        return [word for word, count in counter.most_common(top_n)]
+    except:
+        return []
+
 def assign_auto_theme(etf_name):
     name = str(etf_name).upper().replace(" ", "")
     if any(kw in name for kw in ['인버스', '베어']): return '📉 인버스 (하락배팅)'
@@ -433,7 +452,6 @@ with col_main:
         st.markdown("## 📊 ETF Market Intelligence")
         st.caption("국내외 거시 경제, 경쟁사 수급, 마케팅 액션 및 리테일 투자자 심리를 종합적으로 모니터링합니다.")
         
-        # 탭 개수 7개로 수정 (기존 거래량 탭 삭제 후 편입)
         sub_tabs = st.tabs(["🏠 Home", "📊 Weekly Info", "📈 순매수/거래대금 및 수익률", "📰 뉴스 & 트렌드", "📺 이벤트 및 성과 검증", "🗣️ 고객 UX", "🥧 ETF/AUM 현황"])
 
         with sub_tabs[0]:
@@ -672,8 +690,16 @@ with col_main:
                     pass
             
             st.markdown("#### 🌐 일반 ETF 트렌드 뉴스 (거시/업계 동향)")
-            df_general_news = get_realtime_news("ETF", timeframe="7d", max_items=10)
+            df_general_news = get_realtime_news("ETF", timeframe="7d", max_items=12)
             if "링크" in df_general_news.columns and df_general_news["링크"].iloc[0] != "":
+                
+                # [신규] 할루시네이션 방지용 단순 키워드 태그 추출 로직 적용
+                titles_gen = df_general_news["원본제목"].tolist()
+                kws_gen = extract_keywords_from_titles(titles_gen, top_n=7)
+                if kws_gen:
+                    tags_html = "".join([f"<span style='background:rgba(77, 166, 255, 0.15); border: 1px solid rgba(77, 166, 255, 0.4); border-radius: 15px; padding: 4px 10px; margin-right: 8px; font-size: 13px; font-weight: bold; color: #4da6ff;'>#{kw}</span>" for kw in kws_gen])
+                    st.markdown(f"<div style='margin-bottom: 15px;'>{tags_html}</div>", unsafe_allow_html=True)
+
                 for i in range(0, len(df_general_news), 2):
                     cols = st.columns(2)
                     for j in range(2):
@@ -689,13 +715,21 @@ with col_main:
 
             st.markdown(f"#### 🎯 주간 수급 Top 테마 동적 뉴스 ({top_keyword})")
             search_kw_dynamic = f"{top_keyword} ETF"
-            st.session_state.df_real_news = get_realtime_news(search_kw_dynamic, timeframe="7d", max_items=10)
+            st.session_state.df_real_news = get_realtime_news(search_kw_dynamic, timeframe="7d", max_items=12)
             df_dynamic_news = st.session_state.df_real_news
             
             news_summary = "\n".join([f"- {row['원본제목']}" for _, row in df_dynamic_news.head(5).iterrows()])
             st.session_state.weekly_dynamic_news = f"[{search_kw_dynamic} 검색 결과]\n{news_summary}"
             
             if "링크" in df_dynamic_news.columns and df_dynamic_news["링크"].iloc[0] != "":
+                
+                # [신규] 동적 테마 뉴스용 키워드 태그 추출 적용
+                titles_dyn = df_dynamic_news["원본제목"].tolist()
+                kws_dyn = extract_keywords_from_titles(titles_dyn, top_n=7)
+                if kws_dyn:
+                    tags_dyn_html = "".join([f"<span style='background:rgba(255, 176, 77, 0.15); border: 1px solid rgba(255, 176, 77, 0.4); border-radius: 15px; padding: 4px 10px; margin-right: 8px; font-size: 13px; font-weight: bold; color: #ffb04d;'>#{kw}</span>" for kw in kws_dyn])
+                    st.markdown(f"<div style='margin-bottom: 15px;'>{tags_dyn_html}</div>", unsafe_allow_html=True)
+
                 for i in range(0, len(df_dynamic_news), 2):
                     cols = st.columns(2)
                     for j in range(2):
@@ -950,7 +984,7 @@ with col_main:
                     # [순매수 데이터 차트 설정]
                     fig_evt = px.line(df_trend, x='주차', y='전체순매수', color='종목명', markers=True, template="plotly_dark", color_discrete_map={target_etf: '#ff4d4d', comp_etf: '#4da6ff'})
                     
-                    # [추가] 거래대금(거래량) 연동 및 차트 설정 (날짜 오류 완벽 보완)
+                    # [거래대금(거래량) 연동 및 차트 설정]
                     vol_data = []
                     symbols_mapping = get_etf_mapping()
                     sym_target = symbols_mapping.get(target_etf)
