@@ -1202,30 +1202,17 @@ with col_main:
                 else: st.info("👉 우측 패널에 종목토론방 엑셀 파일을 업로드해주세요.")
 
             st.divider()
-            col_app, col_news = st.columns(2)
-            with col_app:
-                st.markdown("### 📱 주요 증권앱 최신 불만/VOC 리뷰 (OS 통합)")
-                with st.spinner("애플 앱스토어 및 구글 플레이스토어 리뷰를 순회 중입니다..."):
-                    app_reviews = get_app_reviews()
-                    if app_reviews and "Error" in app_reviews[0].get("os", ""):
-                        st.error(app_reviews[0]["content"])
-                    elif app_reviews:
-                        for r in app_reviews:
-                            with st.container(border=True):
-                                st.markdown(f"**[{r['app']}]** {r['os']} | ⭐{r['score']}점")
-                                st.caption(f"📅 {r['date']} - {r['title']}")
-                                st.write(f"\"{r['content']}\"")
-                    else: st.info("수집 장벽 완화 조건 하에서도 매칭된 리뷰 피드가 현재 부재합니다.")
-            with col_news:
-                st.markdown("### 📰 언론 보도 증권앱/MTS 중대 오류 이슈")
-                with st.spinner("MTS 장애/지연 관련 중대 1년 치 아카이브를 탐색 중입니다..."):
-                    df_app_voc = get_realtime_news('"MTS 오류" OR "증권앱 먹통" OR "접속지연"', timeframe="1y", max_items=5)
-                    if "링크" in df_app_voc.columns and df_app_voc["링크"].iloc[0] != "":
-                        for idx, row in df_app_voc.iterrows():
-                            with st.container(border=True):
-                                st.markdown(f"🚨 <a href='{row['링크']}' target='_blank' style='color:#ff4d4d; text-decoration:none;'>{row['원본제목']} 🔗</a>", unsafe_allow_html=True)
-                                st.caption(f"📅 {row['게시일 / 출처']}")
-                    else: st.info("검색 범위(최대 1년) 내 포착된 리스크성 기사가 없습니다.")
+            
+            # --- 레이아웃 변경 적용 영역 ---
+            st.markdown("### 📰 언론 보도 증권앱/MTS 중대 오류 이슈")
+            with st.spinner("MTS 장애/지연 관련 중대 1년 치 아카이브를 탐색 중입니다..."):
+                df_app_voc = get_realtime_news('"MTS 오류" OR "증권앱 먹통" OR "접속지연"', timeframe="1y", max_items=5)
+                if "링크" in df_app_voc.columns and df_app_voc["링크"].iloc[0] != "":
+                    for idx, row in df_app_voc.iterrows():
+                        with st.container(border=True):
+                            st.markdown(f"🚨 <a href='{row['링크']}' target='_blank' style='color:#ff4d4d; text-decoration:none;'>{row['원본제목']} 🔗</a>", unsafe_allow_html=True)
+                            st.caption(f"📅 {row['게시일 / 출처']}")
+                else: st.info("검색 범위(최대 1년) 내 포착된 리스크성 기사가 없습니다.")
 
         with sub_tabs[7]:
             st.markdown("### 🏢 국내 ETF 운용사 AUM 시장 점유율 및 테마별 현황 (실시간 기준)")
@@ -1547,7 +1534,7 @@ with col_main:
                         st.markdown("**⚙️ 옵션 파라미터 설정**")
                         if "Covered Call" in opt_strategy:
                             strike_pct = st.slider("콜옵션 행사가격 (월간 OTM, %)", 0.0, 10.0, 2.0, 0.5) / 100
-                            premium = st.slider("수취 프리미엄 (월간, %)", 0.1, 5.0, 1.5, 0.1) / 100
+                            premium = st.slider("수취 프리미 프리미엄 (월간, %)", 0.1, 5.0, 1.5, 0.1) / 100
                             d_strike = strike_pct / 21
                             d_premium = premium / 21
                             opt_daily = np.where(port_daily > d_strike, d_strike + d_premium, port_daily + d_premium)
@@ -1819,7 +1806,7 @@ with col_main:
             p1_step2 = f"""[Step 2: 미디어 바이럴 및 마케팅 성과 평가]
 이번 주 타겟 ETF 및 경쟁사의 미디어 마케팅 성과를 크롤링한 결과는 다음과 같습니다.
 [유튜브 바이럴 최상위 영상]: {st.session_state.get('yt_target_insights', '데이터 없음')}
-[커뮤니티 심리(VOC) 핵심]: {st.session_state.get('media_context', '데이터 없음')}
+[커뮤니 심리(VOC) 핵심]: {st.session_state.get('media_context', '데이터 없음')}
 
 위 미디어 노출이 실제로 타겟 ETF의 경쟁사 대비 이중차분(DiD) 성과({st.session_state.get('stat_did_multiplier', 0)}배)에 얼마나 기여했는지, 통계적 유의성(p-value: {st.session_state.get('stat_p_value', 1.0)})을 근거로 객관적으로 평가하시오. 미디어 바이럴이 실제 순매수를 견인했는지 결론을 내려야 합니다."""
             st.code(p1_step2, language="text")
