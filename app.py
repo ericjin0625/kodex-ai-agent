@@ -1595,13 +1595,18 @@ Step 1(자금 유입 원인)과 Step 2(미디어 성과 평가)의 분석을 종
                     end_dt = datetime.today()
                     start_dt = end_dt - timedelta(days=365*3)
                     
-                    with st.spinner(f"해외 API에서 {st.session_state.p_proxy} 데이터를 불러옵니다..."):
+with st.spinner(f"해외 API에서 {st.session_state.p_proxy} 데이터를 불러옵니다..."):
                         try:
                             import yfinance as yf # [수정] 배당 수익 역산을 위해 yfinance 호출
                             ticker_data = yf.download(st.session_state.p_proxy, start=start_dt, end=end_dt)
                             
+                            # 💡 [핵심 수정] yfinance 최신 버전의 MultiIndex 컬럼 구조를 평탄화하여 KeyError 방지
+                            import pandas as pd
+                            if isinstance(ticker_data.columns, pd.MultiIndex):
+                                ticker_data.columns = ticker_data.columns.get_level_values(0)
+                            
                             if len(ticker_data) > 10:
-                                # yf.download 멀티인덱스 처리 및 단일 시리즈 추출
+                                # yf.download 평탄화 완료 후 단일 시리즈 추출
                                 price_series = ticker_data['Close'].squeeze().dropna()
                                 adj_series = ticker_data['Adj Close'].squeeze().dropna()
                                 
@@ -1630,7 +1635,7 @@ Step 1(자금 유입 원인)과 Step 2(미디어 성과 평가)의 분석을 종
                             else:
                                 st.error("🚨 야후 파이낸스(API)에서 유효한 주가 데이터를 불러오지 못했습니다.")
                         except Exception as e:
-                            st.error("🚨 야후 파이낸스(API) 서버 응답 지연으로 데이터를 불러올 수 없습니다. 잠시 후 다시 시도해 주세요.")
+                            st.error(f"🚨 야후 파이낸스(API) 서버 응답 지연으로 데이터를 불러올 수 없습니다. (상세: {e})")
                             
                     if backtest_success:
                         st.session_state.p_sharpe = round(sharpe, 2)
