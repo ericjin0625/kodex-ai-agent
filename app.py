@@ -1939,13 +1939,22 @@ with col_main:
             tgt = st.session_state.get('p_target_etf', '타겟 ETF')
             cmp = st.session_state.get('p_comp_etf', '경쟁 ETF')
 
+            # [수정] Numpy bool JSON 직렬화 에러 해결: LLM이 읽기 쉬운 Plain Text로 변환
+            macro_raw = get_macro_snapshot()
+            macro_text = ""
+            for cat, items in macro_raw.items():
+                for k, v in items.items():
+                    if v['val'] != "정보 불가":
+                        macro_text += f"- {k}: {v['val']} (변동: {v.get('pct', '')})\n"
+            if not macro_text:
+                macro_text = "현재 수집된 매크로 데이터 없음"
+
             st.markdown("**📌 [Step 1: Market & Macro Overview (시장 및 거시 환경 분석)]**")
             p1_step1 = f"""[Step 1: Market & Macro Overview (시장 및 거시 환경 분석)]
 다음은 시스템이 수집한 이번 주 핵심 매크로 지표 및 주간 뉴스 Raw Data입니다.
 
 [실시간 매크로 지표 및 환율 동향]:
-{json.dumps(get_macro_snapshot(), ensure_ascii=False, indent=2)}
-
+{macro_text}
 [이번 주 핵심 타겟 ETF 관련 뉴스 요약]:
 {st.session_state.get('weekly_dynamic_news', '뉴스 데이터 없음')}
 
@@ -2015,7 +2024,6 @@ with col_main:
                 user_idea = st.text_area("✍️ 기획하고자 하는 ETF의 핵심 아이디어를 자유롭게 적어주세요:", 
                                          value="미국 사모신용 자산 중에서 부채비율(LTV)이 낮고 현금흐름이 탄탄해서 배당 지속성이 높은 우량 BDC 종목들을 모아서 지수를 짜고 싶어. 커버드콜 옵션도 살짝 섞을 거야.", height=80)
 
-            # [수정] 엑셀 파일 첨부 유무에 따른 프롬프트 변수 로직 (안내문구 강화)
             if st.session_state.get('p_has_csv', False):
                 st.error("📥 **[필수 엑셀 파일 첨부]** '외부 AI에 엑셀 첨부' 옵션을 체크하셨습니다. 프롬프트 입력 시 다운로드하신 **'기초자산 유니버스 엑셀(CSV) 파일'**을 대화창에 반드시 함께 업로드해 주세요!")
                 csv_directive = f"내가 함께 첨부한 유니버스 엑셀(CSV) 원본 데이터를 분석하여, 아래 펀더멘털 필터링 룰(LTV {st.session_state.p_ltv}% 이하, FCF 마진 {st.session_state.p_fcf}% 이상)을 통과한 최종 편입 종목의 리스트를 추출하고 기획서 포트폴리오 섹션에 표 형태로 출력할 것."
