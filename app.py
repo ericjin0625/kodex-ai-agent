@@ -28,8 +28,6 @@ if 'df_volume_summary_text' not in st.session_state: st.session_state.df_volume_
 if 'aum_context_text' not in st.session_state: st.session_state.aum_context_text = "데이터 없음"
 if 'media_context' not in st.session_state: st.session_state.media_context = "데이터 없음"
 
-# [수정] 불필요한 더미 데이터(kw_data_df) 완전 삭제 완료
-
 if 'p_proxy' not in st.session_state: st.session_state.p_proxy = "데이터 없음"
 if 'p_proxy_reason' not in st.session_state: st.session_state.p_proxy_reason = "데이터 없음"
 if 'p_purity' not in st.session_state: st.session_state.p_purity = "데이터 없음"
@@ -408,8 +406,8 @@ with col_main:
         st.markdown("## 📊 ETF Market Intelligence")
         st.caption("국내외 거시 경제, 경쟁사 수급, 마케팅 액션 및 리테일 투자자 심리를 종합적으로 모니터링합니다.")
         
-        # [수정] 8번째 탭으로 'AI 리포트 산출' 탭 연동 및 통합
-        sub_tabs = st.tabs(["🏠 Home", "📊 Weekly Info", "📈 순매수/거래대금 및 수익률", "📰 뉴스 & 트렌드", "📺 이벤트 및 성과 검증", "🗣️ 고객 UX", "🥧 ETF/AUM 현황", "🤖 AI 리포트 산출"])
+        # [수정] 프롬프트 탭 삭제 후 7개로 복구
+        sub_tabs = st.tabs(["🏠 Home", "📊 Weekly Info", "📈 순매수/거래대금 및 수익률", "📰 뉴스 & 트렌드", "📺 이벤트 및 성과 검증", "🗣️ 고객 UX", "🥧 ETF/AUM 현황"])
 
         with sub_tabs[0]:
             st.markdown("<br><div style='text-align: center;'><h1>Macro & Market Dashboard</h1><p>실시간 거시 경제 및 시장 지표 요약</p></div><br>", unsafe_allow_html=True)
@@ -1394,40 +1392,6 @@ with col_main:
                     st.plotly_chart(fig_trend, use_container_width=True)
             else: st.info("👉 우측 패널에 엑셀 데이터를 업로드하시면 트렌드 그래프가 활성화됩니다.")
 
-        # [수정] 메인 탭 통폐합에 따른 AI 주간 리포트 프롬프트 편입 (8번째 하위 탭)
-        with sub_tabs[7]:
-            st.markdown("### 🤖 주간 시장 요약 및 세일즈 리포트 프롬프트 (3-Step)")
-            st.info("💡 대시보드의 실시간 데이터를 바탕으로 AI에게 주간 리포트를 지시하는 체인 프롬프트입니다. 제미나이(Gemini)나 GPT에 복사하여 입력하세요.")
-            
-            st.markdown("**📌 [Step 1: 매크로 환경 및 수급 원인 분석]**")
-            p1_step1 = f"""[Step 1: 시장 환경 및 자금 유입 원인 분석]
-이번 주 ETF 시장의 핵심 키워드는 다음과 같으며, 타겟 ETF에는 {st.session_state.get('stat_net_inflow', 0)}억 원이 순유입되었습니다.
-다음은 이번 주 시장 및 핵심 테마와 관련된 언론 보도(뉴스 크롤링) 내용입니다.
-[주요 뉴스]:
-{st.session_state.get('weekly_dynamic_news', '뉴스 데이터 없음')}
-
-위 뉴스 데이터를 바탕으로, 이번 주 리테일 투자자들의 자금이 왜 특정 테마와 상품으로 쏠렸는지 그 '거시적/심리적 원인'을 3줄로 진단하시오."""
-            st.code(p1_step1, language="text")
-
-            st.divider()
-
-            st.markdown("**📌 [Step 2: 미디어 바이럴 및 마케팅 임팩트 평가]**")
-            p1_step2 = f"""[Step 2: 미디어 바이럴 및 마케팅 성과 평가]
-이번 주 타겟 ETF 및 경쟁사의 미디어 마케팅 성과를 크롤링한 결과는 다음과 같습니다.
-[유튜브 바이럴 최상위 영상]: {st.session_state.get('yt_target_insights', '데이터 없음')}
-[커뮤니티 심리(VOC) 핵심]: {st.session_state.get('media_context', '데이터 없음')}
-
-위 미디어 노출이 실제로 타겟 ETF의 경쟁사 대비 이중차분(DiD) 성과({st.session_state.get('stat_did_multiplier', 0)}배)에 얼마나 기여했는지, 통계적 유의성(p-value: {st.session_state.get('stat_p_value', 1.0)})을 근거로 객관적으로 평가하시오. 미디어 바이럴이 실제 순매수를 견인했는지 결론을 내려야 합니다."""
-            st.code(p1_step2, language="text")
-
-            st.divider()
-
-            st.markdown("**📌 [Step 3: 최종 주간 마케팅 리포트 산출]**")
-            p1_step3 = """[Step 3: 최종 리테일 마케팅 본부 보고서 산출]
-Step 1(자금 유입 원인)과 Step 2(미디어 성과 평가)의 분석을 종합하여, 마케팅 본부장에게 보고할 '주간 세일즈 액션 플랜 리포트'를 마크다운 형식으로 작성하시오. 
-특히, 다음 주 자사 ETF의 순매수를 끌어올리기 위해 우리가 즉시 섭외해야 할 유튜브 채널 타겟(콘텐츠 방향성 포함)과 블로그 이벤트 기획 아이디어를 반드시 1가지씩 포함하여 제안할 것."""
-            st.code(p1_step3, language="text")
-
 # =========================================================================
 # Big 탭 2: 글로벌 상품 기획 시뮬레이터
 # =========================================================================
@@ -1480,6 +1444,10 @@ Step 1(자금 유입 원인)과 Step 2(미디어 성과 평가)의 분석을 종
             raw_keywords = ["타겟 인컴 ETF 버퍼형", "0DTE 초단기 옵션 커버드콜 ETF", "가상자산 비트코인 현물 ETF", "BDC 기업성장집합투자기구 대체투자", "하방 방어형 100% 버퍼 ETF"]
             
             search_kw_map = {
+                "사모신용 (BDC)": '"사모신용" OR "BDC"',
+                "대출채권담보부증권 (CLO)": '"CLO" OR "대출채권담보부증권"',
+                "에너지 인프라 (MLP)": '"MLP" OR "에너지 인프라"',
+                "상장 실물자산 (Listed Real Assets)": '"리츠" OR "실물자산" OR "부동산 ETF"',
                 "타겟 인컴 ETF 버퍼형": '"타겟 인컴" OR "버퍼형" OR "인컴 ETF"',
                 "0DTE 초단기 옵션 커버드콜 ETF": '"0DTE" OR "초단기" OR "위클리 커버드콜"',
                 "가상자산 비트코인 현물 ETF": '"비트코인 현물" OR "가상자산 ETF"',
@@ -1504,14 +1472,36 @@ Step 1(자금 유입 원인)과 Step 2(미디어 성과 평가)의 분석을 종
             
             st.divider()
             
-            # [수정] 신규 지수 뉴스 삭제 및 자산군 기반 주간 뉴스 2xN 그리드 배치
-            st.markdown(f"### 📰 `[{asset_class}]` 지난주(일~토) 핵심 동향 뉴스")
-            with st.spinner("해당 자산군의 지난주 뉴스를 정확히 필터링 중입니다..."):
-                asset_query = asset_class.split(" ")[0] # 예: "사모신용 (BDC)" -> "사모신용"
-                raw_news_df = get_realtime_news(asset_query, timeframe="14d", max_items=20)
+            # [수정] 정책 시그널 와이드 배치 및 불필요한 신규 지수 영역 삭제
+            st.markdown(f"### 📡 `[정책 시그널]` 핵심 혁신 구조 규제 완화 동향")
+            selected_trend_label = st.selectbox("🔍 규제 모니터링망 가동할 혁신 구조 선택:", options=raw_keywords, index=3)
+            st.session_state['selected_trend_label'] = selected_trend_label
+            
+            with st.spinner("선택된 테마의 규제 완화 관련 뉴스를 스크랩 중입니다..."):
+                policy_query = f'({search_kw_map[selected_trend_label]}) AND ("금융위" OR "규제" OR "법안" OR "가이드라인")'
+                df_gap_news = get_realtime_news(policy_query, timeframe="30d", max_items=6)
+                if "링크" in df_gap_news.columns and df_gap_news["링크"].iloc[0] != "":
+                    cols_grid = st.columns(2)
+                    for idx, row in df_gap_news.iterrows():
+                        with cols_grid[idx % 2]:
+                            with st.container(border=True):
+                                st.caption(f"📅 {row['게시일 / 출처']}")
+                                st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:14px; font-weight:bold; color:#ffb04d; text-decoration:none;'>[규제] {row['원본제목']} 🔗</a>", unsafe_allow_html=True)
+                else: 
+                    st.info("관련된 최신 정책/규제 뉴스 피드가 존재하지 않습니다.")
+            
+            st.divider()
+            
+            # [수정] 뉴스 검색 옵션을 넓히고 자산군 및 혁신 테마 뉴스까지 커버 (지난주 일~토 필터링)
+            st.markdown(f"### 📰 핵심 동향 모니터링 (지난주 일~토)")
+            news_options = ["사모신용 (BDC)", "대출채권담보부증권 (CLO)", "에너지 인프라 (MLP)", "상장 실물자산 (Listed Real Assets)"] + raw_keywords
+            selected_news_kw = st.selectbox("🔍 뉴스 검색망 가동할 핵심 키워드 선택:", options=news_options, index=0)
+            
+            with st.spinner("해당 키워드의 지난주 뉴스를 정확히 필터링 중입니다..."):
+                search_query = search_kw_map.get(selected_news_kw, f'"{selected_news_kw}"')
+                raw_news_df = get_realtime_news(search_query, timeframe="14d", max_items=20)
                 
                 today = datetime.today()
-                # 월요일 기준(0)으로 지난주 일~토 계산
                 last_sat = today - timedelta(days=today.weekday() + 2)
                 last_sun = last_sat - timedelta(days=6)
                 
@@ -1519,7 +1509,6 @@ Step 1(자금 유입 원인)과 Step 2(미디어 성과 평가)의 분석을 종
                 if "링크" in raw_news_df.columns and raw_news_df["링크"].iloc[0] != "":
                     for _, row in raw_news_df.iterrows():
                         try:
-                            # '22 Jun 2026' 형태의 날짜 추출 및 파싱
                             date_str = row['게시일 / 출처'].split(' / ')[0].strip()
                             pub_date = datetime.strptime(date_str, "%d %b %Y").date()
                             if last_sun.date() <= pub_date <= last_sat.date():
@@ -1535,40 +1524,34 @@ Step 1(자금 유입 원인)과 Step 2(미디어 성과 평가)의 분석을 종
                                 st.caption(f"📅 {row['게시일 / 출처']}")
                                 st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:14px; font-weight:bold; color:#4da6ff; text-decoration:none;'>{row['원본제목']} 🔗</a>", unsafe_allow_html=True)
                 else:
-                    st.info(f"선택하신 '{asset_class}' 관련 지난주(일~토) 기사가 존재하지 않습니다.")
+                    st.info(f"선택하신 '{selected_news_kw}' 관련 지난주({last_sun.strftime('%Y-%m-%d')} ~ {last_sat.strftime('%Y-%m-%d')}) 기사가 존재하지 않습니다.")
 
         # === 2. 기존 프록시 기반 상품 구조화 (Proxy Simulator) ===
         with sub_tabs_plan[1]:
-            st.markdown("#### Step 1. 테마 퓨리티, 펀더멘털 스크리닝 및 가중치 모델 설정")
-            col_p1, col_p2 = st.columns([1, 1.2])
-            with col_p1:
-                with st.container(border=True):
+            st.markdown("#### Step 1. 펀더멘털 스크리닝 및 가중치 모델 설정")
+            # [수정] 빈 공간 제거를 위한 단일 컨테이너 내부 병합 배치
+            with st.container(border=True):
+                c_s1, c_s2 = st.columns(2)
+                with c_s1:
                     st.markdown("**🔍 기초자산 펀더멘털 스크리닝 (허들 설정)**")
                     st.caption("AI를 통한 실제 종목 필터링 지시 기준이 될 재무 비율을 설정합니다.")
                     ltv_limit = st.slider("[AI 유니버스 필터링 지시용] 최대 LTV (부채비율) 한도 (%)", 10, 80, 40, step=5)
                     fcf_limit = st.slider("[AI 유니버스 필터링 지시용] 최소 잉여현금흐름(FCF) 마진 (%)", 0, 30, 10, step=1)
                     st.session_state.p_ltv = ltv_limit
                     st.session_state.p_fcf = fcf_limit
-                    
-                    st.info("💡 **안내:** 본 대시보드의 백테스트 차트는 대표 프록시 ETF의 실제 과거 수익률을 추종합니다. 위 슬라이더로 설정한 펀더멘털 룰은 차트를 실시간으로 변경하지 않으며, 하단의 'AI 기획서 프롬프트'에 조건값으로 주입되어 최종 기획서 작성에 활용됩니다.")
-                    
-                    # [수정] 업로더 제거 및 단순 체크박스로 변경
-                    st.markdown("<br>**📂 유니버스 데이터 연동 설정**", unsafe_allow_html=True)
-                    st.session_state.p_has_csv = st.checkbox("외부 AI(ChatGPT 등)에 유니버스 엑셀 파일을 직접 첨부할 예정입니다.", value=True)
-
-            with col_p2:
-                with st.container(border=True):
-                    st.markdown("**⚖️ 포트폴리오 가중치(Weighting) 룰**")
+                with c_s2:
+                    st.markdown("**⚖️ 포트폴리오 가중치 및 리스크 통제**")
                     weight_opt = st.selectbox("비중 배분 방식 선택:", [
                         "시가총액 가중 방식 (Cap-weighted)",
                         "Top 3 핵심종목 75% 편중 (Akros Core-Satellite)",
                         "Log-Market Cap 기반 비선형 가중 (대형주 쏠림 방지)"
                     ])
                     st.session_state.p_weight = weight_opt
-                    
-                    st.markdown("<br>**🛡️ 리스크 통제 (Breach Control)**", unsafe_allow_html=True)
                     cap_limit = st.slider("단일 종목 최대 편입 상한선 (Cap, %)", 10, 30, 20, step=1)
                     st.session_state.p_cap = cap_limit
+                    
+                st.info("💡 **안내:** 본 대시보드의 백테스트 차트는 대표 프록시 ETF의 실제 과거 수익률을 추종합니다. 위 슬라이더로 설정한 펀더멘털 룰은 차트를 실시간으로 변경하지 않으며, 하단의 'AI 기획서 프롬프트'에 조건값으로 주입되어 최종 기획서 작성에 활용됩니다.")
+                st.session_state.p_has_csv = st.checkbox("✅ 외부 AI(ChatGPT 등)에 유니버스 엑셀 파일을 직접 첨부할 예정입니다.", value=True)
 
             st.divider()
 
@@ -1580,7 +1563,8 @@ Step 1(자금 유입 원인)과 Step 2(미디어 성과 평가)의 분석을 종
             backtest_success = False
             
             with c_bt1:
-                with st.container(border=True):
+                # [수정] 박스 높이 동일화 (height 파라미터 적용)
+                with st.container(height=550, border=True):
                     st.markdown(f"**📈 {st.session_state.p_proxy} 과거 3년 백테스트 (자본차익 vs 배당수익 분해)**")
                     
                     lp_cost = st.slider("예상 LP 호가 스프레드 및 마찰비용 (연 %)", 0.0, 1.0, 0.2, 0.1)
@@ -1624,7 +1608,7 @@ Step 1(자금 유입 원인)과 Step 2(미디어 성과 평가)의 분석을 종
                         fig_decomp = go.Figure()
                         fig_decomp.add_trace(go.Scatter(x=dates, y=income_return, mode='lines', stackgroup='one', name=f'누적 배당/이자 (연 {annual_yield*100:.1f}%)', line=dict(color='#ffb04d')))
                         fig_decomp.add_trace(go.Scatter(x=dates, y=price_return, mode='lines', stackgroup='one', name='누적 자본 차익 (가격변동)', line=dict(color='#4da6ff')))
-                        fig_decomp.update_layout(height=280, margin=dict(t=10,b=10,l=10,r=10), yaxis_title="누적 수익률 (%)", xaxis_title="", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                        fig_decomp.update_layout(height=250, margin=dict(t=10,b=10,l=10,r=10), yaxis_title="누적 수익률 (%)", xaxis_title="", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                         st.plotly_chart(fig_decomp, use_container_width=True)
 
                         cc1, cc2 = st.columns(2)
@@ -1632,8 +1616,9 @@ Step 1(자금 유입 원인)과 Step 2(미디어 성과 평가)의 분석을 종
                         cc2.metric("실증 최대 낙폭(MDD)", f"{st.session_state.p_mdd}%")
 
             with c_bt2:
-                with st.container(border=True):
-                    st.markdown("**🌪️ 매크로 스트레스 테스트 시나리오 (실데이터 연동)**")
+                # [수정] 박스 높이 동일화
+                with st.container(height=550, border=True):
+                    st.markdown("**🌪️ 매크로 스트레스 테스트 시나리오**")
                     scenario = st.selectbox("과거 위기 시나리오 국면을 선택하세요:", [
                         "2020년 코로나 팬데믹 (글로벌 셧다운 및 신용경색)",
                         "2022년 급격한 금리 인상기 (인플레이션 쇼크)",
@@ -1660,7 +1645,7 @@ Step 1(자금 유입 원인)과 Step 2(미디어 성과 평가)의 분석을 종
                                 df_bar = pd.DataFrame({"자산": ["S&P 500", f"기획 Proxy ({st.session_state.p_proxy})"], "최대 낙폭 (%)": [sp_drop, my_drop]})
                                 fig_bar = px.bar(df_bar, x="자산", y="최대 낙폭 (%)", text="최대 낙폭 (%)", color="자산", color_discrete_map={"S&P 500": "gray", f"기획 Proxy ({st.session_state.p_proxy})": "#ffb04d"}, template="plotly_dark")
                                 fig_bar.update_traces(textposition='auto', texttemplate='%{text:.1f}%')
-                                fig_bar.update_layout(height=280, margin=dict(t=10, b=10, l=10, r=10), showlegend=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                                fig_bar.update_layout(height=250, margin=dict(t=10, b=10, l=10, r=10), showlegend=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                                 st.plotly_chart(fig_bar, use_container_width=True)
                                 st.info(f"💡 **AI 프롬프트 연동:** {desc} 로직이 자동 탑재됩니다.")
                             else:
@@ -1670,6 +1655,7 @@ Step 1(자금 유입 원인)과 Step 2(미디어 성과 평가)의 분석을 종
 
             st.divider()
 
+            # [수정] Step 3 레이아웃 개편: FX 와이드 배치 및 하단 2분할
             st.markdown("#### Step 3. 구조화, 세일즈 타겟팅 및 P&L")
             
             with st.expander("➕ 파생상품(옵션) 오버레이 전략 추가하기 (선택형 심화 모듈)", expanded=False):
@@ -1712,19 +1698,20 @@ Step 1(자금 유입 원인)과 Step 2(미디어 성과 평가)의 분석을 종
                         else:
                             st.warning("상단 백테스트 데이터가 없어 옵션 오버레이를 그릴 수 없습니다.")
 
-            c_pl1, c_pl2 = st.columns([1, 1.5])
-            with c_pl1:
-                with st.container(border=True):
-                    st.markdown("**💱 환율 전략 및 비용**")
+            # 환율 전략 와이드 배치
+            with st.container(border=True):
+                st.markdown("**💱 환율 전략 및 비용 시뮬레이터**")
+                
+                c_fx1, c_fx2 = st.columns([1, 2])
+                with c_fx1:
                     fx_strategy = st.selectbox("환율 전략 선택:", ["환노출 (Unhedged - 환차익/차손 노출)", "환헤지 (Hedged - 변동성 제거)"])
                     st.session_state.p_fx = fx_strategy
-                    
                     ter = st.slider("예상 총보수율 (TER, %)", 0.1, 1.5, 0.45, 0.05)
                     fx_hedge_cost = 2.0 if "환헤지" in fx_strategy else 0.0
                     annual_yield = 8.0 if "BDC" in asset_class else 6.0
                     net_yield = annual_yield - ter - fx_hedge_cost
-
-                    st.markdown("<br>**📉 환율 전략별 성과 차이 (실제 데이터 적용)**", unsafe_allow_html=True)
+                    
+                with c_fx2:
                     if backtest_success:
                         with st.spinner("과거 3년 실제 환율(USD/KRW) 데이터를 결합 중입니다..."):
                             try:
@@ -1738,27 +1725,17 @@ Step 1(자금 유입 원인)과 Step 2(미디어 성과 평가)의 분석을 종
                                 
                                 df_fx = pd.DataFrame({"기간": dates, "환헤지(H)": hedged_cum.values, "환노출(UH)": unhedged_cum.values}).melt(id_vars="기간")
                                 fig_fx = px.line(df_fx, x="기간", y="value", color="variable", template="plotly_dark", color_discrete_map={"환헤지(H)": "#4da6ff", "환노출(UH)": "#ff4d4d"})
-                                fig_fx.update_layout(height=200, margin=dict(t=10,b=10,l=10,r=10), yaxis_title="수익률 궤적", xaxis_title="", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                                fig_fx.update_layout(height=220, margin=dict(t=10,b=10,l=10,r=10), yaxis_title="수익률 궤적", xaxis_title="", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                                 st.plotly_chart(fig_fx, use_container_width=True)
                             except Exception:
                                 st.error("🚨 야후 파이낸스(API) 서버 응답 지연으로 환율(USD/KRW) 데이터를 불러오지 못했습니다.")
                     else:
                         st.warning("상단 백테스트 데이터가 없어 환율 궤적을 그릴 수 없습니다.")
 
-            with c_pl2:
-                with st.container(border=True):
-                    st.markdown("##### 📄 Simulated Product Factsheet")
-                    st.metric("최종 타겟 배당수익률 (Net Yield)", f"{net_yield:.2f}%")
-                    
-                    risk_level = "보통 위험 (Medium Risk)" if "환헤지" in fx_strategy else "높은 위험 (High Risk)"
-                    fx_desc = f"달러 변동성 제거 (헤지 프리미엄 연 약 {fx_hedge_cost}% 발생)" if "환헤지" in fx_strategy else "달러 강세 시 환차익 추가 향유 가능 (변동성 노출)"
-                    tax_desc = "퇴직연금(IRP/DC) 내 안전자산(30%) 룸 편입용" if "환헤지" in fx_strategy else "배당소득세 및 종합과세 방어를 위한 ISA 계좌 편입용"
-                    
-                    st.write(f"- **위험 등급:** {risk_level}")
-                    st.write(f"- **FX 전략:** {fx_desc}")
-                    st.success(f"💰 **세금 최적화(Tax):** {tax_desc}으로 타겟팅하는 세일즈에 유리합니다.")
-
-                with st.container(border=True):
+            # 하단 P&L 및 팩트시트 좌우 병렬 배치
+            c_pl_left, c_pl_right = st.columns(2)
+            with c_pl_left:
+                with st.container(height=480, border=True):
                     st.markdown("**🏢 자산운용사(AMC) 수지 분석 및 피어(Peer) 타겟팅**")
                     
                     col_tgt1, col_tgt2 = st.columns(2)
@@ -1774,9 +1751,9 @@ Step 1(자금 유입 원인)과 Step 2(미디어 성과 평가)의 분석을 종
                     
                     ter_diff = comp_ter - ter
                     if ter_diff > 0:
-                        st.success(f"🔥 가격 경쟁력 확보: 경쟁사({comp_ticker}) 대비 보수율이 {ter_diff:.2f}% 저렴하여 훌륭한 스위칭(Switching) 무기가 됩니다.")
+                        st.success(f"🔥 가격 경쟁력 확보: 경쟁사 대비 보수율이 {ter_diff:.2f}% 저렴합니다.")
                     else:
-                        st.warning(f"⚠️ 보수율 열위: 경쟁사 대비 보수율이 높거나 같으므로 강력한 차별화 구조화(버퍼 등) 포인트가 필요합니다.")
+                        st.warning(f"⚠️ 보수율 열위: 경쟁사 대비 보수율이 높거나 같으므로 차별화 포인트가 필요합니다.")
                     
                     amc_margin = ter - 0.05
                     fixed_cost = 1.5
@@ -1803,26 +1780,31 @@ Step 1(자금 유입 원인)과 Step 2(미디어 성과 평가)의 분석을 종
                         increasing = {"marker":{"color":"#4da6ff"}},
                         totals = {"marker":{"color":"#ffb04d" if net_profit > 0 else "gray"}}
                     ))
-                    fig_wf.update_layout(height=200, margin=dict(t=20, b=10, l=10, r=10), template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                    fig_wf.update_layout(height=180, margin=dict(t=20, b=10, l=10, r=10), template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                     st.plotly_chart(fig_wf, use_container_width=True)
+
+            with c_pl_right:
+                with st.container(height=480, border=True):
+                    st.markdown("##### 📄 Simulated Product Factsheet")
+                    st.metric("최종 타겟 배당수익률 (Net Yield)", f"{net_yield:.2f}%")
+                    
+                    risk_level = "보통 위험 (Medium Risk)" if "환헤지" in fx_strategy else "높은 위험 (High Risk)"
+                    fx_desc = f"달러 변동성 제거 (헤지 프리미엄 연 약 {fx_hedge_cost}% 발생)" if "환헤지" in fx_strategy else "달러 강세 시 환차익 추가 향유 가능 (변동성 노출)"
+                    tax_desc = "퇴직연금(IRP/DC) 내 안전자산(30%) 룸 편입용" if "환헤지" in fx_strategy else "배당소득세 및 종합과세 방어를 위한 ISA 계좌 편입용"
+                    
+                    st.write(f"- **위험 등급:** {risk_level}")
+                    st.write(f"- **FX 전략:** {fx_desc}")
+                    st.success(f"💰 **세금 최적화(Tax):** {tax_desc}으로 타겟팅하는 세일즈에 유리합니다.")
+                    st.info("해당 팩트시트의 핵심 소구 포인트는 우측 상단의 'AI 프롬프트' 탭으로 전달되어 최종 마케팅 제안서 작성에 자동으로 활용됩니다.")
 
         # === 3. 가상 지수 샌드박스 ===
         with sub_tabs_plan[2]:
             st.markdown("### 💡 가상 지수 샌드박스 (Synthetic Index Simulator)")
             st.caption("실제 지수 편입 종목을 시뮬레이션하고, S&P 500 등 벤치마크 대비 복제 오차(TE)와 상관관계를 검증합니다.")
 
+            # [수정] 프롬프트 제너레이터 부분 완전히 삭제 및 탭 3으로 이관
             with st.container(border=True):
-                st.markdown("#### 1. 기획 아이디어 입력 및 AI 매칭 (Prompt Generator)")
-                user_idea = st.text_area("✍️ 기획하고자 하는 ETF의 핵심 아이디어를 자유롭게 적어주세요:", 
-                                         value="미국 사모신용 자산 중에서 부채비율(LTV)이 낮고 현금흐름이 탄탄해서 배당 지속성이 높은 우량 BDC 종목들을 모아서 지수를 짜고 싶어. 커버드콜 옵션도 살짝 섞을 거야.", height=100)
-                
-                if st.button("✨ 프롬프트 생성 (AI용)"):
-                    st.info("👇 아래 텍스트를 복사하여 ChatGPT나 Gemini에게 붙여넣고 티커/비중 추천을 받아보세요.")
-                    prompt_text = f"[역할: 수석 퀀트 애널리스트 및 ETF 기획자]\n다음 아이디어를 바탕으로 ETF에 편입할 실제 종목 티커(Ticker) 3~5개와 그 가중치(%) 룰을 제안해 줘. 기존에 존재하는 유사 지수가 있다면 함께 언급해 줘.\n\n[나의 기획 아이디어]: {user_idea}"
-                    st.code(prompt_text, language="text")
-
-            with st.container(border=True):
-                st.markdown("#### 2. 퀀트 시뮬레이션 컨트롤 패널 (Total Return 기반)")
+                st.markdown("#### 1. 퀀트 시뮬레이션 컨트롤 패널 (Total Return 기반)")
                 
                 sandbox_tickers_input = st.text_input("📌 지수 편입 종목 (전 세계 주식/ETF 티커를 쉼표(,)로 구분):", value="ARCC, OBDC, MAIN, HTGC")
                 sandbox_tickers = [t.strip().upper() for t in sandbox_tickers_input.split(",") if t.strip()]
@@ -1838,7 +1820,7 @@ Step 1(자금 유입 원인)과 Step 2(미디어 성과 평가)의 분석을 종
                     
                 sandbox_rebal_cost = st.slider("🔄 연간 리밸런싱 마찰 비용 (Turnover Cost, %)", 0.0, 1.0, 0.3, 0.1, help="잦은 매매로 인해 깎여나가는 거래 비용을 일할 차감하여 백테스트의 보수성을 높입니다.")
 
-            st.markdown("#### 3. 하이브리드 시나리오 차트 및 복제 오차(TE) 모니터링")
+            st.markdown("#### 2. 하이브리드 시나리오 차트 및 복제 오차(TE) 모니터링")
             if len(sandbox_tickers) > 0:
                 with st.spinner("해외 API에서 실제 주가 데이터를 수집하여 Total Return 지수를 합성하고 있습니다..."):
                     end_dt = datetime.today()
@@ -1991,9 +1973,16 @@ Step 1(자금 유입 원인)과 Step 2(미디어 성과 평가)의 분석을 종
             st.markdown("#### [글로벌 대체자산 ETF 상품기획 프롬프트 - 5-Step 체인]")
             st.caption("고품질의 상세한 상품 기획서(5~6페이지 분량)를 도출하기 위해, 실제 자산운용사 제안서 목차에 맞춘 5단계 체인 프롬프트입니다. 한 번에 하나씩 복사하여 프로급 AI(ChatGPT, Gemini 등)에 순서대로 입력하세요.")
 
-            # [수정] 체크박스 상태에 따른 안내문구 및 프롬프트 변수 동기화
+            # [수정] 샌드박스의 프롬프트 제너레이터를 이곳으로 통합
+            with st.container(border=True):
+                st.markdown("##### 💡 0. 기획 아이디어 입력 (Pre-Step)")
+                st.caption("아래 텍스트 박스에 입력한 기획 의도가 Step 1 프롬프트에 자동으로 스며들어 AI에게 지시됩니다.")
+                user_idea = st.text_area("✍️ 기획하고자 하는 ETF의 핵심 아이디어를 자유롭게 적어주세요:", 
+                                         value="미국 사모신용 자산 중에서 부채비율(LTV)이 낮고 현금흐름이 탄탄해서 배당 지속성이 높은 우량 BDC 종목들을 모아서 지수를 짜고 싶어. 커버드콜 옵션도 살짝 섞을 거야.", height=80)
+
+            # [수정] 체크박스 상태 연동 안내 (임시 안내 문구 포함)
             if st.session_state.get('p_has_csv', False):
-                st.info("💡 **안내:** '외부 AI에 엑셀 첨부' 옵션을 체크하셨습니다. 프롬프트 입력 시 다운로드하신 '기초자산 유니버스 엑셀(CSV) 파일'을 반드시 함께 업로드해 주세요.")
+                st.info("💡 **안내:** 시뮬레이터에서 '외부 AI에 엑셀 첨부' 옵션을 체크하셨습니다. 프롬프트 입력 시 다운로드하신 '기초자산 유니버스 엑셀(CSV) 파일'을 대화창에 반드시 함께 업로드해 주세요.")
                 csv_directive = f"첨부된 유니버스 엑셀(CSV) 데이터를 분석하여, 위 펀더멘털 필터링 룰(LTV {st.session_state.p_ltv}% 이하, FCF 마진 {st.session_state.p_fcf}% 이상)을 통과한 최종 편입 종목 10개의 리스트를 기획서 포트폴리오 섹션에 표 형태로 출력할 것."
             else:
                 csv_directive = f"구체적인 개별 종목 데이터가 없으므로, 위 펀더멘털 필터링 룰(LTV {st.session_state.p_ltv}% 이하, FCF 마진 {st.session_state.p_fcf}% 이상)을 적용했을 때 편입될 수 있는 대표적인 우량 기초자산들의 예시와 해당 필터링 방식의 논리적 타당성을 서술할 것."
@@ -2001,6 +1990,7 @@ Step 1(자금 유입 원인)과 Step 2(미디어 성과 평가)의 분석을 종
             st.markdown("**📌 [Step 1: 유니버스 선정 및 지수 산출 방법론]**")
             p2_step1 = f"""너는 최고 수준의 자산운용사 ETF 상품개발(PD) 시니어 수석 매니저야. 첫 번째 작업으로 아래 데이터를 바탕으로 **[1. 기초자산 유니버스 및 지수 산출 방법론]** 파트를 아주 상세하게(약 1페이지 분량) 작성해 줘.
 
+- 기획 의도: {user_idea}
 - 기초자산 프록시: {st.session_state.p_proxy}
 - 프록시 선정 논리: {st.session_state.p_proxy_reason} (이 논리로 타겟 자산군의 대표성을 부여할 것)
 - 펀더멘털 스크리닝: LTV(부채비율) {st.session_state.p_ltv}% 이하, 잉여현금흐름(FCF) 마진 {st.session_state.p_fcf}% 이상을 허들로 설정하여 현금흐름의 지속가능성을 평가.
@@ -2030,107 +2020,6 @@ Step 1(자금 유입 원인)과 Step 2(미디어 성과 평가)의 분석을 종
 
             st.markdown("**📌 [Step 4: 자산운용사(AMC) 수지 분석 및 M/S 타겟팅]**")
             st.caption("📸 **권장 첨부 이미지:** [글로벌 상품 기획 시뮬레이터] ➡️ [🔍 2. 기존 프록시 기반 상품 구조화] 탭의 **'P&L 폭포수(Waterfall) 차트'** (우측 상단 📷 아이콘 클릭)")
-            p2_step4 = f"""네 번째 작업으로, 본 상품을 출시했을 때 자산운용사 입장에서의 수익성과 시장 침투 전략을 다루는 **[4. 운용사 P&L 및 비즈니스 타당성 분석]** 파트를 재무적 관점에서 상세히(약 1페이지 분량) 작성해 줘.
-
-- M/S 탈환 전략: 타겟 경쟁사인 [{st.session_state.get('p_comp_ticker', '유사ETF')}]의 보수율({st.session_state.get('p_comp_ter', 0.5)}%) 대비 당사 보수율의 가격 경쟁력 우위/열위를 분석하여, AUM 뺏어오기(Switching) 또는 차별화 마케팅 전략을 구체화할 것.
-- AUM 및 손익(P&L) 구조: 첫해 타겟 AUM {st.session_state.p_aum}억 원 달성 시, 운용보수에서 신탁보수 및 고정 유지비/마케팅 비용을 차감한 운용사 예상 순수익은 {st.session_state.p_profit}억 원으로 추정됨. 
-- 작성 지시: 위 P&L 데이터를 근거로, 상품 런칭 시점의 초기 시딩(Seeding) 규모와 공격적인 마케팅 비용 집행이 시장 점유율 확보 관점에서 왜 타당한 투자인지 경영진(C-Level)을 설득하는 논리를 전개할 것. (※ 첨부된 P&L 폭포수 차트 이미지를 바탕으로 재무적 타당성을 설명할 것)"""
-            st.code(p2_step4, language="text")
-
-            st.markdown("**📌 [Step 5: 요약 보고서 및 리테일 세일즈 팩트시트 산출]**")
-            p2_step5 = """마지막 작업이야. Step 1부터 Step 4까지 전개한 모든 퀀트 논리와 수치 데이터를 총망라하여, 다음 두 가지 실무 산출물을 각각 분리해서 최종 완성해 줘.
-
-1. **[Executive Summary (임원 보고용 요약본)]**: 본부장 및 임원진이 1분 안에 의사결정을 내릴 수 있도록 1페이지 분량으로 요약된 공문서. (기획 의도, 핵심 퀀트 성과, BEP 및 경쟁사 타겟팅 타당성이 일목요연하게 정리되어야 함)
-2. **[Retail Sales Factsheet (세일즈 팩트시트)]**: PB(프라이빗 뱅커) 및 일반 리테일 고객이 읽을 1페이지 분량의 마케팅 팩트시트. 고객을 사로잡을 직관적인 카피라이팅으로 '핵심 소구 포인트 3가지'를 도출하고, 투자 위험도 및 세금(Tax) 혜택 활용법을 알기 쉽게 풀어쓸 것.
-
-모든 출력물은 금융 투자 분석사 및 상품 개발 실무자의 전문적인 톤앤매너를 엄격히 준수하라."""
-            st.code(p2_step5, language="text")
-            
-# -------------------------------------------------------------------------
-    # Big 탭 3: 🤖 AI 프롬프트 (마스터 프롬프트 추출소)
-    # -------------------------------------------------------------------------
-    elif big_tab == "🤖 AI 프롬프트":
-        st.markdown("### 🧠 모듈형 AI 프롬프트 컨트롤 타워")
-        st.caption("각 단계별 목적에 맞게 AI(LLM)에게 전달할 최적화된 프롬프트를 체인(Chain) 형태로 분리하여 제공합니다.")
-        
-        prompt_tabs = st.tabs(["📊 1. 주간 모니터링 체인 프롬프트", "🌟 2. 상품 기획 RAG 마스터 프롬프트 (최종 결과물)"])
-        
-        with prompt_tabs[0]:
-            st.markdown("#### [주간 시장 요약 및 세일즈 리포트 프롬프트 - 3-Step 체인]")
-            st.info("💡 대시보드의 실시간 데이터를 바탕으로 AI에게 주간 리포트를 지시하는 3단계 체인 프롬프트입니다. 한 번에 하나씩 복사하여 제미나이(Gemini)나 GPT에 입력하세요.")
-            
-            st.markdown("**📌 [Step 1: 매크로 환경 및 수급 원인 분석]**")
-            p1_step1 = f"""[Step 1: 시장 환경 및 자금 유입 원인 분석]
-이번 주 ETF 시장의 핵심 키워드는 다음과 같으며, 타겟 ETF에는 {st.session_state.get('stat_net_inflow', 0)}억 원이 순유입되었습니다.
-다음은 이번 주 시장 및 핵심 테마와 관련된 언론 보도(뉴스 크롤링) 내용입니다.
-[주요 뉴스]:
-{st.session_state.get('weekly_dynamic_news', '뉴스 데이터 없음')}
-
-위 뉴스 데이터를 바탕으로, 이번 주 리테일 투자자들의 자금이 왜 특정 테마와 상품으로 쏠렸는지 그 '거시적/심리적 원인'을 3줄로 진단하시오."""
-            st.code(p1_step1, language="text")
-
-            st.divider()
-
-            st.markdown("**📌 [Step 2: 미디어 바이럴 및 마케팅 임팩트 평가]**")
-            p1_step2 = f"""[Step 2: 미디어 바이럴 및 마케팅 성과 평가]
-이번 주 타겟 ETF 및 경쟁사의 미디어 마케팅 성과를 크롤링한 결과는 다음과 같습니다.
-[유튜브 바이럴 최상위 영상]: {st.session_state.get('yt_target_insights', '데이터 없음')}
-[커뮤니티 심리(VOC) 핵심]: {st.session_state.get('media_context', '데이터 없음')}
-
-위 미디어 노출이 실제로 타겟 ETF의 경쟁사 대비 이중차분(DiD) 성과({st.session_state.get('stat_did_multiplier', 0)}배)에 얼마나 기여했는지, 통계적 유의성(p-value: {st.session_state.get('stat_p_value', 1.0)})을 근거로 객관적으로 평가하시오. 미디어 바이럴이 실제 순매수를 견인했는지 결론을 내려야 합니다."""
-            st.code(p1_step2, language="text")
-
-            st.divider()
-
-            st.markdown("**📌 [Step 3: 최종 주간 마케팅 리포트 산출]**")
-            p1_step3 = """[Step 3: 최종 리테일 마케팅 본부 보고서 산출]
-Step 1(자금 유입 원인)과 Step 2(미디어 성과 평가)의 분석을 종합하여, 마케팅 본부장에게 보고할 '주간 세일즈 액션 플랜 리포트'를 마크다운 형식으로 작성하시오. 
-특히, 다음 주 자사 ETF의 순매수를 끌어올리기 위해 우리가 즉시 섭외해야 할 유튜브 채널 타겟(콘텐츠 방향성 포함)과 블로그 이벤트 기획 아이디어를 반드시 1가지씩 포함하여 제안할 것."""
-            st.code(p1_step3, language="text")
-            
-        with prompt_tabs[1]:
-            st.markdown("#### [글로벌 대체자산 ETF 상품기획 프롬프트 - 5-Step 체인]")
-            
-            st.caption("고품질의 상세한 상품 기획서(5~6페이지 분량)를 도출하기 위해, 실제 자산운용사 제안서 목차에 맞춘 5단계 체인 프롬프트입니다. 한 번에 하나씩 복사하여 프로급 AI(ChatGPT, Gemini 등)에 순서대로 입력하세요.")
-
-            if st.session_state.p_has_csv:
-                csv_directive = f"첨부된 유니버스 엑셀(CSV) 데이터를 분석하여, 위 펀더멘털 필터링 룰(LTV {st.session_state.p_ltv}% 이하, FCF 마진 {st.session_state.p_fcf}% 이상)을 통과한 최종 편입 종목 10개의 리스트를 기획서 포트폴리오 섹션에 표 형태로 출력할 것."
-            else:
-                csv_directive = f"구체적인 개별 종목 데이터가 없으므로, 위 펀더멘털 필터링 룰(LTV {st.session_state.p_ltv}% 이하, FCF 마진 {st.session_state.p_fcf}% 이상)을 적용했을 때 편입될 수 있는 대표적인 우량 기초자산들의 예시와 해당 필터링 방식의 논리적 타당성을 서술할 것."
-
-            st.markdown("**📌 [Step 1: 유니버스 선정 및 지수 산출 방법론]**")
-            st.caption("📁 **권장 첨부 파일:** 기초자산 스크리닝이 완료된 엑셀/CSV 유니버스 파일 (보유하고 있는 경우에만)")
-            p2_step1 = f"""너는 최고 수준의 자산운용사 ETF 상품개발(PD) 시니어 수석 매니저야. 첫 번째 작업으로 아래 데이터를 바탕으로 **[1. 기초자산 유니버스 및 지수 산출 방법론]** 파트를 아주 상세하게(약 1페이지 분량) 작성해 줘.
-
-- 기초자산 프록시: {st.session_state.p_proxy}
-- 프록시 선정 논리: {st.session_state.p_proxy_reason} (이 논리로 타겟 자산군의 대표성을 부여할 것)
-- 펀더멘털 스크리닝: LTV(부채비율) {st.session_state.p_ltv}% 이하, 잉여현금흐름(FCF) 마진 {st.session_state.p_fcf}% 이상을 허들로 설정하여 현금흐름의 지속가능성을 평가.
-- 편입 종목 도출 지시: {csv_directive}
-- 가중치 배분 및 리스크 통제: [{st.session_state.p_weight}] 룰을 적용하고, 단일 종목 최대 편입비중(Cap)은 {st.session_state.p_cap}%로 엄격히 통제함.
-- 지수 유지보수: 기초자산의 유상증자, 분할, M&A 등 발생 시 S&P DJI 및 FnGuide의 이벤트 처리 방법론(Divisor Adjustment)을 준용하여 추적오차를 통제하는 룰을 명시할 것."""
-            st.code(p2_step1, language="text")
-
-            st.markdown("**📌 [Step 2: 퀀트 백테스팅 및 매크로 스트레스 테스트]**")
-            st.caption("📸 **권장 첨부 이미지:** [글로벌 상품 기획 시뮬레이터] ➡️ [💡 2. 가상 지수 샌드박스] 탭의 **'하이브리드 시나리오 차트 (밴드 차트)'** (우측 상단 📷 아이콘 클릭)")
-            p2_step2 = f"""훌륭해. 두 번째 작업으로 앞서 설정한 지수의 **[2. 퀀트 퍼포먼스 및 리스크 검증]** 파트를 상세히(약 1페이지 분량) 작성해 줘.
-
-- 퀀트 백테스트 지표: 샤프비율 {st.session_state.p_sharpe}, MDD {st.session_state.p_mdd}%, S&P 500 상관계수 {st.session_state.p_corr}.
-- 마찰 비용(Friction Cost) 할인: 위 백테스트 수치는 LP 호가 스프레드 및 리밸런싱 슬리피지를 감안하여 [연 {st.session_state.get('p_lp_cost', 0.2)}%]의 보수적인 할인율이 차감된 실전적 수치임을 강조할 것.
-- 다각화 증명 지시: 전통 자산(주식/채권)과의 상관계수 데이터를 바탕으로, 기관 및 리테일 투자자의 핵심 포트폴리오에 본 ETF 편입 시 발생하는 꼬리 위험(Tail Risk) 헷지 효과를 수학적으로 증명할 것.
-- 수익 원천 분석: 총수익률을 자본 차익(Price Return)과 인컴 수익(Income Return)으로 철저히 분해하여, 자산 가격 하락장에서도 누적된 인컴이 훌륭한 하방 버퍼(Buffer) 역할을 수행함을 강조할 것.
-- 스트레스 테스트: [{st.session_state.p_scenario}] 당시의 매크로 위기 국면을 예시로 들어, 해당 자산군의 회복력(Resilience)을 증명할 것. (※ 첨부된 밴드 차트 이미지를 통해 벤치마크 대비 하방 방어력을 분석할 것)"""
-            st.code(p2_step2, language="text")
-
-            st.markdown("**📌 [Step 3: 상품 구조화 및 세무/채널 타겟팅]**")
-            p2_step3 = f"""좋아. 세 번째 작업으로 실질적인 상품 런칭을 위한 **[3. 상품 구조화 및 세무/마케팅 채널 전략]** 파트를 상세히(약 1페이지 분량) 작성해 줘.
-
-- 환율 전략: [{st.session_state.p_fx}] (이 전략이 투자자의 수익률 궤적에 미치는 영향을 서술할 것)
-- 세제 혜택 연계 및 채널 타겟팅: 본 상품의 환율 전략과 대체자산 특유의 고배당 속성을 종합적으로 감안하여, 연금 채널(IRP/퇴직연금 안전자산 30% 룸) 또는 ISA 계좌 중 어디에 편입하는 것이 고객의 세후 수익률(After-tax Return) 관점에서 유리한지 논리적으로 구조화할 것.
-- 타겟 페르소나: 이 구조화 전략에 가장 매력을 느낄 핵심 타겟 고객층(예: 현금흐름 창출을 원하는 은퇴 준비자 등)을 정의할 것."""
-            st.code(p2_step3, language="text")
-
-            st.markdown("**📌 [Step 4: 자산운용사(AMC) 수지 분석 및 M/S 타겟팅]**")
-            st.caption("📸 **권장 첨부 이미지:** [글로벌 상품 기획 시뮬레이터] ➡️ [🔍 1. 기존 프록시 기반 상품 구조화] 탭의 **'P&L 폭포수(Waterfall) 차트'** (우측 상단 📷 아이콘 클릭)")
             p2_step4 = f"""네 번째 작업으로, 본 상품을 출시했을 때 자산운용사 입장에서의 수익성과 시장 침투 전략을 다루는 **[4. 운용사 P&L 및 비즈니스 타당성 분석]** 파트를 재무적 관점에서 상세히(약 1페이지 분량) 작성해 줘.
 
 - M/S 탈환 전략: 타겟 경쟁사인 [{st.session_state.get('p_comp_ticker', '유사ETF')}]의 보수율({st.session_state.get('p_comp_ter', 0.5)}%) 대비 당사 보수율의 가격 경쟁력 우위/열위를 분석하여, AUM 뺏어오기(Switching) 또는 차별화 마케팅 전략을 구체화할 것.
