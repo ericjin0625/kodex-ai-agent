@@ -433,7 +433,7 @@ with col_main:
         st.markdown("## 📊 ETF Market Intelligence")
         st.caption("국내외 거시 경제, 경쟁사 수급, 마케팅 액션 및 리테일 투자자 심리를 종합적으로 모니터링합니다.")
         
-        sub_tabs = st.tabs(["🏠 Home", "📊 Weekly Info", "📈 순매수 & 수익률", "📰 뉴스 & 트렌드", "💸 거래량 추이", "📺 이벤트 및 성과 검증", "🗣️ 고객 UX", "🥧 ETF/AUM 현황"])
+        sub_tabs = st.tabs(["🏠 Home", "📊 Weekly Info", "📈 순매수/거래대금 및 수익률", "📰 뉴스 & 트렌드", "📺 이벤트 및 성과 검증", "🗣️ 고객 UX", "🥧 ETF/AUM 현황"])
 
         with sub_tabs[0]:
             st.markdown("<br><div style='text-align: center;'><h1>Macro & Market Dashboard</h1><p>실시간 거시 경제 및 시장 지표 요약</p></div><br>", unsafe_allow_html=True)
@@ -565,11 +565,13 @@ with col_main:
                             for etf in selected_scatter_etfs:
                                 this_week_val = df_c[df_c['종목명'] == etf]['이번주'].values[0]
                                 aum_raw = aum_mapping.get(etf, 0)
+                                
                                 if pd.isna(aum_raw) or aum_raw == 0:
                                     ratio = 0
                                 else:
-                                    aum_100m = aum_raw / 100_000_000 # KRW 원을 억원 단위로 변환
-                                    ratio = (this_week_val / aum_100m) * 100 if aum_100m > 0 else 0
+                                    ratio = (this_week_val / aum_raw) * 100
+                                    if abs(ratio) < 0.0001 and this_week_val != 0:
+                                        ratio = ((this_week_val * 100_000_000) / aum_raw) * 100
                                 
                                 sym = symbols_mapping.get(etf)
                                 ret_t0, ret_t1, ret_t2 = 0.0, 0.0, 0.0
@@ -621,7 +623,39 @@ with col_main:
                             draw_scatter(c_s1, "T-0 수익률(%)", "**T-0 (이번주 수익률) 반응**")
                             draw_scatter(c_s2, "T-1 수익률(%)", "**T-1 (지난주 수익률) 반응**")
                             draw_scatter(c_s3, "T-2 수익률(%)", "**T-2 (지지난주 수익률) 반응**")
-            else: st.info("👉 우측 패널에 엑셀 데이터를 업로드해주세요.")
+                
+                st.divider()
+                st.markdown("### 📊 선택 ETF 실제 주간 거래량(거래대금 프록시) 추이")
+                df_source = load_and_clean_excel(uploaded_excel, selected_week)
+                if not df_source.empty and '종목명' in df_source.columns:
+                    extracted_etfs = df_source[df_source['종목명'] != '전체']['종목명'].dropna().unique().tolist()
+                    selected_etfs = st.multiselect("검색 및 선택 (원하시는 만큼 무제한 선택 가능합니다):", options=extracted_etfs, default=extracted_etfs[:4] if len(extracted_etfs) >= 4 else extracted_etfs, key="vol_multiselect")
+                    st.divider()
+                    if selected_etfs:
+                        volume_lines = []
+                        with st.spinner("한국거래소(KRX)에서 거래 데이터를 불러오는 중입니다..."):
+                            cols = st.columns(2)
+                            symbols_mapping = get_etf_mapping()
+                            end_date = datetime.today()
+                            start_date = end_date - timedelta(weeks=8) 
+                            for i, etf_name in enumerate(selected_etfs):
+                                with cols[i % 2]:
+                                    symbol = symbols_mapping.get(etf_name)
+                                    if symbol:
+                                        try:
+                                            df_hist = fdr.DataReader(symbol, start_date, end_date)
+                                            df_weekly = df_hist['Volume'].resample('W').sum().reset_index()
+                                            df_weekly.columns = ['주 시작일', '거래량']
+                                            last_vol = df_weekly['거래량'].iloc[-1] if not df_weekly.empty else 0
+                                            volume_lines.append(f"- {etf_name}: 최근 주간 거래량 {last_vol:,.0f}주")
+                                            
+                                            fig_line = px.line(df_weekly, x='주 시작일', y='거래량', title=f"**{etf_name}** 실제 주간 거래량 추이", markers=True, color_discrete_sequence=['#4da6ff'])
+                                            fig_line.update_layout(height=350, template="plotly_dark", yaxis_title="주간 거래량 (주)", xaxis_title=None, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                                            st.plotly_chart(fig_line, use_container_width=True)
+                                        except: st.error(f"{etf_name}의 데이터를 불러오지 못했습니다.")
+                            if volume_lines:
+                                st.session_state.df_volume_summary_text = "\n".join(volume_lines)
+            else: st.info("👉 우측 패널에 엑셀 데이터를 업로드해주세요. (비교를 위해 2주 이상의 데이터가 필요합니다)")
 
         with sub_tabs[3]:
             st.markdown("### 📰 실시간 뉴스 리스트")
@@ -673,40 +707,6 @@ with col_main:
             else: st.dataframe(df_dynamic_news, use_container_width=True, hide_index=True)
 
         with sub_tabs[4]:
-            st.markdown("### 📊 선택 ETF 실제 주간 거래량 추이")
-            if uploaded_excel is not None and selected_week != "데이터 없음":
-                df_source = load_and_clean_excel(uploaded_excel, selected_week)
-                if not df_source.empty and '종목명' in df_source.columns:
-                    extracted_etfs = df_source[df_source['종목명'] != '전체']['종목명'].dropna().unique().tolist()
-                    selected_etfs = st.multiselect("검색 및 선택 (원하시는 만큼 무제한 선택 가능합니다):", options=extracted_etfs, default=extracted_etfs[:4] if len(extracted_etfs) >= 4 else extracted_etfs)
-                    st.divider()
-                    if selected_etfs:
-                        volume_lines = []
-                        with st.spinner("한국거래소(KRX)에서 거래 데이터를 불러오는 중입니다..."):
-                            cols = st.columns(2)
-                            symbols_mapping = get_etf_mapping()
-                            end_date = datetime.today()
-                            start_date = end_date - timedelta(weeks=8) 
-                            for i, etf_name in enumerate(selected_etfs):
-                                with cols[i % 2]:
-                                    symbol = symbols_mapping.get(etf_name)
-                                    if symbol:
-                                        try:
-                                            df_hist = fdr.DataReader(symbol, start_date, end_date)
-                                            df_weekly = df_hist['Volume'].resample('W').sum().reset_index()
-                                            df_weekly.columns = ['주 시작일', '거래량']
-                                            last_vol = df_weekly['거래량'].iloc[-1] if not df_weekly.empty else 0
-                                            volume_lines.append(f"- {etf_name}: 최근 주간 거래량 {last_vol:,.0f}주")
-                                            
-                                            fig_line = px.line(df_weekly, x='주 시작일', y='거래량', title=f"**{etf_name}** 실제 주간 거래량 추이", markers=True, color_discrete_sequence=['#4da6ff'])
-                                            fig_line.update_layout(height=350, template="plotly_dark", yaxis_title="주간 거래량 (주)", xaxis_title=None, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                                            st.plotly_chart(fig_line, use_container_width=True)
-                                        except: st.error(f"{etf_name}의 데이터를 불러오지 못했습니다.")
-                            if volume_lines:
-                                st.session_state.df_volume_summary_text = "\n".join(volume_lines)
-            else: st.info("👉 우측 패널에 엑셀 데이터를 업로드해주세요.")
-
-        with sub_tabs[5]:
             # 이벤트 시트 데이터 사전 로딩 (마케팅 촉매 및 이벤트 모니터링을 위함)
             sheet_url = st.session_state.get('sheet_url_global', '')
             df_events = load_event_sheet(sheet_url)
@@ -927,6 +927,130 @@ with col_main:
                                     st.warning("실제 데이터랩과 주간 순매수 간 매칭되는 데이터 기간이 부족하여 상관계수를 도출할 수 없습니다. (데이터랩과 순매수 엑셀의 날짜 구간을 맞춰주세요.)")
             else:
                 st.warning("👉 위의 '분석 대상 ETF' 및 '조회 기간' 설정과 엑셀 업로드가 선행되어야 통계 분석이 가능합니다.")
+
+            st.divider()
+
+            # 2. 마케팅 촉매 임팩트 분석기 
+            st.markdown("### 📊 마케팅 촉매(이벤트/영상) 임팩트 분석기")
+            if not df_trend.empty:
+                selected_ongoing = []
+                selected_ended = []
+                if not df_events.empty and '이벤트명' in df_events.columns:
+                    c_evt1, c_evt2 = st.columns(2)
+                    with c_evt1:
+                        ongoing_list = df_ongoing['이벤트명'].tolist() if not df_ongoing.empty else []
+                        selected_ongoing = st.multiselect("🟢 진행 중인 이벤트 (차트 음영 표시):", options=ongoing_list)
+                    with c_evt2:
+                        ended_list = df_ended['이벤트명'].tolist() if not df_ended.empty else []
+                        selected_ended = st.multiselect("🔴 종료된 이벤트 (차트 음영 표시):", options=ended_list)
+                else:
+                    st.warning("이벤트 시트가 연동되지 않아 음영 매핑 기능이 비활성화되었습니다.")
+
+                with st.spinner("수급 임팩트 데이터를 렌더링하고 있습니다..."):
+                    # [순매수 데이터 차트 설정]
+                    fig_evt = px.line(df_trend, x='주차', y='전체순매수', color='종목명', markers=True, template="plotly_dark", color_discrete_map={target_etf: '#ff4d4d', comp_etf: '#4da6ff'})
+                    
+                    # [추가] 거래대금(거래량) 연동 및 차트 설정
+                    vol_data = []
+                    symbols_mapping = get_etf_mapping()
+                    sym_target = symbols_mapping.get(target_etf)
+                    sym_comp = symbols_mapping.get(comp_etf)
+                    
+                    data_year = datetime.today().year
+                    try:
+                        s_dt_min, _ = parse_week_range(target_sheets[-1], data_year)
+                        _, e_dt_max = parse_week_range(target_sheets[0], data_year)
+                        s_dt_min = s_dt_min - timedelta(days=7)
+                        e_dt_max = e_dt_max + timedelta(days=7)
+                        
+                        df_target_hist = fdr.DataReader(sym_target, s_dt_min, e_dt_max) if sym_target else pd.DataFrame()
+                        df_comp_hist = fdr.DataReader(sym_comp, s_dt_min, e_dt_max) if sym_comp else pd.DataFrame()
+                    except:
+                        df_target_hist = pd.DataFrame()
+                        df_comp_hist = pd.DataFrame()
+                        
+                    for w in target_sheets:
+                        s_dt, e_dt = parse_week_range(w, data_year)
+                        v_target, v_comp = 0, 0
+                        if s_dt and e_dt:
+                            try:
+                                if not df_target_hist.empty: v_target = df_target_hist.loc[str(s_dt.date()):str(e_dt.date()), 'Volume'].sum()
+                                if not df_comp_hist.empty: v_comp = df_comp_hist.loc[str(s_dt.date()):str(e_dt.date()), 'Volume'].sum()
+                            except: pass
+                        vol_data.append({'주차': w, '종목명': target_etf, '거래량': v_target})
+                        vol_data.append({'주차': w, '종목명': comp_etf, '거래량': v_comp})
+                        
+                    df_vol = pd.DataFrame(vol_data)
+                    
+                    # [추가] 거래대금/거래량용 두 번째 차트
+                    fig_vol = px.line(df_vol, x='주차', y='거래량', color='종목명', markers=True, template="plotly_dark", color_discrete_map={target_etf: '#ff4d4d', comp_etf: '#4da6ff'})
+
+                    BRAND_COLORS = {
+                        'KODEX': 'rgba(10, 88, 202, 0.2)',
+                        'TIGER': 'rgba(255, 114, 0, 0.2)',
+                        'ACE': 'rgba(0, 166, 126, 0.2)',
+                        'RISE': 'rgba(255, 186, 0, 0.2)',
+                        'DEFAULT': 'rgba(128, 128, 128, 0.2)'
+                    }
+
+                    def find_closest_week_str(dt, weeks_list):
+                        if pd.isnull(dt) or not weeks_list: return None
+                        best_w = weeks_list[-1]
+                        min_diff = float('inf')
+                        for w in weeks_list:
+                            try:
+                                s_str = w.split('-')[0]
+                                s_m, s_d = map(int, s_str.split('.'))
+                                w_dt = datetime(dt.year, s_m, s_d)
+                                diff = abs((dt - w_dt).days)
+                                if diff < min_diff:
+                                    min_diff = diff
+                                    best_w = w
+                            except: pass
+                        return best_w
+
+                    all_selected = selected_ongoing + selected_ended
+                    for evt_name in all_selected:
+                        evt_row = df_events[df_events['이벤트명'] == evt_name].iloc[0]
+                        e_start = evt_row['시작일']
+                        e_end = evt_row['종료일']
+                        e_brand = evt_row.get('ETF 브랜드', '')
+                        
+                        x0_str = find_closest_week_str(e_start, target_sheets)
+                        x1_str = find_closest_week_str(e_end, target_sheets)
+                        
+                        color = BRAND_COLORS.get(e_brand, BRAND_COLORS['DEFAULT'])
+                        
+                        if x0_str and x1_str:
+                            try:
+                                # [수정] 순매수 차트와 거래량 차트 양쪽 모두에 동일한 이벤트 음영 추가
+                                fig_evt.add_vrect(
+                                    x0=x0_str, x1=x1_str, fillcolor=color.replace('0.2', '0.15'), opacity=1, layer="below", 
+                                    line_width=1, line_dash="dash", line_color=color.replace('0.2', '0.8'),
+                                    annotation_text=evt_name[:10] + '..' if len(evt_name) > 10 else evt_name, 
+                                    annotation_position="top left", annotation_font_size=11, annotation_font_color=color.replace('0.2', '1.0')
+                                )
+                                fig_vol.add_vrect(
+                                    x0=x0_str, x1=x1_str, fillcolor=color.replace('0.2', '0.15'), opacity=1, layer="below", 
+                                    line_width=1, line_dash="dash", line_color=color.replace('0.2', '0.8'),
+                                    annotation_text=evt_name[:10] + '..' if len(evt_name) > 10 else evt_name, 
+                                    annotation_position="top left", annotation_font_size=11, annotation_font_color=color.replace('0.2', '1.0')
+                                )
+                            except: pass
+
+                    fig_evt.update_layout(height=400, margin=dict(l=20, r=20, t=20, b=20), xaxis_title=None, yaxis_title="전체 순매수 금액 합계", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
+                    fig_vol.update_layout(height=400, margin=dict(l=20, r=20, t=20, b=20), xaxis_title=None, yaxis_title="주간 거래량 합계 (거래대금 프록시)", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False)
+                    
+                    with st.container(border=True):
+                        st.markdown("##### 1️⃣ 이벤트 기반 [전체 순매수] 추이 궤적")
+                        st.plotly_chart(fig_evt, use_container_width=True)
+                    
+                    with st.container(border=True):
+                        st.markdown("##### 2️⃣ 이벤트 기반 [거래대금/거래량] 추이 궤적")
+                        st.plotly_chart(fig_vol, use_container_width=True)
+
+            else:
+                st.info("👉 우측 패널에 엑셀 데이터를 업로드하시면 성과 분석기 차트가 활성화됩니다.")
 
             st.divider()
 
