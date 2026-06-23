@@ -21,6 +21,7 @@ import scipy.stats as stats
 # ==========================================
 st.set_page_config(page_title="ETF Intelligence & Structuring Agent", layout="wide", initial_sidebar_state="collapsed")
 
+# (탭 간 이동 시 초기화되거나 에러가 나는 것을 방지하기 위해 모든 주요 변수 Session State 사전 선언)
 if 'df_scatter' not in st.session_state: st.session_state.df_scatter = pd.DataFrame()
 if 'dl_summary' not in st.session_state: st.session_state.dl_summary = "DataLab 데이터가 업로드되지 않았습니다."
 if 'df_real_news' not in st.session_state: st.session_state.df_real_news = pd.DataFrame()
@@ -753,13 +754,14 @@ with col_main:
                     with st.container(border=True):
                         col_evt1, col_evt2 = st.columns([1, 3])
                         with col_evt1:
+                            # [수정] 탭 이동 시 T=0 주차가 초기화되는 문제 방지 (key 사용)
                             event_start_week = st.selectbox("📍 이벤트가 발생한 기준 주차 (T=0):", target_sheets, key="t0_week_state")
                         with col_evt2:
-                            st.info(f"**DiD 설계:** '{event_start_week}' 이전 기간을 **Pre**, 이후 기간을 **Post**로 지정하여 실제 순매수 증감을 계산합니다. (※ 통계 분석은 명확한 시점 분리가 필수적이므로 수동 선택을 권장합니다.)")
+                            st.info(f"**DiD 설계:** '{event_start_week}' 이전 기간을 **Pre**, 이후 기간을 **Post**로 지정하여 실제 순매수 증감을 계산합니다.")
                     
                     with st.spinner("Scipy 및 Pandas로 실제 통계값을 연산 중입니다..."):
-                        pre_weeks = target_sheets[:target_sheets.index(event_start_week)]
-                        post_weeks = target_sheets[target_sheets.index(event_start_week):]
+                        pre_weeks = target_sheets[:target_sheets.index(event_start_week)] if event_start_week in target_sheets else []
+                        post_weeks = target_sheets[target_sheets.index(event_start_week):] if event_start_week in target_sheets else []
                         
                         target_pre_sum = df_trend[(df_trend['종목명'] == target_etf) & (df_trend['주차'].isin(pre_weeks))]['전체순매수'].sum() if pre_weeks else 0
                         target_post_sum = df_trend[(df_trend['종목명'] == target_etf) & (df_trend['주차'].isin(post_weeks))]['전체순매수'].sum() if post_weeks else 0
@@ -780,7 +782,7 @@ with col_main:
                         lag_corrs = []
                         data_year = datetime.today().year
                         
-                        if uploaded_dls:
+                        if uploaded_dls and event_start_week:
                             try:
                                 dl_file = uploaded_dls[0]
                                 df_dl = pd.read_csv(dl_file, skiprows=6, encoding='cp949') if dl_file.name.endswith('csv') else pd.read_excel(dl_file, skiprows=6)
@@ -1099,6 +1101,7 @@ with col_main:
             st.divider()
 
             st.markdown("### 📺 유튜브 사후 성과 분석 (Post-Hoc Analysis)")
+            # 이중차분 타겟 변수를 그대로 사용하되, 안전하게 fallback 설정
             current_target = target_etf if 'target_etf' in locals() else "KODEX 200"
             current_comp = comp_etf if 'comp_etf' in locals() else "TIGER 200"
             
@@ -1732,6 +1735,7 @@ with col_main:
                     else:
                         st.warning("상단 백테스트 데이터가 없어 환율 궤적을 그릴 수 없습니다.")
 
+            # [수정] 양쪽 컨테이너 높이(height)를 650으로 대폭 연장하여 워터폴 차트 스크롤 방지
             c_pl_left, c_pl_right = st.columns(2)
             with c_pl_left:
                 with st.container(height=650, border=True):
@@ -1779,7 +1783,8 @@ with col_main:
                         increasing = {"marker":{"color":"#4da6ff"}},
                         totals = {"marker":{"color":"#ffb04d" if net_profit > 0 else "gray"}}
                     ))
-                    fig_wf.update_layout(height=250, margin=dict(t=20, b=10, l=10, r=10), template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                    # 높이값을 여유 있게 줘서 내부 스크롤 완벽 방지
+                    fig_wf.update_layout(height=280, margin=dict(t=20, b=10, l=10, r=10), template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                     st.plotly_chart(fig_wf, use_container_width=True)
 
             with c_pl_right:
