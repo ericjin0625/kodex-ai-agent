@@ -1052,6 +1052,166 @@ with col_main:
             else:
                 st.info("👉 우측 패널에 엑셀 데이터를 업로드하시면 성과 분석기 차트가 활성화됩니다.")
 
+            st.divider()
+
+            st.markdown("### 📢 운용사별 이벤트 모니터링 (Sheet 연동)")
+            if not df_events.empty and '이벤트명' in df_events.columns:
+                evt_tab1, evt_tab2 = st.tabs(["🟢 진행 중인 이벤트", "🔴 종료된 이벤트"])
+                
+                with evt_tab1:
+                    if not df_ongoing.empty:
+                        for brand, group in df_ongoing.groupby('ETF 브랜드'):
+                            with st.expander(f"🔵 {brand} ({len(group)}건)", expanded=True):
+                                for _, row in group.iterrows():
+                                    st.markdown(f"- **{row.get('이벤트명', '')}** (대상: {row.get('대상 ETF의 종목 코드', '')}) | {row['시작일'].strftime('%Y.%m.%d')} ~ {row['종료일'].strftime('%Y.%m.%d')}")
+                    else:
+                        st.write("진행 중인 이벤트가 없습니다.")
+                        
+                with evt_tab2:
+                    if not df_ended.empty:
+                        for brand, group in df_ended.groupby('ETF 브랜드'):
+                            with st.expander(f"🔴 {brand} ({len(group)}건)", expanded=False):
+                                for _, row in group.iterrows():
+                                    st.markdown(f"- **{row.get('이벤트명', '')}** (대상: {row.get('대상 ETF의 종목 코드', '')}) | {row['시작일'].strftime('%Y.%m.%d')} ~ {row['종료일'].strftime('%Y.%m.%d')}")
+                    else:
+                        st.write("종료된 이벤트가 없습니다.")
+            else:
+                st.info("👉 우측 패널 '1. 이벤트 시트 링크' 칸에 구글 스프레드시트 공유 링크를 입력해주세요.")
+            
+            st.divider()
+
+            st.markdown("### 📊 키워드 검색비율 추이 (다중 비교 지원)")
+            if uploaded_dls:
+                dl_summaries = []
+                for dl_file in uploaded_dls:
+                    try:
+                        file_name_without_ext = dl_file.name.rsplit('.', 1)[0]
+                        st.markdown(f"#### 📉 {file_name_without_ext}")
+                        df_dl = pd.read_csv(dl_file, skiprows=6, encoding='cp949') if dl_file.name.endswith('csv') else pd.read_excel(dl_file, skiprows=6)
+                        if not df_dl.empty:
+                            master_date = df_dl.iloc[:, 0]
+                            value_cols = [col for col in df_dl.columns if '날짜' not in col and 'Unnamed' not in col]
+                            clean_df = pd.DataFrame({'날짜': master_date})
+                            for col in value_cols: clean_df[col] = df_dl[col]
+                            clean_df['날짜'] = pd.to_datetime(clean_df['날짜'])
+                            recent_14d_mean = clean_df.tail(14).mean(numeric_only=True).round(1)
+                            dl_summaries.append(f"[{file_name_without_ext}]\n" + "\n".join([f"- {idx}: {val}" for idx, val in recent_14d_mean.items()]))
+                            df_melted = clean_df.melt(id_vars=['날짜'], var_name='종목명', value_name='검색량')
+                            with st.container(border=True):
+                                fig_trend = px.line(df_melted, x='날짜', y='검색량', color='종목명', template="plotly_dark")
+                                fig_trend.update_layout(height=350, xaxis_title=None, yaxis_title="상대적 검색량", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5))
+                                st.plotly_chart(fig_trend, use_container_width=True)
+                    except: pass
+                st.session_state['dl_summary'] = "\n\n".join(dl_summaries) if dl_summaries else "데이터랩 연동 오류"
+            else: st.info("👉 우측 패널에 Naver DataLab 파일을 업로드해 주세요.")
+
+            st.divider()
+
+            st.markdown("### 📺 유튜브 사후 성과 분석 (Post-Hoc Analysis)")
+            current_target = target_etf if 'target_etf' in locals() else "KODEX 200"
+            current_comp = comp_etf if 'comp_etf' in locals() else "TIGER 200"
+            
+            top_keyword = "ETF"
+            if uploaded_excel is not None and selected_week != "데이터 없음":
+                try:
+                    df_temp = load_and_clean_excel(uploaded_excel, selected_week)
+                    df_temp['테마'] = df_temp['종목명'].apply(assign_auto_theme)
+                    top_theme = df_temp[df_temp['종목명'] != '전체'].groupby('테마')['개인'].sum().idxmax()
+                    top_keyword = re.sub(r'[^\w\s]', '', top_theme).strip()
+                except:
+                    pass
+            current_theme = top_keyword
+            
+            yt_keywords = {
+                f"🎯 자사 타겟 ({current_target})": current_target, 
+                f"⚔️ 경쟁 대조군 ({current_comp})": current_comp,
+                f"🔥 주간 핫 테마 ({current_theme} ETF)": f"{current_theme} ETF"
+            }
+            
+            with st.spinner("타겟 종목 및 경쟁사 유튜브 영상 성과를 실시간으로 비교 파싱 중입니다..."):
+                yt_data = []
+                for brand, kw in yt_keywords.items():
+                    vids = scrape_youtube_search_real(kw)
+                    for v in vids: yt_data.append({"검색 타겟": brand, "영상 제목": v['title'], "조회수": v['views'], "업로드": v['date'], "링크": v['link']})
+                
+                if yt_data:
+                    df_yt = pd.DataFrame(yt_data)
+                    df_yt_sorted = df_yt.sort_values(by="조회수", ascending=False)
+                    
+                    target_vids = df_yt[df_yt['검색 타겟'].str.contains("🎯")].sort_values(by="조회수", ascending=False)
+                    if not target_vids.empty:
+                        top_vid = target_vids.iloc[0]
+                        st.session_state.yt_target_insights = f"타겟 종목({current_target}) 최고 바이럴 영상: '{top_vid['영상 제목']}' (조회수 {top_vid['조회수']:,}회) - 업로드 시기: {top_vid['업로드']}"
+                    else:
+                        st.session_state.yt_target_insights = f"타겟 종목({current_target}) 관련 유의미한 유튜브 바이럴 없음."
+
+                    c_yt1, c_yt2 = st.columns([1, 1])
+                    with c_yt1:
+                        st.markdown("#### 🏆 타겟 vs 대조군 관련 영상 평균 조회수")
+                        df_agg = df_yt.groupby("검색 타겟")["조회수"].mean().reset_index()
+                        
+                        color_map = {
+                            f"🎯 자사 타겟 ({current_target})": '#ff4d4d',
+                            f"⚔️ 경쟁 대조군 ({current_comp})": '#4da6ff',
+                            f"🔥 주간 핫 테마 ({current_theme} ETF)": '#ffb04d'
+                        }
+                        
+                        fig_yt = px.bar(df_agg, x="검색 타겟", y="조회수", text_auto='.0f', color="검색 타겟", color_discrete_map=color_map, template="plotly_dark")
+                        fig_yt.update_layout(height=350, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False, xaxis_title=None)
+                        st.plotly_chart(fig_yt, use_container_width=True)
+                    with c_yt2:
+                        st.markdown("#### 📝 실시간 영상 성과 및 업로드 타이밍")
+                        st.dataframe(df_yt_sorted[["검색 타겟", "영상 제목", "조회수", "업로드"]], use_container_width=True, height=350, hide_index=True)
+
+            st.divider()
+
+            st.markdown("### 🏢 운용사별 블로그 포스트")
+            brand_mappings = {
+                "KODEX (삼성)": {"blog": "etf_kodex"}, 
+                "TIGER (미래에셋)": {"blog": "m_invest"},
+                "ACE (한국투자)": {"blog": "aceetf"}, "RISE (KB)": {"blog": "riseetf"},
+                "SOL (신한)": {"blog": "soletf"}, "PLUS (한화)": {"blog": "hanwhaasset"},
+                "HANARO (NH아문디)": {"blog": "nh_amundi"}, "1Q (하나)": {"blog": "1qetf"},
+                "TIMEFOLIO (타임폴리오)": {"blog": "timefolioetf"}, "KIWOOM (키움)": {"blog": "kiwoomammkt"},
+                "WON (우리)": {"blog": "wooriam_kr"}
+            }
+            
+            with st.spinner("지난주(일~토) 블로그 포스트를 스크래핑 중입니다..."):
+                kodex_posts = parse_competitor_blog_last_week(brand_mappings["KODEX (삼성)"]["blog"])
+                other_posts = {}
+                empty_brands = []
+                
+                for brand, items in brand_mappings.items():
+                    if brand == "KODEX (삼성)": continue
+                    posts = parse_competitor_blog_last_week(items['blog'])
+                    if posts:
+                        other_posts[brand] = posts
+                    else:
+                        empty_brands.append(brand.split(' ')[0])
+                        
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.markdown("**🔵 KODEX (삼성) 블로그**")
+                    if kodex_posts:
+                        for p in kodex_posts:
+                            st.markdown(f"- [{p['date']}] <a href='{p['link']}' target='_blank' style='color:#4da6ff; text-decoration:none;'>{p['title']}</a>", unsafe_allow_html=True)
+                    else:
+                        st.info("지난 주 KODEX 블로그에 올라온 포스트가 없습니다.")
+                        
+                with c2:
+                    st.markdown("**🔵 기타 운용사 블로그**")
+                    if other_posts:
+                        for brand, posts in other_posts.items():
+                            with st.expander(f"{brand} ({len(posts)}건)"):
+                                for p in posts:
+                                    st.markdown(f"- [{p['date']}] <a href='{p['link']}' target='_blank' style='color:#4da6ff; text-decoration:none;'>{p['title']}</a>", unsafe_allow_html=True)
+                    else:
+                        st.info("지난 주 기타 운용사 블로그에 올라온 포스트가 없습니다.")
+                
+                if empty_brands:
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    st.warning(f"💤 **지난주 신규 포스팅 없음 (모니터링 대상):** {', '.join(empty_brands)}")
+
         with sub_tabs[5]:
             st.markdown("### 🗣️ 고객 Voice (VOC) & 투자자 심리 모니터링")
             with st.container(border=True):
