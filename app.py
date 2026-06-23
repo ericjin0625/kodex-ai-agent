@@ -51,6 +51,8 @@ if 'stat_did_multiplier' not in st.session_state: st.session_state.stat_did_mult
 if 'stat_p_value' not in st.session_state: st.session_state.stat_p_value = 0.0
 if 'stat_net_inflow' not in st.session_state: st.session_state.stat_net_inflow = 0.0
 
+if 't0_week_state' not in st.session_state: st.session_state.t0_week_state = None
+
 # ==========================================
 # 2. Glassmorphism 커스텀 CSS
 # ==========================================
@@ -388,7 +390,6 @@ with col_right:
         
     uploaded_dls = st.file_uploader("🔍 3. DataLab 다중 비교", type=["csv", "xlsx", "xls"], key="dl_global", accept_multiple_files=True)
     uploaded_voc = st.file_uploader("💬 4. 종토방 VOC 엑셀", type=["xlsx", "xls"], key="voc_global")
-
 
 # =========================================================================
 # 5. 메인 패널 
@@ -752,9 +753,9 @@ with col_main:
                     with st.container(border=True):
                         col_evt1, col_evt2 = st.columns([1, 3])
                         with col_evt1:
-                            event_start_week = st.selectbox("📍 이벤트가 발생한 기준 주차 (T=0):", target_sheets)
+                            event_start_week = st.selectbox("📍 이벤트가 발생한 기준 주차 (T=0):", target_sheets, key="t0_week_state")
                         with col_evt2:
-                            st.info(f"**DiD 설계:** '{event_start_week}' 이전 기간을 **Pre**, 이후 기간을 **Post**로 지정하여 실제 순매수 증감을 계산합니다.")
+                            st.info(f"**DiD 설계:** '{event_start_week}' 이전 기간을 **Pre**, 이후 기간을 **Post**로 지정하여 실제 순매수 증감을 계산합니다. (※ 통계 분석은 명확한 시점 분리가 필수적이므로 수동 선택을 권장합니다.)")
                     
                     with st.spinner("Scipy 및 Pandas로 실제 통계값을 연산 중입니다..."):
                         pre_weeks = target_sheets[:target_sheets.index(event_start_week)]
@@ -1733,7 +1734,7 @@ with col_main:
 
             c_pl_left, c_pl_right = st.columns(2)
             with c_pl_left:
-                with st.container(height=480, border=True):
+                with st.container(height=650, border=True):
                     st.markdown("**🏢 자산운용사(AMC) 수지 분석 및 피어(Peer) 타겟팅**")
                     
                     col_tgt1, col_tgt2 = st.columns(2)
@@ -1778,11 +1779,11 @@ with col_main:
                         increasing = {"marker":{"color":"#4da6ff"}},
                         totals = {"marker":{"color":"#ffb04d" if net_profit > 0 else "gray"}}
                     ))
-                    fig_wf.update_layout(height=180, margin=dict(t=20, b=10, l=10, r=10), template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                    fig_wf.update_layout(height=250, margin=dict(t=20, b=10, l=10, r=10), template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                     st.plotly_chart(fig_wf, use_container_width=True)
 
             with c_pl_right:
-                with st.container(height=480, border=True):
+                with st.container(height=650, border=True):
                     st.markdown("##### 📄 Simulated Product Factsheet")
                     st.metric("최종 타겟 배당수익률 (Net Yield)", f"{net_yield:.2f}%")
                     
@@ -1939,7 +1940,6 @@ with col_main:
             tgt = st.session_state.get('p_target_etf', '타겟 ETF')
             cmp = st.session_state.get('p_comp_etf', '경쟁 ETF')
 
-            # [데이터 주입 보완 1] 뉴스 링크 포함 및 매크로 텍스트화
             macro_raw = get_macro_snapshot()
             macro_text = ""
             for cat, items in macro_raw.items():
@@ -1951,7 +1951,7 @@ with col_main:
             df_news = st.session_state.get('df_real_news', pd.DataFrame())
             news_text = ""
             if not df_news.empty and "링크" in df_news.columns and df_news["링크"].iloc[0] != "":
-                for _, row in df_news.head(5).iterrows():
+                for _, row in df_news.head(12).iterrows():
                     news_text += f"- [{row['원본제목']}]({row['링크']})\n"
             else:
                 news_text = "뉴스 데이터 없음"
@@ -1969,6 +1969,18 @@ with col_main:
 
             st.markdown("**📌 [Step 2: AUM & Flow Analysis (수급 및 점유율 동향)]**")
             st.warning("📸 **[필수 스크린샷 첨부 1]** 1번 상위 탭의 [순매수/거래대금 및 수익률] 하위 탭에 있는 **'시차별 수익률 vs AUM 대비 순매수 산점도'** 이미지를 캡처하여 AI 대화창에 업로드하세요!")
+            
+            # [수정] 프롬프트 호출 시점 기준으로 타겟/경쟁 ETF 주간 거래량 재파싱
+            symbols_mapping_pr = get_etf_mapping()
+            end_dt_pr = datetime.today()
+            start_dt_pr = end_dt_pr - timedelta(days=14)
+            tgt_v, cmp_v = 0, 0
+            try:
+                if symbols_mapping_pr.get(tgt): tgt_v = fdr.DataReader(symbols_mapping_pr[tgt], start_dt_pr, end_dt_pr).resample('W').sum()['Volume'].iloc[-1]
+                if symbols_mapping_pr.get(cmp): cmp_v = fdr.DataReader(symbols_mapping_pr[cmp], start_dt_pr, end_dt_pr).resample('W').sum()['Volume'].iloc[-1]
+            except: pass
+            dynamic_vol_text = f"- {tgt}: 최근 주간 거래량 {tgt_v:,.0f}주\n- {cmp}: 최근 주간 거래량 {cmp_v:,.0f}주"
+
             p1_step2 = f"""[Step 2: AUM & Flow Analysis (수급 및 점유율 동향)]
 다음은 시스템이 추출한 실제 AUM 및 거래량 데이터입니다.
 
@@ -1976,13 +1988,12 @@ with col_main:
 {st.session_state.get('aum_context_text', 'AUM 데이터 없음')}
 
 [선택된 주요 ETF 최근 주간 거래량 추이]:
-{st.session_state.get('df_volume_summary_text', '거래량 데이터 없음')}
+{dynamic_vol_text}
 
 위 데이터를 바탕으로 타겟 ETF인 [{tgt}]와 경쟁 대조군인 [{cmp}] 간의 테마 내 AUM 점유율 및 주간 거래량 동향을 비교 분석하시오. 
 추가로, 내가 함께 첨부한 '수익률 vs 순매수 산점도(Scatter Plot)' 이미지를 판독하여, 이번 주 리테일 자금이 '과거 수익률(T-1, T-2)'을 쫓아 들어왔는지, '당일 테마(T-0)'에 직각적으로 반응했는지 자금 유입의 성격을 진단하시오."""
             st.code(p1_step2, language="text")
 
-            # [데이터 주입 보완 2] 이벤트 리스트 직접 주입
             sheet_url = st.session_state.get('sheet_url_global', '')
             df_events = load_event_sheet(sheet_url)
             event_text = ""
@@ -2006,7 +2017,6 @@ with col_main:
 또한 내가 함께 첨부한 '전체 순매수 추이 궤적' 차트 이미지를 시각적으로 분석하고, DiD 성과 배수 및 p-value를 근거로 최근 실행된 이벤트/마케팅 액션이 경쟁사 대비 얼마나 실질적인 수급 타격을 주었는지 수학적으로 평가하시오."""
             st.code(p1_step3, language="text")
 
-            # [데이터 주입 보완 3] 유튜브 링크 추가
             vids = scrape_youtube_search_real(tgt)
             yt_text = ""
             if vids:
@@ -2056,7 +2066,6 @@ with col_main:
             else:
                 csv_directive = f"구체적인 개별 종목 데이터가 없으므로, 아래 펀더멘털 필터링 룰(LTV {st.session_state.p_ltv}% 이하, FCF 마진 {st.session_state.p_fcf}% 이상)을 적용했을 때 편입될 수 있는 대표적인 우량 기초자산들의 예시와 해당 필터링 방식의 논리적 타당성을 퀀트적 관점에서 서술할 것."
 
-            # [데이터 주입 보완 4] 정책 뉴스 링크 주입
             trend_label = st.session_state.get('selected_trend_label', '혁신 타겟 인컴')
             search_kw_map_plan = {
                 "사모신용 (BDC)": '"사모신용" OR "BDC"',
