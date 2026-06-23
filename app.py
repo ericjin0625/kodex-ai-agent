@@ -1052,7 +1052,7 @@ with sub_tabs[4]:
 
             else:
                 st.info("👉 우측 패널에 엑셀 데이터를 업로드하시면 성과 분석기 차트가 활성화됩니다.")
-
+                
         with sub_tabs[5]:
             st.markdown("### 🗣️ 고객 Voice (VOC) & 투자자 심리 모니터링")
             with st.container(border=True):
