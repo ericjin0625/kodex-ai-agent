@@ -398,7 +398,7 @@ with col_right:
 with col_main:
     big_tab = st.radio(
         "메인 메뉴",
-        ["ETF 시장 모니터링", "글로벌 상품 기획 시뮬레이터", "🤖 AI 프롬프트"],
+        ["📊 ETF 시장 모니터링", "🌍 글로벌 상품 기획 시뮬레이터", "🤖 AI 프롬프트"],
         horizontal=True,
         label_visibility="collapsed"
     )
@@ -406,8 +406,8 @@ with col_main:
 
 # -------------------------------------------------------------------------
     # Big 탭 1: ETF 시장 모니터링 
-    # -------------------------------------------------------------------------
-    if big_tab == "ETF 시장 모니터링":
+# -------------------------------------------------------------------------
+    if big_tab == "📊 ETF 시장 모니터링":
         st.markdown("## 📊 ETF Market Intelligence")
         st.caption("국내외 거시 경제, 경쟁사 수급, 마케팅 액션 및 리테일 투자자 심리를 종합적으로 모니터링합니다.")
         
@@ -698,7 +698,7 @@ with col_main:
                                     st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:15px; font-weight:bold; color:#4da6ff; text-decoration:none;'>{row['원본제목']} 🔗</a>", unsafe_allow_html=True)
             else: st.dataframe(df_dynamic_news, use_container_width=True, hide_index=True)
 
-with sub_tabs[4]:
+        with sub_tabs[4]:
             sheet_url = st.session_state.get('sheet_url_global', '')
             df_events = load_event_sheet(sheet_url)
             df_ongoing, df_ended = pd.DataFrame(), pd.DataFrame()
@@ -754,7 +754,6 @@ with sub_tabs[4]:
                     with st.container(border=True):
                         col_evt1, col_evt2 = st.columns([1, 3])
                         with col_evt1:
-                            # [수정] 메모리가 비어있거나, 선택 기간 변경으로 T=0 주차가 리스트에 없을 경우 강제 초기화 방어
                             if target_sheets:
                                 if st.session_state.get('t0_week_state') not in target_sheets:
                                     st.session_state.t0_week_state = target_sheets[len(target_sheets)//2]
@@ -1052,7 +1051,7 @@ with sub_tabs[4]:
 
             else:
                 st.info("👉 우측 패널에 엑셀 데이터를 업로드하시면 성과 분석기 차트가 활성화됩니다.")
-                
+
         with sub_tabs[5]:
             st.markdown("### 🗣️ 고객 Voice (VOC) & 투자자 심리 모니터링")
             with st.container(border=True):
@@ -1249,10 +1248,10 @@ with sub_tabs[4]:
                     st.plotly_chart(fig_trend, use_container_width=True)
             else: st.info("👉 우측 패널에 엑셀 데이터를 업로드하시면 트렌드 그래프가 활성화됩니다.")
 
-# =========================================================================
-# Big 탭 2: 글로벌 상품 기획 시뮬레이터
-# =========================================================================
-    elif big_tab == "글로벌 상품 기획 시뮬레이터":
+# -------------------------------------------------------------------------
+    # Big 탭 2: 글로벌 상품 기획 시뮬레이터
+# -------------------------------------------------------------------------
+    elif big_tab == "🌍 글로벌 상품 기획 시뮬레이터":
         st.markdown("## 🌍 Global Alternative ETF Structuring Simulator")
         st.caption("해외 자산을 융합하여 실제 주가 기반 백테스트 및 수지 분석(P&L)을 거친 실무형 팩트시트를 도출합니다.")
         
