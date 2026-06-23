@@ -1955,6 +1955,7 @@ with col_main:
 
             df_news = st.session_state.get('df_real_news', pd.DataFrame())
             news_text = ""
+            # [수정] 뉴스 12개를 전부 프롬프트 텍스트에 포함
             if not df_news.empty and "링크" in df_news.columns and df_news["링크"].iloc[0] != "":
                 for _, row in df_news.head(12).iterrows():
                     news_text += f"- [{row['원본제목']}]({row['링크']})\n"
@@ -1975,14 +1976,16 @@ with col_main:
             st.markdown("**📌 [Step 2: AUM & Flow Analysis (수급 및 점유율 동향)]**")
             st.warning("📸 **[필수 스크린샷 첨부 1]** 1번 상위 탭의 [순매수/거래대금 및 수익률] 하위 탭에 있는 **'시차별 수익률 vs AUM 대비 순매수 산점도'** 이미지를 캡처하여 AI 대화창에 업로드하세요!")
             
-            # [수정] 프롬프트 호출 시점 기준으로 타겟/경쟁 ETF 주간 거래량 재파싱
+            # [수정] 이벤트 탭에서 선택된 타겟 ETF와 경쟁 ETF의 실제 거래량을 직접 Fetch하여 프롬프트에 연동
             symbols_mapping_pr = get_etf_mapping()
             end_dt_pr = datetime.today()
             start_dt_pr = end_dt_pr - timedelta(days=14)
             tgt_v, cmp_v = 0, 0
             try:
-                if symbols_mapping_pr.get(tgt): tgt_v = fdr.DataReader(symbols_mapping_pr[tgt], start_dt_pr, end_dt_pr).resample('W').sum()['Volume'].iloc[-1]
-                if symbols_mapping_pr.get(cmp): cmp_v = fdr.DataReader(symbols_mapping_pr[cmp], start_dt_pr, end_dt_pr).resample('W').sum()['Volume'].iloc[-1]
+                sym_tgt = symbols_mapping_pr.get(tgt)
+                if sym_tgt: tgt_v = fdr.DataReader(sym_tgt, start_dt_pr, end_dt_pr).resample('W').sum()['Volume'].iloc[-1]
+                sym_cmp = symbols_mapping_pr.get(cmp)
+                if sym_cmp: cmp_v = fdr.DataReader(sym_cmp, start_dt_pr, end_dt_pr).resample('W').sum()['Volume'].iloc[-1]
             except: pass
             dynamic_vol_text = f"- {tgt}: 최근 주간 거래량 {tgt_v:,.0f}주\n- {cmp}: 최근 주간 거래량 {cmp_v:,.0f}주"
 
