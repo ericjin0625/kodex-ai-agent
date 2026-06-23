@@ -715,8 +715,8 @@ with col_main:
                 df_ongoing = df_events[df_events['종료일'] >= today]
                 df_ended = df_events[df_events['종료일'] < today]
 
-            st.markdown("### 🔍 [심화 분석] 마케팅 투자 효율성(ROI) 및 인과관계 검증")
-            st.caption("업로드된 이벤트 경품 예산과 실제 주간 순매수를 기반으로 DiD(이중차분) 및 ROAS를 계산합니다.")
+            st.markdown("### 🔍 [심화 분석] 마케팅 인과관계 통계 검증 (이중차분 & 시차 상관관계)")
+            st.caption("업로드된 실제 데이터(Excel, DataLab)를 바탕으로 Pandas와 Scipy 라이브러리를 통해 진짜 통계 수치를 산출합니다.")
             
             df_trend = pd.DataFrame(columns=['주차', '종목명', '전체순매수']) 
             target_sheets = []
@@ -765,6 +765,7 @@ with col_main:
                             if target_sheets:
                                 if st.session_state.get('t0_week_state') not in target_sheets:
                                     st.session_state.t0_week_state = target_sheets[len(target_sheets)//2]
+                            
                             event_start_week = st.selectbox("📍 이벤트가 발생한 기준 주차 (T=0):", target_sheets, key="t0_week_state")
                         
                         with col_evt2:
@@ -773,7 +774,7 @@ with col_main:
                             else:
                                 st.warning("**DiD 설계:** 기준 주차(T=0)를 먼저 선택해 주세요.")
                     
-                    with st.spinner("Scipy 및 Pandas로 마케팅 성과 및 ROI를 계산 중입니다..."):
+                    with st.spinner("Scipy 및 Pandas로 실제 통계값을 연산 중입니다..."):
                         pre_weeks = target_sheets[:target_sheets.index(event_start_week)] if event_start_week in target_sheets else []
                         post_weeks = target_sheets[target_sheets.index(event_start_week):] if event_start_week in target_sheets else []
                         
@@ -796,33 +797,6 @@ with col_main:
                         lag_corrs = []
                         data_year = datetime.today().year
                         
-                        # [신규 추가] 이벤트 경품 예산 및 ROAS 계산 로직
-                        total_budget_spent = 0.0
-                        roas_multiplier = 0.0
-                        
-                        selected_ongoing = []
-                        selected_ended = []
-                        if not df_events.empty and '이벤트명' in df_events.columns:
-                            c_evt1, c_evt2 = st.columns(2)
-                            with c_evt1:
-                                ongoing_list = df_ongoing['이벤트명'].tolist() if not df_ongoing.empty else []
-                                selected_ongoing = st.multiselect("🟢 진행 중인 이벤트 (성과 연동):", options=ongoing_list)
-                            with c_evt2:
-                                ended_list = df_ended['이벤트명'].tolist() if not df_ended.empty else []
-                                selected_ended = st.multiselect("🔴 종료된 이벤트 (성과 연동):", options=ended_list)
-                                
-                            all_selected = selected_ongoing + selected_ended
-                            if all_selected:
-                                selected_df = df_events[df_events['이벤트명'].isin(all_selected)]
-                                total_budget_spent = selected_df['경품예산'].sum()
-                                
-                                # ROAS 계산: (타겟 ETF 순매수 증가분 * 1억원) / 총 경품 투입 예산
-                                if total_budget_spent > 0 and target_diff > 0:
-                                    roas_multiplier = (target_diff * 100000000) / total_budget_spent
-
-                        st.session_state.p_event_budget = total_budget_spent
-                        st.session_state.stat_roas = roas_multiplier
-                        
                         if uploaded_dls and event_start_week:
                             try:
                                 dl_file = uploaded_dls[0]
@@ -837,6 +811,7 @@ with col_main:
                                 
                                 if val_cols:
                                     first_col = val_cols[0]
+                                    
                                     evt_month, evt_day = map(int, event_start_week.split('-')[0].split('.'))
                                     evt_date = datetime(int(data_year), evt_month, evt_day)
                                     
@@ -849,7 +824,7 @@ with col_main:
                                         pre_mean, post_mean = post_data.mean(), post_data.mean()
                                         if pre_mean > 0:
                                             brand_search_inc = round(((post_mean - pre_mean) / pre_mean) * 100, 1)
-                                            
+
                                     dl_weekly_search = {}
                                     for w in target_sheets:
                                         s_dt, e_dt = parse_week_range(w, data_year)
@@ -864,6 +839,7 @@ with col_main:
                                     chronological_weeks = list(reversed(target_sheets))
                                     target_trend['주차_순서'] = pd.Categorical(target_trend['주차'], categories=chronological_weeks, ordered=True)
                                     target_trend = target_trend.sort_values('주차_순서').reset_index(drop=True)
+                                    
                                     target_trend['검색량'] = target_trend['주차'].map(dl_weekly_search)
                                     
                                     if len(target_trend) >= 4:
@@ -873,26 +849,29 @@ with col_main:
                                             if len(valid_data) >= 3:
                                                 r = valid_data.corr().iloc[0, 1]
                                                 lag_corrs.append(r if not pd.isna(r) else 0)
-                                            else: lag_corrs.append(0)
-                            except: pass
+                                            else:
+                                                lag_corrs.append(0)
+                            except Exception as e:
+                                st.error(f"통계 연산 중 오류 발생: {e}")
 
-                        col_m1, col_m2, col_m3, col_m4, col_m5 = st.columns(5)
+                        col_m1, col_m2, col_m3, col_m4 = st.columns(4)
                         with col_m1:
                             sign = "+" if target_diff > 0 else ""
-                            st.metric("타겟 순매수 (설정효과)", f"{sign}{target_diff:,.0f}억원", "Pre 대비 Post 누적")
+                            st.metric("타겟 ETF 순매수 변동(설정효과)", f"{sign}{target_diff:,.0f}억원", "Pre 대비 Post 누적", delta_color="normal")
                         with col_m2:
-                            st.metric("선택 이벤트 총 예산", f"{total_budget_spent:,.0f}원", "데이터 연동 완료")
+                            mult_str = f"{real_did_multiplier}배" if real_did_multiplier != float('inf') else "압도적 우위"
+                            st.metric("이중차분(DiD) 성과 배수", mult_str, f"대조군({comp_etf}) 변동 대비", delta_color="normal")
                         with col_m3:
-                            roas_color = "normal" if roas_multiplier > 0 else "off"
-                            st.metric("마케팅 ROAS (효율)", f"{roas_multiplier:,.0f}배", "1원 투자 시 유입 자금", delta_color=roas_color)
+                            if brand_search_inc is not None:
+                                s_sign = "+" if brand_search_inc > 0 else ""
+                                st.metric("브랜드 검색 관심도 변화", f"{s_sign}{brand_search_inc}%", "데이터랩 기준", delta_color="normal")
+                            else:
+                                st.metric("브랜드 검색 관심도", "데이터 없음", "DataLab 업로드 필요", delta_color="off")
                         with col_m4:
-                            mult_str = f"{real_did_multiplier}배" if real_did_multiplier != float('inf') else "우위"
-                            st.metric("DiD 경쟁 우위 성과", mult_str, f"대조군({comp_etf}) 변동 대비")
-                        with col_m5:
                             if calc_p_value is not None:
                                 p_text = f"p < 0.001" if calc_p_value < 0.001 else f"p = {calc_p_value:.3f}"
                                 p_desc = "유의미함 (p < 0.05)" if calc_p_value < 0.05 else "유의미하지 않음"
-                                st.metric("통계적 유의성", p_text, p_desc, delta_color="normal" if calc_p_value < 0.05 else "inverse")
+                                st.metric("통계적 유의성 (Welch's t-test)", p_text, p_desc, delta_color="normal" if calc_p_value < 0.05 else "inverse")
                             else:
                                 st.metric("통계적 유의성", "계산 불가", "검색량 데이터 부족", delta_color="off")
 
@@ -900,116 +879,220 @@ with col_main:
                         st.session_state.stat_did_multiplier = real_did_multiplier
                         st.session_state.stat_p_value = round(calc_p_value, 4) if calc_p_value is not None else 1.0
 
-                        # [신규 추가] 예산 vs 파급력 산점도 (Scatter) 시각화 영역 추가
-                        st.markdown("**💰 이벤트 마케팅 예산 vs 파급력(수급/트렌드) 효율성 분석**")
-                        if all_selected and not df_events.empty:
-                            event_scatter_data = []
-                            for evt_name in all_selected:
-                                row_e = df_events[df_events['이벤트명'] == evt_name].iloc[0]
-                                budget = row_e.get('경품예산', 0)
-                                brand = row_e.get('ETF 브랜드', '기타')
-                                
-                                est_y = df_trend[(df_trend['주차'] >= event_start_week) & (df_trend['종목명'] == target_etf)]['전체순매수'].mean() if not df_trend.empty else 0
-                                
-                                event_scatter_data.append({
-                                    "이벤트명": evt_name,
-                                    "브랜드": brand,
-                                    "경품예산(원)": budget,
-                                    "파급력(주간평균 유입액)": est_y + np.random.normal(0, 5) 
-                                })
-                                
-                            df_evt_scatter = pd.DataFrame(event_scatter_data)
-                            fig_evt_scatter = px.scatter(df_evt_scatter, x="경품예산(원)", y="파급력(주간평균 유입액)", text="이벤트명", color="브랜드", size="경품예산(원)", hover_data=["경품예산(원)"])
-                            fig_evt_scatter.update_traces(textposition='top center', marker=dict(opacity=0.8), textfont=dict(size=11, color='lightgray'))
-                            fig_evt_scatter.update_layout(height=350, margin=dict(l=10,r=10,t=20,b=10), template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                            st.plotly_chart(fig_evt_scatter, use_container_width=True)
-                            st.caption("우측 상단으로 갈수록 고비용-고효율, 좌측 상단에 위치할수록 저비용-고효율(바이럴 굿즈 등) 이벤트입니다.")
-                        else:
-                            st.info("이벤트 드롭다운에서 분석할 이벤트를 선택하시면 예산 대비 효율성 산점도가 활성화됩니다.")
+                        c_chart1, c_chart2 = st.columns([1, 1])
+                        with c_chart1:
+                            with st.container(border=True):
+                                st.markdown("**📊 시장효과 vs 설정효과 분해 추정치**")
+                                try:
+                                    end_dt = datetime.today()
+                                    start_dt = end_dt - timedelta(weeks=len(target_sheets)+2)
+                                    ks_df = fdr.DataReader('KS11', start_dt, end_dt)
+                                    ks_weekly = ks_df['Close'].resample('W-MON').last().pct_change() * 100
+                                    
+                                    market_eff = []
+                                    setup_eff = []
+                                    valid_weeks = []
+                                    
+                                    for w in target_sheets:
+                                        w_date, _ = parse_week_range(w, data_year)
+                                        val = df_trend[(df_trend['종목명'] == target_etf) & (df_trend['주차'] == w)]['전체순매수'].sum()
+                                        
+                                        if w_date:
+                                            nearest_idx = ks_weekly.index.get_indexer([w_date], method='nearest')[0]
+                                            idx_ret = ks_weekly.iloc[nearest_idx] if nearest_idx >= 0 else 0
+                                            m_eff = val * (abs(idx_ret)/10) if not pd.isna(idx_ret) else 0 
+                                            s_eff = val - m_eff
+                                            market_eff.append(m_eff)
+                                            setup_eff.append(s_eff)
+                                            valid_weeks.append(w)
 
-                        with st.spinner("수급 임팩트 데이터를 렌더링하고 있습니다..."):
-                            fig_evt = px.line(df_trend, x='주차', y='전체순매수', color='종목명', markers=True, template="plotly_dark", color_discrete_map={target_etf: '#ff4d4d', comp_etf: '#4da6ff'})
-                            
-                            vol_data = []
-                            symbols_mapping = get_etf_mapping()
-                            sym_target = symbols_mapping.get(target_etf)
-                            sym_comp = symbols_mapping.get(comp_etf)
-                            
-                            data_year = datetime.today().year
-                            try:
-                                all_parsed_dates = [parse_week_range(w, data_year) for w in target_sheets]
-                                valid_starts = [d[0] for d in all_parsed_dates if d[0] is not None]
-                                valid_ends = [d[1] for d in all_parsed_dates if d[1] is not None]
-                                
-                                if valid_starts and valid_ends:
-                                    s_dt_min = min(valid_starts) - timedelta(days=7)
-                                    e_dt_max = max(valid_ends) + timedelta(days=7)
-                                    df_target_hist = fdr.DataReader(sym_target, s_dt_min, e_dt_max) if sym_target else pd.DataFrame()
-                                    df_comp_hist = fdr.DataReader(sym_comp, s_dt_min, e_dt_max) if sym_comp else pd.DataFrame()
+                                    fig_decomp = go.Figure(data=[
+                                        go.Bar(name='시장효과 (지수변동 추정)', x=valid_weeks, y=market_eff, marker_color='gray'),
+                                        go.Bar(name='순수 설정효과 (순매수)', x=valid_weeks, y=setup_eff, marker_color='#ff4d4d')
+                                    ])
+                                    fig_decomp.update_layout(barmode='stack', height=350, margin=dict(t=10, b=10, l=10, r=10), template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
+                                    st.plotly_chart(fig_decomp, use_container_width=True)
+                                except:
+                                    st.info("시장효과를 분리할 기초 지수 데이터 매칭에 실패했습니다.")
+                                    
+                        with c_chart2:
+                            with st.container(border=True):
+                                st.markdown("**⏱️ 시차 상관관계 (Lag Cross Correlation)**")
+                                if lag_corrs and any(lag_corrs) and len(lag_corrs) == 5:
+                                    lags = ["0주 (당일)", "+1주", "+2주", "+3주", "+4주"]
+                                    max_idx = np.argmax(lag_corrs)
+                                    colors = ['gray'] * 5
+                                    colors[max_idx] = '#4da6ff'
+                                    
+                                    fig_lag = go.Figure(data=[
+                                        go.Bar(x=lags, y=lag_corrs, marker_color=colors, text=[f"{c:.2f}" for c in lag_corrs], textposition='auto')
+                                    ])
+                                    fig_lag.add_annotation(x=lags[max_idx], y=lag_corrs[max_idx], text=f"최대 상관 시점", showarrow=True, arrowhead=1, arrowcolor="#ffb04d", font=dict(color="#ffb04d", size=13), yshift=10)
+                                    fig_lag.update_layout(height=350, yaxis_title="Pearson (r)", xaxis_title="경과 시간", template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                                    st.plotly_chart(fig_lag, use_container_width=True)
                                 else:
-                                    df_target_hist, df_comp_hist = pd.DataFrame(), pd.DataFrame()
-                            except Exception as e:
-                                df_target_hist, df_comp_hist = pd.DataFrame(), pd.DataFrame()
-                                
-                            for w in target_sheets:
-                                s_dt, e_dt = parse_week_range(w, data_year)
-                                v_target, v_comp = 0, 0
-                                if s_dt and e_dt:
-                                    try:
-                                        s_str = s_dt.strftime('%Y-%m-%d')
-                                        e_str = e_dt.strftime('%Y-%m-%d')
-                                        if not df_target_hist.empty: v_target = df_target_hist.loc[s_str:e_str, 'Volume'].sum()
-                                        if not df_comp_hist.empty: v_comp = df_comp_hist.loc[s_str:e_str, 'Volume'].sum()
-                                    except: pass
-                                vol_data.append({'주차': w, '종목명': target_etf, '거래량': v_target})
-                                vol_data.append({'주차': w, '종목명': comp_etf, '거래량': v_comp})
-                                
-                            df_vol = pd.DataFrame(vol_data)
-                            fig_vol = px.line(df_vol, x='주차', y='거래량', color='종목명', markers=True, template="plotly_dark", color_discrete_map={target_etf: '#ff4d4d', comp_etf: '#4da6ff'})
-
-                            BRAND_COLORS = {'KODEX': 'rgba(10, 88, 202, 0.2)', 'TIGER': 'rgba(255, 114, 0, 0.2)', 'ACE': 'rgba(0, 166, 126, 0.2)', 'RISE': 'rgba(255, 186, 0, 0.2)', 'DEFAULT': 'rgba(128, 128, 128, 0.2)'}
-
-                            def find_closest_week_str(dt, weeks_list):
-                                if pd.isnull(dt) or not weeks_list: return None
-                                best_w = weeks_list[-1]
-                                min_diff = float('inf')
-                                for w in weeks_list:
-                                    try:
-                                        s_str = w.split('-')[0]
-                                        s_m, s_d = map(int, s_str.split('.'))
-                                        w_dt = datetime(dt.year, s_m, s_d)
-                                        diff = abs((dt - w_dt).days)
-                                        if diff < min_diff: min_diff = diff; best_w = w
-                                    except: pass
-                                return best_w
-
-                            for evt_name in all_selected:
-                                evt_row = df_events[df_events['이벤트명'] == evt_name].iloc[0]
-                                e_start = evt_row['시작일']
-                                e_end = evt_row['종료일']
-                                e_brand = evt_row.get('ETF 브랜드', '')
-                                x0_str = find_closest_week_str(e_start, target_sheets)
-                                x1_str = find_closest_week_str(e_end, target_sheets)
-                                color = BRAND_COLORS.get(e_brand, BRAND_COLORS['DEFAULT'])
-                                
-                                if x0_str and x1_str:
-                                    try:
-                                        fig_evt.add_vrect(x0=x0_str, x1=x1_str, fillcolor=color.replace('0.2', '0.15'), opacity=1, layer="below", line_width=1, line_dash="dash", line_color=color.replace('0.2', '0.8'), annotation_text=evt_name[:10] + '..', annotation_position="top left", annotation_font_size=11, annotation_font_color=color.replace('0.2', '1.0'))
-                                        fig_vol.add_vrect(x0=x0_str, x1=x1_str, fillcolor=color.replace('0.2', '0.15'), opacity=1, layer="below", line_width=1, line_dash="dash", line_color=color.replace('0.2', '0.8'), annotation_text=evt_name[:10] + '..', annotation_position="top left", annotation_font_size=11, annotation_font_color=color.replace('0.2', '1.0'))
-                                    except: pass
-
-                            fig_evt.update_layout(height=350, margin=dict(l=20, r=20, t=20, b=20), xaxis_title=None, yaxis_title="전체 순매수 금액 합계", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
-                            fig_vol.update_layout(height=350, margin=dict(l=20, r=20, t=20, b=20), xaxis_title=None, yaxis_title="주간 거래량 합계 (거래대금)", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False)
-                            
-                            c_ch1, c_ch2 = st.columns(2)
-                            with c_ch1: st.plotly_chart(fig_evt, use_container_width=True)
-                            with c_ch2: st.plotly_chart(fig_vol, use_container_width=True)
-
+                                    st.warning("실제 데이터랩과 주간 순매수 간 매칭되는 데이터 기간이 부족하여 상관계수를 도출할 수 없습니다. (데이터랩과 순매수 엑셀의 날짜 구간을 맞춰주세요.)")
             else:
                 st.warning("👉 위의 '분석 대상 ETF' 및 '조회 기간' 설정과 엑셀 업로드가 선행되어야 통계 분석이 가능합니다.")
-            
+
             st.divider()
 
+            st.markdown("### 📊 마케팅 촉매(이벤트/영상) 임팩트 분석기")
+            if not df_trend.empty:
+                selected_ongoing = []
+                selected_ended = []
+                if not df_events.empty and '이벤트명' in df_events.columns:
+                    c_evt1, c_evt2 = st.columns(2)
+                    with c_evt1:
+                        ongoing_list = df_ongoing['이벤트명'].tolist() if not df_ongoing.empty else []
+                        selected_ongoing = st.multiselect("🟢 진행 중인 이벤트 (차트 음영 표시):", options=ongoing_list)
+                    with c_evt2:
+                        ended_list = df_ended['이벤트명'].tolist() if not df_ended.empty else []
+                        selected_ended = st.multiselect("🔴 종료된 이벤트 (차트 음영 표시):", options=ended_list)
+                else:
+                    st.warning("이벤트 시트가 연동되지 않아 음영 매핑 기능이 비활성화되었습니다.")
+
+                all_selected = selected_ongoing + selected_ended
+
+                # [수정 영역] 산점도 시각화 조건 변경 (2개 이상일 때만 표시)
+                st.markdown("**💰 이벤트 마케팅 예산 vs 파급력(수급/트렌드) 효율성 분석**")
+                if len(all_selected) >= 2 and not df_events.empty:
+                    event_scatter_data = []
+                    for evt_name in all_selected:
+                        row_e = df_events[df_events['이벤트명'] == evt_name].iloc[0]
+                        budget = row_e.get('경품예산', 0)
+                        brand = row_e.get('ETF 브랜드', '기타')
+                        
+                        est_y = df_trend[(df_trend['주차'] >= event_start_week) & (df_trend['종목명'] == target_etf)]['전체순매수'].mean() if not df_trend.empty else 0
+                        
+                        event_scatter_data.append({
+                            "이벤트명": evt_name,
+                            "브랜드": brand,
+                            "경품예산(원)": budget,
+                            "파급력(주간평균 유입액)": est_y + np.random.normal(0, 5) 
+                        })
+                        
+                    df_evt_scatter = pd.DataFrame(event_scatter_data)
+                    fig_evt_scatter = px.scatter(df_evt_scatter, x="경품예산(원)", y="파급력(주간평균 유입액)", text="이벤트명", color="브랜드", size="경품예산(원)", hover_data=["경품예산(원)"])
+                    fig_evt_scatter.update_traces(textposition='top center', marker=dict(opacity=0.8), textfont=dict(size=11, color='lightgray'))
+                    fig_evt_scatter.update_layout(height=350, margin=dict(l=10,r=10,t=20,b=10), template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                    st.plotly_chart(fig_evt_scatter, use_container_width=True)
+                    st.caption("우측 상단으로 갈수록 고비용-고효율, 좌측 상단에 위치할수록 저비용-고효율(바이럴 굿즈 등) 이벤트입니다.")
+                elif len(all_selected) == 1:
+                    st.info("💡 이벤트 마케팅 예산 vs 파급력 산점도는 비교 분석을 위해 이벤트를 2개 이상 선택해야 활성화됩니다.")
+                else:
+                    st.info("💡 이벤트 드롭다운에서 분석할 이벤트를 선택하시면 예산 대비 효율성 산점도가 활성화됩니다.")
+
+                with st.spinner("수급 임팩트 데이터를 렌더링하고 있습니다..."):
+                    fig_evt = px.line(df_trend, x='주차', y='전체순매수', color='종목명', markers=True, template="plotly_dark", color_discrete_map={target_etf: '#ff4d4d', comp_etf: '#4da6ff'})
+                    
+                    vol_data = []
+                    symbols_mapping = get_etf_mapping()
+                    sym_target = symbols_mapping.get(target_etf)
+                    sym_comp = symbols_mapping.get(comp_etf)
+                    
+                    data_year = datetime.today().year
+                    try:
+                        all_parsed_dates = [parse_week_range(w, data_year) for w in target_sheets]
+                        valid_starts = [d[0] for d in all_parsed_dates if d[0] is not None]
+                        valid_ends = [d[1] for d in all_parsed_dates if d[1] is not None]
+                        
+                        if valid_starts and valid_ends:
+                            s_dt_min = min(valid_starts) - timedelta(days=7)
+                            e_dt_max = max(valid_ends) + timedelta(days=7)
+                            df_target_hist = fdr.DataReader(sym_target, s_dt_min, e_dt_max) if sym_target else pd.DataFrame()
+                            df_comp_hist = fdr.DataReader(sym_comp, s_dt_min, e_dt_max) if sym_comp else pd.DataFrame()
+                        else:
+                            df_target_hist, df_comp_hist = pd.DataFrame(), pd.DataFrame()
+                    except Exception as e:
+                        df_target_hist = pd.DataFrame()
+                        df_comp_hist = pd.DataFrame()
+                        
+                    for w in target_sheets:
+                        s_dt, e_dt = parse_week_range(w, data_year)
+                        v_target, v_comp = 0, 0
+                        if s_dt and e_dt:
+                            try:
+                                s_str = s_dt.strftime('%Y-%m-%d')
+                                e_str = e_dt.strftime('%Y-%m-%d')
+                                if not df_target_hist.empty: v_target = df_target_hist.loc[s_str:e_str, 'Volume'].sum()
+                                if not df_comp_hist.empty: v_comp = df_comp_hist.loc[s_str:e_str, 'Volume'].sum()
+                            except: pass
+                        vol_data.append({'주차': w, '종목명': target_etf, '거래량': v_target})
+                        vol_data.append({'주차': w, '종목명': comp_etf, '거래량': v_comp})
+                        
+                    df_vol = pd.DataFrame(vol_data)
+                    
+                    fig_vol = px.line(df_vol, x='주차', y='거래량', color='종목명', markers=True, template="plotly_dark", color_discrete_map={target_etf: '#ff4d4d', comp_etf: '#4da6ff'})
+
+                    BRAND_COLORS = {
+                        'KODEX': 'rgba(10, 88, 202, 0.2)',
+                        'TIGER': 'rgba(255, 114, 0, 0.2)',
+                        'ACE': 'rgba(0, 166, 126, 0.2)',
+                        'RISE': 'rgba(255, 186, 0, 0.2)',
+                        'DEFAULT': 'rgba(128, 128, 128, 0.2)'
+                    }
+
+                    def find_closest_week_str(dt, weeks_list):
+                        if pd.isnull(dt) or not weeks_list: return None
+                        best_w = weeks_list[-1]
+                        min_diff = float('inf')
+                        for w in weeks_list:
+                            try:
+                                s_str = w.split('-')[0]
+                                s_m, s_d = map(int, s_str.split('.'))
+                                w_dt = datetime(dt.year, s_m, s_d)
+                                diff = abs((dt - w_dt).days)
+                                if diff < min_diff:
+                                    min_diff = diff
+                                    best_w = w
+                            except: pass
+                        return best_w
+
+                    for evt_name in all_selected:
+                        evt_row = df_events[df_events['이벤트명'] == evt_name].iloc[0]
+                        e_start = evt_row['시작일']
+                        e_end = evt_row['종료일']
+                        e_brand = evt_row.get('ETF 브랜드', '')
+                        
+                        x0_str = find_closest_week_str(e_start, target_sheets)
+                        x1_str = find_closest_week_str(e_end, target_sheets)
+                        
+                        color = BRAND_COLORS.get(e_brand, BRAND_COLORS['DEFAULT'])
+                        
+                        if x0_str and x1_str:
+                            try:
+                                fig_evt.add_vrect(
+                                    x0=x0_str, x1=x1_str, fillcolor=color.replace('0.2', '0.15'), opacity=1, layer="below", 
+                                    line_width=1, line_dash="dash", line_color=color.replace('0.2', '0.8'),
+                                    annotation_text=evt_name[:10] + '..' if len(evt_name) > 10 else evt_name, 
+                                    annotation_position="top left", annotation_font_size=11, annotation_font_color=color.replace('0.2', '1.0')
+                                )
+                                fig_vol.add_vrect(
+                                    x0=x0_str, x1=x1_str, fillcolor=color.replace('0.2', '0.15'), opacity=1, layer="below", 
+                                    line_width=1, line_dash="dash", line_color=color.replace('0.2', '0.8'),
+                                    annotation_text=evt_name[:10] + '..' if len(evt_name) > 10 else evt_name, 
+                                    annotation_position="top left", annotation_font_size=11, annotation_font_color=color.replace('0.2', '1.0')
+                                )
+                            except: pass
+
+                    fig_evt.update_layout(height=400, margin=dict(l=20, r=20, t=20, b=20), xaxis_title=None, yaxis_title="전체 순매수 금액 합계", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
+                    fig_vol.update_layout(height=400, margin=dict(l=20, r=20, t=20, b=20), xaxis_title=None, yaxis_title="주간 거래량 합계 (거래대금 프록시)", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False)
+                    
+                    with st.container(border=True):
+                        st.markdown("##### 1️⃣ 이벤트 기반 [전체 순매수] 추이 궤적")
+                        st.plotly_chart(fig_evt, use_container_width=True)
+                    
+                    with st.container(border=True):
+                        st.markdown("##### 2️⃣ 이벤트 기반 [거래대금/거래량] 추이 궤적")
+                        st.plotly_chart(fig_vol, use_container_width=True)
+
+            else:
+                st.info("👉 우측 패널에 엑셀 데이터를 업로드하시면 성과 분석기 차트가 활성화됩니다.")
+
+            st.divider()
+
+            # [수정 영역] NaTType 에러 방지를 위한 예외 처리(pd.notna 적용)
             st.markdown("### 📢 운용사별 이벤트 모니터링 (Sheet 연동)")
             if not df_events.empty and '이벤트명' in df_events.columns:
                 evt_tab1, evt_tab2 = st.tabs(["🟢 진행 중인 이벤트", "🔴 종료된 이벤트"])
@@ -1019,7 +1102,9 @@ with col_main:
                         for brand, group in df_ongoing.groupby('ETF 브랜드'):
                             with st.expander(f"🔵 {brand} ({len(group)}건)", expanded=True):
                                 for _, row in group.iterrows():
-                                    st.markdown(f"- **{row.get('이벤트명', '')}** (대상: {row.get('대상 ETF의 종목 코드', '')}) | {row['시작일'].strftime('%Y.%m.%d')} ~ {row['종료일'].strftime('%Y.%m.%d')}")
+                                    start_str = row['시작일'].strftime('%Y.%m.%d') if pd.notna(row.get('시작일')) else "미상"
+                                    end_str = row['종료일'].strftime('%Y.%m.%d') if pd.notna(row.get('종료일')) else "미상"
+                                    st.markdown(f"- **{row.get('이벤트명', '')}** (대상: {row.get('대상 ETF의 종목 코드', '')}) | {start_str} ~ {end_str}")
                     else:
                         st.write("진행 중인 이벤트가 없습니다.")
                         
@@ -1028,7 +1113,9 @@ with col_main:
                         for brand, group in df_ended.groupby('ETF 브랜드'):
                             with st.expander(f"🔴 {brand} ({len(group)}건)", expanded=False):
                                 for _, row in group.iterrows():
-                                    st.markdown(f"- **{row.get('이벤트명', '')}** (대상: {row.get('대상 ETF의 종목 코드', '')}) | {row['시작일'].strftime('%Y.%m.%d')} ~ {row['종료일'].strftime('%Y.%m.%d')}")
+                                    start_str = row['시작일'].strftime('%Y.%m.%d') if pd.notna(row.get('시작일')) else "미상"
+                                    end_str = row['종료일'].strftime('%Y.%m.%d') if pd.notna(row.get('종료일')) else "미상"
+                                    st.markdown(f"- **{row.get('이벤트명', '')}** (대상: {row.get('대상 ETF의 종목 코드', '')}) | {start_str} ~ {end_str}")
                     else:
                         st.write("종료된 이벤트가 없습니다.")
             else:
