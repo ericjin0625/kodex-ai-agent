@@ -954,34 +954,44 @@ with col_main:
 
                 all_selected = selected_ongoing + selected_ended
 
-                # [수정 영역] 산점도 시각화 조건 변경 (2개 이상일 때만 표시)
-                st.markdown("**💰 이벤트 마케팅 예산 vs 파급력(수급/트렌드) 효율성 분석**")
-                if len(all_selected) >= 2 and not df_events.empty:
-                    event_scatter_data = []
-                    for evt_name in all_selected:
-                        row_e = df_events[df_events['이벤트명'] == evt_name].iloc[0]
-                        budget = row_e.get('경품예산', 0)
-                        brand = row_e.get('ETF 브랜드', '기타')
-                        
-                        est_y = df_trend[(df_trend['주차'] >= event_start_week) & (df_trend['종목명'] == target_etf)]['전체순매수'].mean() if not df_trend.empty else 0
-                        
-                        event_scatter_data.append({
-                            "이벤트명": evt_name,
-                            "브랜드": brand,
-                            "경품예산(원)": budget,
-                            "파급력(주간평균 유입액)": est_y + np.random.normal(0, 5) 
-                        })
-                        
-                    df_evt_scatter = pd.DataFrame(event_scatter_data)
-                    fig_evt_scatter = px.scatter(df_evt_scatter, x="경품예산(원)", y="파급력(주간평균 유입액)", text="이벤트명", color="브랜드", size="경품예산(원)", hover_data=["경품예산(원)"])
-                    fig_evt_scatter.update_traces(textposition='top center', marker=dict(opacity=0.8), textfont=dict(size=11, color='lightgray'))
-                    fig_evt_scatter.update_layout(height=350, margin=dict(l=10,r=10,t=20,b=10), template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                    st.plotly_chart(fig_evt_scatter, use_container_width=True)
-                    st.caption("우측 상단으로 갈수록 고비용-고효율, 좌측 상단에 위치할수록 저비용-고효율(바이럴 굿즈 등) 이벤트입니다.")
-                elif len(all_selected) == 1:
-                    st.info("💡 이벤트 마케팅 예산 vs 파급력 산점도는 비교 분석을 위해 이벤트를 2개 이상 선택해야 활성화됩니다.")
+                # [수정 영역] 퍼널(Funnel) 전환 프로세스 시각화 추가
+                st.markdown("**🎯 마케팅 퍼널(Funnel) 전환 효율 프로세스**")
+                st.info("💡 **안내:** 기업이 집행한 마케팅 예산(Input)이 투자자들의 '검색 관심도(Awareness)'를 얼마나 끌어올렸고, 최종적으로 실제 펀드 '순매수 자금 유입(Conversion)'으로 얼마나 이어졌는지 3단계로 추적하는 퍼널(깔때기) 분석입니다.")
+
+                if all_selected and not df_events.empty:
+                    c_f1, c_arr1, c_f2, c_arr2, c_f3 = st.columns([3, 1, 3, 1, 3])
+                    
+                    with c_f1:
+                        with st.container(border=True):
+                            st.markdown("<div style='text-align: center; color: #94a3b8; font-size: 14px;'>Step 1. 마케팅 예산 투입</div>", unsafe_allow_html=True)
+                            
+                            total_budget_spent = df_events[df_events['이벤트명'].isin(all_selected)]['경품예산'].sum()
+                            st.markdown(f"<div style='text-align: center; color: #ffb04d; font-size: 24px; font-weight: bold; margin-top: 10px;'>{total_budget_spent:,.0f}원</div>", unsafe_allow_html=True)
+                            st.markdown("<div style='text-align: center; color: #94a3b8; font-size: 12px; margin-top: 5px;'>선택된 이벤트 총 경품 비용</div>", unsafe_allow_html=True)
+
+                    with c_arr1:
+                        st.markdown("<div style='text-align: center; font-size: 30px; color: #4da6ff; margin-top: 25px;'>➔</div>", unsafe_allow_html=True)
+
+                    with c_f2:
+                        with st.container(border=True):
+                            st.markdown("<div style='text-align: center; color: #94a3b8; font-size: 14px;'>Step 2. 브랜드 관심도 획득</div>", unsafe_allow_html=True)
+                            search_val = f"+{brand_search_inc}%" if brand_search_inc is not None else "N/A"
+                            search_color = "#ff4d4d" if brand_search_inc is not None and brand_search_inc > 0 else "#ffffff"
+                            st.markdown(f"<div style='text-align: center; color: {search_color}; font-size: 24px; font-weight: bold; margin-top: 10px;'>{search_val}</div>", unsafe_allow_html=True)
+                            st.markdown("<div style='text-align: center; color: #94a3b8; font-size: 12px; margin-top: 5px;'>DataLab 검색량 증가율</div>", unsafe_allow_html=True)
+
+                    with c_arr2:
+                        st.markdown("<div style='text-align: center; font-size: 30px; color: #4da6ff; margin-top: 25px;'>➔</div>", unsafe_allow_html=True)
+
+                    with c_f3:
+                        with st.container(border=True):
+                            st.markdown("<div style='text-align: center; color: #94a3b8; font-size: 14px;'>Step 3. 최종 매수 전환</div>", unsafe_allow_html=True)
+                            inflow_sign = "+" if target_diff > 0 else ""
+                            inflow_color = "#ff4d4d" if target_diff > 0 else "#4da6ff"
+                            st.markdown(f"<div style='text-align: center; color: {inflow_color}; font-size: 24px; font-weight: bold; margin-top: 10px;'>{inflow_sign}{target_diff:,.0f}억원</div>", unsafe_allow_html=True)
+                            st.markdown("<div style='text-align: center; color: #94a3b8; font-size: 12px; margin-top: 5px;'>타겟 ETF 순매수 유입액</div>", unsafe_allow_html=True)
                 else:
-                    st.info("💡 이벤트 드롭다운에서 분석할 이벤트를 선택하시면 예산 대비 효율성 산점도가 활성화됩니다.")
+                    st.info("💡 이벤트 드롭다운에서 분석할 이벤트를 하나 이상 선택하시면 마케팅 전환 퍼널(Funnel)이 실시간으로 활성화됩니다.")
 
                 with st.spinner("수급 임팩트 데이터를 렌더링하고 있습니다..."):
                     fig_evt = px.line(df_trend, x='주차', y='전체순매수', color='종목명', markers=True, template="plotly_dark", color_discrete_map={target_etf: '#ff4d4d', comp_etf: '#4da6ff'})
