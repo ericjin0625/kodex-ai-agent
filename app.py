@@ -1707,7 +1707,6 @@ with col_main:
 
             st.markdown("#### Step 3. 구조화, 세일즈 타겟팅 및 P&L")
             
-            # [수정] 옵션 산수(Arithmetic) 로직 제거 및 구조(Structure/Payoff) 시각화로 대체
             with st.expander("➕ 파생상품(옵션) 오버레이 전략 추가하기 (선택형 심화 모듈)", expanded=False):
                 st.markdown("**📈 옵션 페이오프(Payoff) 개념 구조도**")
                 st.caption("설정된 옵션 파라미터를 기반으로 만기 시점의 개념적인 수익률 페이오프 구조를 시각화합니다.")
@@ -1773,12 +1772,12 @@ with col_main:
                     else:
                         st.warning("상단 백테스트 데이터가 없어 환율 궤적을 그릴 수 없습니다.")
 
-            # [수정] UI 레이아웃 최적화 (워터폴을 우측으로, 팩트시트를 그 아래로 이동)
-            c_pl_left, c_pl_right = st.columns(2)
-            with c_pl_left:
-                with st.container(border=True):
-                    st.markdown("**🏢 자산운용사(AMC) 수지 분석 및 피어(Peer) 타겟팅**")
-                    
+            # [수정] 1. 동일한 컨테이너 내부 병렬 배치 
+            with st.container(border=True):
+                st.markdown("**🏢 자산운용사(AMC) 수지 분석 및 피어(Peer) 타겟팅**")
+                c_pl_left, c_pl_right = st.columns(2)
+                
+                with c_pl_left:
                     col_tgt1, col_tgt2 = st.columns(2)
                     with col_tgt1:
                         comp_ticker = st.text_input("타겟 경쟁사 ETF 티커", value="TIGER 유사ETF")
@@ -1790,7 +1789,7 @@ with col_main:
                     target_aum = st.number_input("1년 차 당사 타겟 AUM (억원)", value=1000, step=100)
                     st.session_state.p_aum = target_aum
                     
-                    # [수정] 종토방 기프티콘 마케팅 예산 강제 연동 해제 및 독립적 런칭 마케팅 예산 변수화
+                    # [수정] 강제 연동 해제 & 변수명 통일
                     mkt_cost = st.number_input("초기 런칭 마케팅 예산 (억원)", value=2.0, step=0.5)
                     st.session_state.p_launch_budget = mkt_cost
                     
@@ -1812,9 +1811,9 @@ with col_main:
                         st.info(f"💡 **BEP(손익분기점) 달성 필요 AUM:** 약 {bep_aum:,.0f}억 원")
                     else:
                         st.error("마진이 0 또는 마이너스입니다. 보수율(TER)을 높이거나 고정비를 줄이세요.")
-
-            with c_pl_right:
-                with st.container(border=True):
+                
+                with c_pl_right:
+                    # [수정] 차트는 오른쪽 열에 배치하여 동일 박스 안에 들어가도록 구성
                     fig_wf = go.Figure(go.Waterfall(
                         name = "P&L", orientation = "v",
                         measure = ["relative", "relative", "relative", "total"],
@@ -1830,18 +1829,19 @@ with col_main:
                     fig_wf.update_layout(height=280, margin=dict(t=20, b=10, l=10, r=10), template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                     st.plotly_chart(fig_wf, use_container_width=True)
 
-                with st.container(border=True):
-                    st.markdown("##### 📄 Simulated Product Factsheet")
-                    st.metric("최종 타겟 배당수익률 (Net Yield)", f"{net_yield:.2f}%")
-                    
-                    risk_level = "보통 위험 (Medium Risk)" if "환헤지" in fx_strategy else "높은 위험 (High Risk)"
-                    fx_desc = f"달러 변동성 제거 (헤지 프리미엄 연 약 {fx_hedge_cost}% 발생)" if "환헤지" in fx_strategy else "달러 강세 시 환차익 추가 향유 가능 (변동성 노출)"
-                    tax_desc = "퇴직연금(IRP/DC) 내 안전자산(30%) 룸 편입용" if "환헤지" in fx_strategy else "배당소득세 및 종합과세 방어를 위한 ISA 계좌 편입용"
-                    
-                    st.write(f"- **위험 등급:** {risk_level}")
-                    st.write(f"- **FX 전략:** {fx_desc}")
-                    st.success(f"💰 **세금 최적화(Tax):** {tax_desc}으로 타겟팅하는 세일즈에 유리합니다.")
-                    st.info("해당 팩트시트의 핵심 소구 포인트는 우측 상단의 'AI 프롬프트' 탭으로 전달되어 최종 마케팅 제안서 작성에 자동으로 활용됩니다.")
+            # [수정] 2. Factsheet을 독립된 박스로 가로 꽉 차게 하단에 배치
+            with st.container(border=True):
+                st.markdown("##### 📄 Simulated Product Factsheet")
+                st.metric("최종 타겟 배당수익률 (Net Yield)", f"{net_yield:.2f}%")
+                
+                risk_level = "보통 위험 (Medium Risk)" if "환헤지" in fx_strategy else "높은 위험 (High Risk)"
+                fx_desc = f"달러 변동성 제거 (헤지 프리미엄 연 약 {fx_hedge_cost}% 발생)" if "환헤지" in fx_strategy else "달러 강세 시 환차익 추가 향유 가능 (변동성 노출)"
+                tax_desc = "퇴직연금(IRP/DC) 내 안전자산(30%) 룸 편입용" if "환헤지" in fx_strategy else "배당소득세 및 종합과세 방어를 위한 ISA 계좌 편입용"
+                
+                st.write(f"- **위험 등급:** {risk_level}")
+                st.write(f"- **FX 전략:** {fx_desc}")
+                st.success(f"💰 **세금 최적화(Tax):** {tax_desc}으로 타겟팅하는 세일즈에 유리합니다.")
+                st.info("해당 팩트시트의 핵심 소구 포인트는 우측 상단의 'AI 프롬프트' 탭으로 전달되어 최종 마케팅 제안서 작성에 자동으로 활용됩니다.")
 
         # === 3. 가상 지수 샌드박스 ===
         with sub_tabs_plan[2]:
@@ -1887,7 +1887,6 @@ with col_main:
                         df_merged = pd.concat(df_list, axis=1).dropna()
                         weights = np.array([1/len(valid_tickers)] * len(valid_tickers))
                         
-                        # [수정] 배당률(Dividend) 처리를 주가 수익률에서 완전히 분리
                         port_daily_ret_price = df_merged.dot(weights)
                         
                         if sandbox_hedging:
@@ -1899,7 +1898,6 @@ with col_main:
                         
                         years = np.arange(1, len(dates) + 1) / 252.0
                         
-                        # 누적 인컴(배당) 수익을 독립적인 포인트로 환산
                         income_pts = 100 * (((1 + sandbox_div/100) ** years) - 1)
                         
                         y_price = base_cum_returns_price - 100
@@ -1928,7 +1926,6 @@ with col_main:
                             fig_fan = go.Figure()
                             fig_fan.add_trace(go.Scatter(x=dates, y=bm_cum_returns, mode='lines', name='S&P 500 (BM Price)', line=dict(color='gray', width=1, dash='dot')))
                             
-                            # [수정] 누적 수익 분해 차트 (Stacked Area Chart 형태로 Total Return 시각화)
                             fig_fan.add_trace(go.Scatter(x=dates, y=y_price, mode='lines', name='순수 주가 수익률 (Price)', line=dict(color='#4da6ff', width=2)))
                             fig_fan.add_trace(go.Scatter(x=dates, y=y_total, mode='none', name=f'누적 배당 수익 (연 {sandbox_div}%)', fill='tonexty', fillcolor='rgba(255, 176, 77, 0.3)'))
                             fig_fan.add_trace(go.Scatter(x=dates, y=y_total, mode='lines', name='총 수익률 (Total Return)', line=dict(color='#ffb04d', width=3)))
@@ -1958,13 +1955,14 @@ with col_main:
                             st.plotly_chart(fig_fan, use_container_width=True)
 
                             c_m1, c_m2, c_m3, c_m4 = st.columns(4)
+                            # [수정] 3. KeyError 발생 원인 (y_total[-1] -> y_total.iloc[-1]) 수정 완료
                             final_base = base_cum_returns_price.iloc[-1]
                             mdd_base = (base_cum_returns_price / np.maximum.accumulate(base_cum_returns_price) - 1).min() * 100
                             years_elapsed = years[-1] if years[-1] > 0 else 1
                             cagr_price = ((final_base/100)**(1/years_elapsed)-1)*100
                             
                             c_m1.metric("연환산 주가 수익률 (Price CAGR)", f"{cagr_price:.1f}%")
-                            c_m2.metric("최종 총수익률 (Total Return)", f"{y_total[-1]:.1f}%", f"배당(인컴) 분해 적용")
+                            c_m2.metric("최종 총수익률 (Total Return)", f"{y_total.iloc[-1]:.1f}%", f"배당(인컴) 분해 적용")
                             
                             corr_color = "normal" if corr_with_bm < 0.5 else "off"
                             c_m3.metric("S&P 500 상관계수 (분산도)", f"{corr_with_bm:.2f}", "수치가 낮을수록 헷지 우수", delta_color=corr_color)
@@ -2021,7 +2019,7 @@ with col_main:
 {macro_text}
 [이번 주 핵심 타겟 ETF 관련 뉴스 (링크 포함)]:
 {news_text}
-위 Raw Data와 첨부된 링크 내용들을 바탕으로, 현재 거시 경제(금리/환율) 흐름이 ETF 시장 전반의 투자 심리 및 특정 테마 쏠림에 어떤 영향을 미치고 있는지 3줄로 진단하시오. (다음 단계들을 위해 분석 결과를 메모리에 유지할 것)"""
+위 Raw Data와 첨부된 링크 내용들을 바탕으로, 현재 거시 경제(금리/환율) 흐름이 ETF 시장 전반의 투자 심리 및 특정 테마 쏠림에 어떤 영향을 미치고 있는지 3줄로 진단하시오. (다음 단계들을 위해 분석 결과를 메모리에 유지할 단)"""
             st.code(p1_step1, language="text")
 
             st.markdown("**📌 [Step 2: AUM & Flow Analysis (수급 및 점유율 동향)]**")
@@ -2107,7 +2105,7 @@ with col_main:
             with st.container(border=True):
                 st.markdown("##### 💡 0. 기획 상품 핵심 컨셉 요약 (AI 주입용)")
                 st.caption("여기에 작성한 컨셉이 아래 Step 1 프롬프트에 자동 반영되어 AI가 어떤 상품을 기획해야 하는지 뚜렷한 방향성을 잡아줍니다.")
-                user_idea = st.text_area("✍️ 기획하고자 하는 ETF의 핵심 아이디어를 자유롭게 적어주세요:", 
+                user_idea = st.text_area("✍️ 기획하고자 전하는 ETF의 핵심 아이디어를 자유롭게 적어주세요:", 
                                          value="미국 사모신용 자산 중에서 부채비율(LTV)이 낮고 현금흐름이 탄탄해서 배당 지속성이 높은 우량 BDC 종목들을 모아서 지수를 짜고 싶어. 커버드콜 옵션도 살짝 섞을 거야.", height=80)
 
             if st.session_state.get('p_has_csv', False):
@@ -2186,11 +2184,12 @@ with col_main:
 - 타겟 위기 국면: {st.session_state.get('p_scenario', '데이터 없음')}
 
 [지시사항]: 
-1) 입력된 수치와 내가 첨부한 '시나리오 밴드 차트' 이미지를 시각적으로 분석하여, 총수익률(Total Return)을 자본차익(Price Return)과 인컴수익(Dividend)으로 철저히 분해하고 하락장 방어 논리를 어필할 것.
+1) 입력된 수치와 내가 첨부한 '시나리오 밴드 차트' 이미지를 시각적으로 분석하여, 총수익률을 자본차익과 인컴수익으로 철저히 분해하고 하락장 방어 논리를 어필할 것.
 2) S&P 500과의 낮은 상관계수({st.session_state.get('p_corr', 0.0)})를 근거로, 기관 투자자가 기존 전통자산 포트폴리오에 이 ETF를 편입했을 때 얻을 수 있는 분산(헷지) 효과를 증명할 것.
 3) 지정된 과거 매크로 위기 국면 당시의 벤치마크 대비 하방 경직성을 서술하고, 추적오차를 통제하기 위한 실제 운용 매니저 관점의 대응 전략을 추가할 것."""
             st.code(p2_step3, language="text")
 
+            # [수정] 프롬프트 내부 예산 관련 변수도 p_launch_budget으로 업데이트
             st.markdown("**📌 [Step 4: 상품 구조화 및 운용사 동적 P&L 분석]**")
             st.warning("📸 **[필수 스크린샷 첨부]** 2번 탭의 **'P&L 폭포수(Waterfall) 차트'** 이미지를 캡처하여 프롬프트와 함께 첨부해 주세요!")
             
