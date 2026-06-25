@@ -52,8 +52,6 @@ if 'stat_p_value' not in st.session_state: st.session_state.stat_p_value = 0.0
 if 'stat_net_inflow' not in st.session_state: st.session_state.stat_net_inflow = 0.0
 
 if 't0_week_state' not in st.session_state: st.session_state.t0_week_state = None
-
-# [신규 추가] 이벤트 경품 예산 및 ROAS 관련 전역 변수
 if 'p_event_budget' not in st.session_state: st.session_state.p_event_budget = 0.0
 if 'stat_roas' not in st.session_state: st.session_state.stat_roas = 0.0
 
@@ -351,7 +349,6 @@ def load_event_sheet(url):
         if '종료일' in df.columns:
             df['종료일'] = pd.to_datetime(df['종료일'].astype(str).str.replace('.', '-', regex=False), errors='coerce')
 
-        # [신규 추가] 경품 예산 파싱 (금액 쉼표 제거 및 float 변환)
         if '타겟/경품 내역 (원)' in df.columns:
             df['경품예산'] = pd.to_numeric(df['타겟/경품 내역 (원)'].astype(str).str.replace(',', '', regex=False).str.replace(' ', '', regex=False), errors='coerce').fillna(0)
             
@@ -954,7 +951,7 @@ with col_main:
 
                 all_selected = selected_ongoing + selected_ended
 
-                # [수정 영역] 산점도 시각화 조건 변경 (2개 이상일 때만 표시)
+                # [수정] 랜덤 노이즈(np.random.normal) 제거 적용
                 st.markdown("**💰 이벤트 마케팅 예산 vs 파급력(수급/트렌드) 효율성 분석**")
                 if len(all_selected) >= 2 and not df_events.empty:
                     event_scatter_data = []
@@ -969,7 +966,7 @@ with col_main:
                             "이벤트명": evt_name,
                             "브랜드": brand,
                             "경품예산(원)": budget,
-                            "파급력(주간평균 유입액)": est_y + np.random.normal(0, 5) 
+                            "파급력(주간평균 유입액)": est_y  # [수정] 난수 생성기 완전 제거
                         })
                         
                     df_evt_scatter = pd.DataFrame(event_scatter_data)
@@ -1092,7 +1089,6 @@ with col_main:
 
             st.divider()
 
-            # [수정 영역] NaTType 에러 방지를 위한 예외 처리(pd.notna 적용)
             st.markdown("### 📢 운용사별 이벤트 모니터링 (Sheet 연동)")
             if not df_events.empty and '이벤트명' in df_events.columns:
                 evt_tab1, evt_tab2 = st.tabs(["🟢 진행 중인 이벤트", "🔴 종료된 이벤트"])
@@ -1711,10 +1707,10 @@ with col_main:
 
             st.markdown("#### Step 3. 구조화, 세일즈 타겟팅 및 P&L")
             
+            # [수정] 옵션 산수(Arithmetic) 로직 제거 및 구조(Structure/Payoff) 시각화로 대체
             with st.expander("➕ 파생상품(옵션) 오버레이 전략 추가하기 (선택형 심화 모듈)", expanded=False):
-                st.markdown("**📈 개념적 옵션 결합 수익률 시뮬레이터 (Heuristic Model)**")
-                st.caption("Step 2의 실제 과거 3년 일간 주가 데이터에 옵션의 수익/제한 구조를 씌워 실제 궤적이 어떻게 방어되는지 시각화합니다.")
-                st.info("💡 실시간 옵션 내재변동성(IV) 및 프리미엄 데이터의 한계로 인해, 본 시뮬레이터는 일간 변동성에 고정 프리미엄 수취 및 캡(Cap)을 씌운 개념적(Heuristic) 모델로 작동합니다. 실제 상품화 시에는 옵션 프라이싱 모델(Black-Scholes 등)을 통한 정밀 검증이 필요합니다.")
+                st.markdown("**📈 옵션 페이오프(Payoff) 개념 구조도**")
+                st.caption("설정된 옵션 파라미터를 기반으로 만기 시점의 개념적인 수익률 페이오프 구조를 시각화합니다.")
                 
                 opt_strategy = st.radio("시뮬레이션 전략 선택:", ["적용 안 함 (순수 대체자산)", "초단기 커버드콜 (Covered Call)", "하방 방어형 (Buffer ETF)"], horizontal=True)
 
@@ -1723,33 +1719,26 @@ with col_main:
                     with c_opt1:
                         st.markdown("**⚙️ 옵션 파라미터 설정**")
                         if "Covered Call" in opt_strategy:
-                            strike_pct = st.slider("콜옵션 행사가격 (월간 OTM, %)", 0.0, 10.0, 2.0, 0.5) / 100
-                            premium = st.slider("수취 프리미엄 (월간, %)", 0.1, 5.0, 1.5, 0.1) / 100
-                            d_strike = strike_pct / 21
-                            d_premium = premium / 21
-                            if backtest_success:
-                                opt_daily = np.where(port_daily > d_strike, d_strike + d_premium, port_daily + d_premium)
+                            strike_pct = st.slider("콜옵션 행사가격 (월간 OTM, %)", 0.0, 10.0, 2.0, 0.5)
+                            premium = st.slider("수취 프리미엄 (월간, %)", 0.1, 5.0, 1.5, 0.1)
                         else:
-                            buffer_pct = st.slider("하방 방어 수준 (연간 Buffer, %)", 5.0, 20.0, 10.0, 1.0) / 100
-                            cap_pct = st.slider("상방 제한 수준 (연간 Cap, %)", 5.0, 15.0, 8.0, 1.0) / 100
-                            d_buffer = buffer_pct / 252
-                            d_cap = cap_pct / 252
-                            if backtest_success:
-                                opt_daily = np.where(port_daily > 0, np.minimum(port_daily, d_cap), 
-                                                     np.where(port_daily >= -d_buffer, 0, port_daily + d_buffer))
+                            buffer_pct = st.slider("하방 방어 수준 (연간 Buffer, %)", 5.0, 20.0, 10.0, 1.0)
+                            cap_pct = st.slider("상방 제한 수준 (연간 Cap, %)", 5.0, 15.0, 8.0, 1.0)
                     
                     with c_opt2:
-                        if backtest_success:
-                            base_cum = (1 + port_daily).cumprod() * 100
-                            opt_cum = (1 + opt_daily).cumprod() * 100
-                            
-                            fig_opt = go.Figure()
-                            fig_opt.add_trace(go.Scatter(x=dates, y=base_cum, mode='lines', name='순수 기초자산 (Before)', line=dict(color='gray', dash='dot')))
-                            fig_opt.add_trace(go.Scatter(x=dates, y=opt_cum, mode='lines', name=f'{opt_strategy} 적용 (After)', line=dict(color='#4da6ff' if "Covered" in opt_strategy else '#ffb04d', width=2)))
-                            fig_opt.update_layout(height=230, margin=dict(t=10,b=10,l=10,r=10), template="plotly_dark", xaxis_title="기간", yaxis_title="누적 수익률", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
-                            st.plotly_chart(fig_opt, use_container_width=True)
+                        x_vals = np.linspace(-20, 20, 100)
+                        if "Covered" in opt_strategy:
+                            y_vals = np.where(x_vals > strike_pct, strike_pct + premium, x_vals + premium)
                         else:
-                            st.warning("상단 백테스트 데이터가 없어 옵션 오버레이를 그릴 수 없습니다.")
+                            y_vals = np.where(x_vals > 0, np.minimum(x_vals, cap_pct), 
+                                              np.where(x_vals >= -buffer_pct, 0, x_vals + buffer_pct))
+                                              
+                        fig_opt = go.Figure()
+                        fig_opt.add_trace(go.Scatter(x=x_vals, y=x_vals, mode='lines', name='기초자산 (Base)', line=dict(color='gray', dash='dot')))
+                        fig_opt.add_trace(go.Scatter(x=x_vals, y=y_vals, mode='lines', name=f'{opt_strategy} 페이오프', line=dict(color='#4da6ff' if "Covered" in opt_strategy else '#ffb04d', width=3)))
+                        
+                        fig_opt.update_layout(height=230, margin=dict(t=10,b=10,l=10,r=10), template="plotly_dark", xaxis_title="기초자산 수익률 (%)", yaxis_title="전략 수익률 (%)", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
+                        st.plotly_chart(fig_opt, use_container_width=True)
 
             with st.container(border=True):
                 st.markdown("**💱 환율 전략 및 비용 시뮬레이터**")
@@ -1784,9 +1773,10 @@ with col_main:
                     else:
                         st.warning("상단 백테스트 데이터가 없어 환율 궤적을 그릴 수 없습니다.")
 
+            # [수정] UI 레이아웃 최적화 (워터폴을 우측으로, 팩트시트를 그 아래로 이동)
             c_pl_left, c_pl_right = st.columns(2)
             with c_pl_left:
-                with st.container(height=650, border=True):
+                with st.container(border=True):
                     st.markdown("**🏢 자산운용사(AMC) 수지 분석 및 피어(Peer) 타겟팅**")
                     
                     col_tgt1, col_tgt2 = st.columns(2)
@@ -1800,9 +1790,9 @@ with col_main:
                     target_aum = st.number_input("1년 차 당사 타겟 AUM (억원)", value=1000, step=100)
                     st.session_state.p_aum = target_aum
                     
-                    actual_budget_in_uk = st.session_state.get('p_event_budget', 0.0) / 100000000
-                    st.info(f"💡 이벤트 검증 탭에서 선택된 누적 마케팅 예산 **{actual_budget_in_uk:.2f}억 원**이 기본 비용으로 산입됩니다.")
-                    mkt_cost = st.number_input("마케팅 예산 수동 조정 (억원)", value=float(max(2.0, actual_budget_in_uk)), step=0.5)
+                    # [수정] 종토방 기프티콘 마케팅 예산 강제 연동 해제 및 독립적 런칭 마케팅 예산 변수화
+                    mkt_cost = st.number_input("초기 런칭 마케팅 예산 (억원)", value=2.0, step=0.5)
+                    st.session_state.p_launch_budget = mkt_cost
                     
                     ter_diff = comp_ter - ter
                     if ter_diff > 0:
@@ -1822,11 +1812,13 @@ with col_main:
                         st.info(f"💡 **BEP(손익분기점) 달성 필요 AUM:** 약 {bep_aum:,.0f}억 원")
                     else:
                         st.error("마진이 0 또는 마이너스입니다. 보수율(TER)을 높이거나 고정비를 줄이세요.")
-                    
+
+            with c_pl_right:
+                with st.container(border=True):
                     fig_wf = go.Figure(go.Waterfall(
                         name = "P&L", orientation = "v",
                         measure = ["relative", "relative", "relative", "total"],
-                        x = ["총 운용수익", "고정/유지비용", "실제 마케팅 예산", "최종 순이익"],
+                        x = ["총 운용수익", "고정/유지비용", "초기 런칭 예산", "최종 순이익"],
                         textposition = "outside",
                         text = [f"+{expected_revenue:.1f}억", f"-{fixed_cost:.1f}억", f"-{mkt_cost:.1f}억", f"{net_profit:.1f}억"],
                         y = [expected_revenue, -fixed_cost, -mkt_cost, net_profit],
@@ -1838,8 +1830,7 @@ with col_main:
                     fig_wf.update_layout(height=280, margin=dict(t=20, b=10, l=10, r=10), template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                     st.plotly_chart(fig_wf, use_container_width=True)
 
-            with c_pl_right:
-                with st.container(height=650, border=True):
+                with st.container(border=True):
                     st.markdown("##### 📄 Simulated Product Factsheet")
                     st.metric("최종 타겟 배당수익률 (Net Yield)", f"{net_yield:.2f}%")
                     
@@ -1858,7 +1849,7 @@ with col_main:
             st.caption("실제 지수 편입 종목을 시뮬레이션하고, S&P 500 등 벤치마크 대비 복제 오차(TE)와 상관관계를 검증합니다.")
 
             with st.container(border=True):
-                st.markdown("#### 1. 퀀트 시뮬레이션 컨트롤 패널 (Total Return 기반)")
+                st.markdown("#### 1. 퀀트 시뮬레이션 컨트롤 패널 (Total Return 분해 기반)")
                 
                 sandbox_tickers_input = st.text_input("📌 지수 편입 종목 (전 세계 주식/ETF 티커를 쉼표(,)로 구분):", value="ARCC, OBDC, MAIN, HTGC")
                 sandbox_tickers = [t.strip().upper() for t in sandbox_tickers_input.split(",") if t.strip()]
@@ -1867,7 +1858,7 @@ with col_main:
                 with col_sb1:
                     sandbox_weight = st.selectbox("⚖️ 비중 배분 룰:", ["동일 가중 (Equal Weight)", "시가총액 가중 방식 (Cap-weighted)"])
                 with col_sb2:
-                    sandbox_div = st.slider("💰 포트폴리오 예상 연 배당수익률 (%)", 0.0, 15.0, 8.5, 0.5, help="배당이 제외된 주가 수익률에 입력하신 배당률을 일할(252일) 계산하여 Total Return을 합성합니다.")
+                    sandbox_div = st.slider("💰 포트폴리오 예상 연 배당수익률 (%)", 0.0, 15.0, 8.5, 0.5, help="입력하신 배당률은 순수 주가 궤적(Price Return) 위에 누적 인컴(Income) 면적으로 독립 시각화됩니다.")
                 with col_sb3:
                     sandbox_error = st.slider("🌪️ 예상 오차율/마찰 비용 (Tracking Error, 연간 ±%)", 0.5, 5.0, 2.0, 0.5)
                     sandbox_hedging = st.checkbox("🛡️ 환헤지 프리미엄 비용 차감 (연 -1.5%)")
@@ -1896,32 +1887,37 @@ with col_main:
                         df_merged = pd.concat(df_list, axis=1).dropna()
                         weights = np.array([1/len(valid_tickers)] * len(valid_tickers))
                         
-                        daily_div_yield = sandbox_div / 100 / 252
-                        port_daily_ret = df_merged.dot(weights) + daily_div_yield
+                        # [수정] 배당률(Dividend) 처리를 주가 수익률에서 완전히 분리
+                        port_daily_ret_price = df_merged.dot(weights)
                         
                         if sandbox_hedging:
-                            port_daily_ret -= (1.5 / 252 / 100)
+                            port_daily_ret_price -= (1.5 / 252 / 100)
+                        port_daily_ret_price -= (sandbox_rebal_cost / 100 / 252)
                             
-                        port_daily_ret -= (sandbox_rebal_cost / 100 / 252)
-                            
-                        base_cum_returns = (1 + port_daily_ret).cumprod() * 100
-                        dates = base_cum_returns.index
+                        base_cum_returns_price = (1 + port_daily_ret_price).cumprod() * 100
+                        dates = base_cum_returns_price.index
                         
-                        t_array = np.arange(1, len(dates) + 1) / 252.0
-                        envelope = (sandbox_error / 100) * np.sqrt(t_array)
+                        years = np.arange(1, len(dates) + 1) / 252.0
                         
-                        best_cum_returns = base_cum_returns * (1 + envelope)
-                        worst_cum_returns = base_cum_returns * (1 - envelope)
+                        # 누적 인컴(배당) 수익을 독립적인 포인트로 환산
+                        income_pts = 100 * (((1 + sandbox_div/100) ** years) - 1)
+                        
+                        y_price = base_cum_returns_price - 100
+                        y_total = y_price + income_pts
+                        
+                        envelope = (sandbox_error / 100) * np.sqrt(years) * 100
+                        best_cum_returns = y_total + envelope
+                        worst_cum_returns = y_total - envelope
                         
                         api_error = False
                         try:
                             bm_df = fdr.DataReader('US500', start_dt, end_dt)['Close'].pct_change().dropna()
                             bm_df = bm_df.reindex(dates).fillna(0)
                             bm_df += (1.5 / 100 / 252)
-                            bm_cum_returns = (1 + bm_df).cumprod() * 100
+                            bm_cum_returns = (1 + bm_df).cumprod() * 100 - 100
                             
-                            corr_with_bm = port_daily_ret.corr(bm_df)
-                            tracking_error_annual = np.std(port_daily_ret - bm_df) * np.sqrt(252) * 100
+                            corr_with_bm = port_daily_ret_price.corr(bm_df)
+                            tracking_error_annual = np.std(port_daily_ret_price - bm_df) * np.sqrt(252) * 100
                             st.session_state.p_corr = round(corr_with_bm, 2)
                             
                         except Exception:
@@ -1930,10 +1926,15 @@ with col_main:
 
                         if not api_error:
                             fig_fan = go.Figure()
-                            fig_fan.add_trace(go.Scatter(x=dates, y=bm_cum_returns, mode='lines', name='S&P 500 (BM 가상)', line=dict(color='gray', width=1, dash='dot')))
+                            fig_fan.add_trace(go.Scatter(x=dates, y=bm_cum_returns, mode='lines', name='S&P 500 (BM Price)', line=dict(color='gray', width=1, dash='dot')))
+                            
+                            # [수정] 누적 수익 분해 차트 (Stacked Area Chart 형태로 Total Return 시각화)
+                            fig_fan.add_trace(go.Scatter(x=dates, y=y_price, mode='lines', name='순수 주가 수익률 (Price)', line=dict(color='#4da6ff', width=2)))
+                            fig_fan.add_trace(go.Scatter(x=dates, y=y_total, mode='none', name=f'누적 배당 수익 (연 {sandbox_div}%)', fill='tonexty', fillcolor='rgba(255, 176, 77, 0.3)'))
+                            fig_fan.add_trace(go.Scatter(x=dates, y=y_total, mode='lines', name='총 수익률 (Total Return)', line=dict(color='#ffb04d', width=3)))
+
                             fig_fan.add_trace(go.Scatter(x=dates, y=worst_cum_returns, mode='lines', name=f'Worst Case (-{sandbox_error}%)', line=dict(color='#ff4d4d', width=1, dash='dash')))
-                            fig_fan.add_trace(go.Scatter(x=dates, y=best_cum_returns, mode='lines', name=f'Best Case (+{sandbox_error}%)', fill='tonexty', fillcolor='rgba(77, 166, 255, 0.15)', line=dict(color='#4da6ff', width=1, dash='dash')))
-                            fig_fan.add_trace(go.Scatter(x=dates, y=base_cum_returns, mode='lines', name='Base Case (가상 합성지수)', line=dict(color='#4da6ff', width=3)))
+                            fig_fan.add_trace(go.Scatter(x=dates, y=best_cum_returns, mode='lines', name=f'Best Case (+{sandbox_error}%)', fill='tonexty', fillcolor='rgba(77, 166, 255, 0.1)', line=dict(color='#4da6ff', width=1, dash='dash')))
 
                             fig_fan.update_xaxes(
                                 rangeselector=dict(
@@ -1948,7 +1949,7 @@ with col_main:
 
                             fig_fan.update_layout(
                                 height=450, margin=dict(t=20, b=20, l=20, r=20),
-                                yaxis_title="누적 수익률 (Pt, Base=100)", xaxis_title="",
+                                yaxis_title="누적 수익률 (%)", xaxis_title="",
                                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
                                 template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
                             )
@@ -1957,13 +1958,13 @@ with col_main:
                             st.plotly_chart(fig_fan, use_container_width=True)
 
                             c_m1, c_m2, c_m3, c_m4 = st.columns(4)
-                            final_base = base_cum_returns.iloc[-1]
-                            mdd_base = (base_cum_returns / np.maximum.accumulate(base_cum_returns) - 1).min() * 100
-                            years = len(dates) / 252
-                            cagr_base = ((final_base/100)**(1/years)-1)*100 if years > 0 else 0
+                            final_base = base_cum_returns_price.iloc[-1]
+                            mdd_base = (base_cum_returns_price / np.maximum.accumulate(base_cum_returns_price) - 1).min() * 100
+                            years_elapsed = years[-1] if years[-1] > 0 else 1
+                            cagr_price = ((final_base/100)**(1/years_elapsed)-1)*100
                             
-                            c_m1.metric("Base 연환산 수익률 (CAGR)", f"{cagr_base:.1f}%")
-                            c_m2.metric("최대 낙폭 (MDD)", f"{mdd_base:.1f}%")
+                            c_m1.metric("연환산 주가 수익률 (Price CAGR)", f"{cagr_price:.1f}%")
+                            c_m2.metric("최종 총수익률 (Total Return)", f"{y_total[-1]:.1f}%", f"배당(인컴) 분해 적용")
                             
                             corr_color = "normal" if corr_with_bm < 0.5 else "off"
                             c_m3.metric("S&P 500 상관계수 (분산도)", f"{corr_with_bm:.2f}", "수치가 낮을수록 헷지 우수", delta_color=corr_color)
@@ -2185,14 +2186,14 @@ with col_main:
 - 타겟 위기 국면: {st.session_state.get('p_scenario', '데이터 없음')}
 
 [지시사항]: 
-1) 입력된 수치와 내가 첨부한 '시나리오 밴드 차트' 이미지를 시각적으로 분석하여, 총수익률을 자본차익과 인컴수익으로 철저히 분해하고 하락장 방어 논리를 어필할 것.
+1) 입력된 수치와 내가 첨부한 '시나리오 밴드 차트' 이미지를 시각적으로 분석하여, 총수익률(Total Return)을 자본차익(Price Return)과 인컴수익(Dividend)으로 철저히 분해하고 하락장 방어 논리를 어필할 것.
 2) S&P 500과의 낮은 상관계수({st.session_state.get('p_corr', 0.0)})를 근거로, 기관 투자자가 기존 전통자산 포트폴리오에 이 ETF를 편입했을 때 얻을 수 있는 분산(헷지) 효과를 증명할 것.
 3) 지정된 과거 매크로 위기 국면 당시의 벤치마크 대비 하방 경직성을 서술하고, 추적오차를 통제하기 위한 실제 운용 매니저 관점의 대응 전략을 추가할 것."""
             st.code(p2_step3, language="text")
 
             st.markdown("**📌 [Step 4: 상품 구조화 및 운용사 동적 P&L 분석]**")
             st.warning("📸 **[필수 스크린샷 첨부]** 2번 탭의 **'P&L 폭포수(Waterfall) 차트'** 이미지를 캡처하여 프롬프트와 함께 첨부해 주세요!")
-            actual_budget_in_uk = st.session_state.get('p_event_budget', 0.0) / 100000000
+            
             p2_step4 = f"""네 번째 작업으로, 실질적인 상품 런칭 및 재무 타당성을 다루는 **[4. 상품 구조화 및 운용사 비즈니스 모델]** 파트를 경영진 보고용으로 작성해 줘.
 
 [환율 전략 및 타겟 페르소나]:
@@ -2202,13 +2203,13 @@ with col_main:
 - 타겟 경쟁사 티커: {st.session_state.get('p_comp_ticker', '유사ETF')}
 - 경쟁사 보수율: {st.session_state.get('p_comp_ter', 0.5)}%
 - 당사 1년 차 타겟 AUM: {st.session_state.get('p_aum', 1000)} 억 원
-- 마케팅 집행 예산(이벤트 연동): {max(2.0, actual_budget_in_uk):.2f} 억 원
+- 초기 런칭 마케팅 예산: {st.session_state.get('p_launch_budget', 2.0):.2f} 억 원
 - 운용사 예상 최종 순이익(비용 차감 후): {st.session_state.get('p_profit', 0.0)} 억 원
 
 [지시사항]: 
 1) 채택된 환율 전략({st.session_state.get('p_fx', '환노출')})과 인컴 속성을 고려할 때, 고객의 세후 수익률 측면에서 유리한 연금/ISA 채널 타겟팅 전략을 서술할 것.
 2) 입력된 P&L Raw Data와 당사의 보수율 경쟁력을 기반으로 AUM 뺏어오기(Switching) 영업 전략을 구체화할 것.
-3) 내가 함께 첨부한 'P&L 폭포수(Waterfall) 차트' 이미지를 근거로 삼아, 이번에 책정된 마케팅 집행 예산({max(2.0, actual_budget_in_uk):.2f} 억 원)이 시장 점유율 확보와 BEP(손익분기점) 달성 관점에서 왜 합리적이고 타당한 투자인지 임원진을 강력하게 설득할 것."""
+3) 내가 함께 첨부한 'P&L 폭포수(Waterfall) 차트' 이미지를 근거로 삼아, 이번에 책정된 마케팅 집행 예산({st.session_state.get('p_launch_budget', 2.0):.2f} 억 원)이 시장 점유율 확보와 BEP(손익분기점) 달성 관점에서 왜 합리적이고 타당한 투자인지 임원진을 강력하게 설득할 것."""
             st.code(p2_step4, language="text")
 
             st.markdown("**📌 [Step 5: 요약 보고서 및 투트랙 팩트시트 산출]**")
