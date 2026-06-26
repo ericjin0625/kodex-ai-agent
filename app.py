@@ -401,13 +401,12 @@ with col_right:
 # 5. 메인 패널 
 # =========================================================================
 with col_main:
-   big_tab = st.radio(
+    big_tab = st.radio(
         "메인 메뉴",
-        ["📊 ETF 시장 모니터링", "🌍 상품 기획 시뮬레이터", "🤖 AI 프롬프트"], # <- 여기 이름 수정
+        ["📊 ETF 시장 모니터링", "🌍 상품 기획 시뮬레이터", "🤖 AI 프롬프트"],
         horizontal=True,
         label_visibility="collapsed"
     )
-    
     st.markdown("<br>", unsafe_allow_html=True)
 
 # -------------------------------------------------------------------------
