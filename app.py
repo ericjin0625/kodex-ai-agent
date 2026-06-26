@@ -401,9 +401,9 @@ with col_right:
 # 5. 메인 패널 
 # =========================================================================
 with col_main:
-    big_tab = st.radio(
+   big_tab = st.radio(
         "메인 메뉴",
-        ["📊 ETF 시장 모니터링", "🌍 글로벌 상품 기획 시뮬레이터", "🤖 AI 프롬프트"],
+        ["📊 ETF 시장 모니터링", "🌍 상품 기획 시뮬레이터", "🤖 AI 프롬프트"], # <- 여기 이름 수정
         horizontal=True,
         label_visibility="collapsed"
     )
@@ -1448,15 +1448,14 @@ with col_main:
             else: st.info("👉 우측 패널에 엑셀 데이터를 업로드하시면 트렌드 그래프가 활성화됩니다.")
 
 # -------------------------------------------------------------------------
-    # Big 탭 2: 글로벌 상품 기획 시뮬레이터
+    # Big 탭 2: 상품 기획 시뮬레이터
 # -------------------------------------------------------------------------
-    elif big_tab == "🌍 글로벌 상품 기획 시뮬레이터":
-        st.markdown("## 🌍 Global Alternative ETF Structuring Simulator")
-        st.caption("해외 자산을 융합하여 실제 주가 기반 백테스트 및 수지 분석(P&L)을 거친 실무형 팩트시트를 도출합니다.")
+    elif big_tab == "🌍 상품 기획 시뮬레이터":
+        st.markdown("## 🌍 ETF Structuring Simulator")
+        st.caption("다양한 자산을 융합하여 실제 주가 기반 백테스트 및 수지 분석(P&L)을 거친 실무형 팩트시트를 도출합니다.")
         
         c_sel1, c_sel2 = st.columns(2)
         with c_sel1:
-            # [수정] 자산군 선택 옵션에 '직접 입력' 추가
             asset_class_options = [
                 "사모신용 (BDC)", 
                 "대출채권담보부증권 (CLO)", 
@@ -1465,9 +1464,8 @@ with col_main:
                 "국내 배당/그룹 테마 (SK그룹 등)",
                 "➕ 직접 입력 (Manual)"
             ]
-            selected_asset_ui = st.selectbox("🌍 탐색할 해외/국내 자산군 선택:", asset_class_options, key="asset_sel_app1")
+            selected_asset_ui = st.selectbox("🌍 탐색할 핵심 자산군 선택:", asset_class_options, key="asset_sel_app1")
             
-            # [수정] 직접 입력을 선택했을 때 나타나는 자산군 입력창
             if selected_asset_ui == "➕ 직접 입력 (Manual)":
                 with st.container(border=True):
                     st.markdown("**✍️ 커스텀 자산군 설정**")
@@ -1484,7 +1482,6 @@ with col_main:
         elif asset_class == "상장 실물자산 (Listed Real Assets)": proxy_options = ["VNQ", "XLRE"]
         elif asset_class == "특수 목적 리츠 (통신탑/데이터센터)": proxy_options = ["AMT", "CCI", "SRVR"]
         elif asset_class == "국내 배당/그룹 테마 (SK그룹 등)": proxy_options = ["017670", "034730", "TIGER 지주회사"]
-        # 커스텀 자산군의 경우 위의 조건문에 걸리지 않으므로 proxy_options는 빈 리스트가 됨 (아래에서 직접입력만 추가됨)
         
         proxy_reason_map = {
             "ARCC": "미국 BDC 시가총액 1위 종목으로, 가장 다각화된 포트폴리오를 보유하여 우량 사모신용의 펀더멘털을 가장 잘 대변함.",
@@ -1521,15 +1518,15 @@ with col_main:
         st.info(f"💡 **프록시 선정 논리(AI 프롬프트 연동):** {st.session_state.p_proxy_reason}")
 
         sub_tabs_plan = st.tabs([
-            "📡 1. 글로벌 규제 공백 및 신상품 모니터링", 
+            "📡 1. 규제 공백 및 신상품 모니터링", 
             "🔍 2. 기존 프록시 기반 상품 구조화 (Proxy Simulator)", 
             "💡 3. 가상 지수 샌드박스 (Index Sandbox)"
         ])
 
-        # === 1. 글로벌 규제 공백 및 신상품 모니터링 ===
+        # === 1. 규제 공백 및 신상품 모니터링 ===
         with sub_tabs_plan[0]:
-            st.markdown("### 🇺🇸 글로벌 혁신 구조 공백 분석 (US Mega Trends vs KODEX)")
-            st.caption("해외 시장에서 자금이 유입되는 혁신 테마 중, 국내 시장 및 자사 라인업에 공백이 있는 영역을 모니터링합니다.")
+            st.markdown("### 🇺🇸 혁신 구조 공백 분석 (Mega Trends vs 당사 라인업)")
+            st.caption("시장에서 자금이 유입되는 혁신 테마 중, 국내 시장 및 자사 라인업에 공백이 있는 영역을 모니터링합니다.")
             
             raw_keywords = ["타겟 인컴 ETF 버퍼형", "0DTE 초단기 옵션 커버드콜 ETF", "가상자산 비트코인 현물 ETF", "BDC 기업성장집합투자기구 대체투자", "하방 방어형 100% 버퍼 ETF"]
             
@@ -1546,7 +1543,7 @@ with col_main:
                 "하방 방어형 100% 버퍼 ETF": '"하방 방어" OR "버퍼 ETF"'
             }
             
-            # 커스텀 자산군이 검색맵에 없으면 자동으로 맵에 등록 (사용자 입력어 기반)
+            # 커스텀 자산군이 검색맵에 없으면 맵에 동적 등록 (뉴스 검색 시 키워드로 바로 활용되도록)
             if asset_class not in search_kw_map:
                 search_kw_map[asset_class] = f'"{asset_class}"'
 
@@ -1560,9 +1557,9 @@ with col_main:
                     trend_strengths.append("🔥🔥🔥 최고조" if c >= 3 else ("🔥🔥 강세" if c >= 1 else "🔥 꾸준함"))
                     
             st.dataframe(pd.DataFrame({
-                "혁신 상품 구조 (미국 메가 트렌드)": raw_keywords, 
+                "혁신 상품 구조 (메가 트렌드)": raw_keywords, 
                 "최근 뉴스 기반 유입 강도": trend_strengths, 
-                "KODEX 라인업 현황": ["공백 (0개)", "일부 유사 (1개)", "규제 한계 (0개)", "규제 한계 (0개)", "공백 (0개)"], 
+                "당사 라인업 현황": ["공백 (0개)", "일부 유사 (1개)", "규제 한계 (0개)", "규제 한계 (0개)", "공백 (0개)"], 
                 "전략적 제언 (Action Plan)": ["즉시 벤치마킹 기획 가동", "분배율 메시지 고도화", "정책 완화 시그널 추적", "법안 통과 즉시 선점", "하락장 방어 포트폴리오 설계"]
             }), use_container_width=True, hide_index=True)
             
@@ -1570,13 +1567,13 @@ with col_main:
             
             st.markdown(f"### 📡 `[정책 시그널]` 핵심 혁신 구조 규제 완화 동향")
             
-            # [수정] 사용자가 상단에서 선택/입력한 자산군을 드롭다운 최우선 옵션으로 동적 연동
+            # 사용자가 상단에서 선택/입력한 자산군을 드롭다운 최우선 옵션으로 동적 연동
             policy_options = [asset_class] + [kw for kw in raw_keywords if kw != asset_class]
             selected_trend_label = st.selectbox("🔍 규제 모니터링망 가동할 혁신 구조 선택:", options=policy_options, index=0)
             st.session_state['selected_trend_label'] = selected_trend_label
             
             with st.spinner("선택된 테마의 규제 완화 관련 뉴스를 스크랩 중입니다..."):
-                policy_query = f'({search_kw_map.get(selected_trend_label, f"{selected_trend_label}")}) AND ("금융위" OR "규제" OR "법안" OR "가이드라인")'
+                policy_query = f'({search_kw_map.get(selected_trend_label, f'"{selected_trend_label}"')}) AND ("금융위" OR "규제" OR "법안" OR "가이드라인")'
                 df_gap_news = get_realtime_news(policy_query, timeframe="30d", max_items=6)
                 if "링크" in df_gap_news.columns and df_gap_news["링크"].iloc[0] != "":
                     cols_grid = st.columns(2)
@@ -1592,7 +1589,7 @@ with col_main:
             
             st.markdown(f"### 📰 핵심 동향 모니터링 (지난주 일~토)")
             
-            # [수정] 뉴스 검색 옵션에도 사용자가 선택/입력한 자산군 동적 추가
+            # 뉴스 검색 옵션에도 사용자가 선택/입력한 자산군 동적 추가 및 1순위 노출
             base_news_options = [
                 "사모신용 (BDC)", "대출채권담보부증권 (CLO)", "상장 실물자산 (Listed Real Assets)", 
                 "특수 목적 리츠 (통신탑/데이터센터)", "국내 배당/그룹 테마 (SK그룹 등)"
