@@ -407,6 +407,7 @@ with col_main:
         horizontal=True,
         label_visibility="collapsed"
     )
+    
     st.markdown("<br>", unsafe_allow_html=True)
 
 # -------------------------------------------------------------------------
