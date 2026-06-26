@@ -1452,27 +1452,39 @@ with col_main:
 # -------------------------------------------------------------------------
     elif big_tab == "🌍 글로벌 상품 기획 시뮬레이터":
         st.markdown("## 🌍 Global Alternative ETF Structuring Simulator")
-        st.caption("해외 및 국내 자산을 융합하여 실제 주가 기반 백테스트 및 수지 분석(P&L)을 거친 실무형 팩트시트를 도출합니다.")
+        st.caption("해외 자산을 융합하여 실제 주가 기반 백테스트 및 수지 분석(P&L)을 거친 실무형 팩트시트를 도출합니다.")
         
         c_sel1, c_sel2 = st.columns(2)
         with c_sel1:
-            # [수정] 신규 자산군(특수 목적 리츠, 국내 배당/그룹주) 공식 탑재
-            asset_class = st.selectbox("🌍 탐색할 자산군 선택:", [
+            # [수정] 자산군 선택 옵션에 '직접 입력' 추가
+            asset_class_options = [
                 "사모신용 (BDC)", 
                 "대출채권담보부증권 (CLO)", 
-                "에너지 인프라 (MLP)",
                 "상장 실물자산 (Listed Real Assets)",
                 "특수 목적 리츠 (통신탑/데이터센터)", 
-                "국내 배당/그룹 테마 (SK그룹 등)"
-            ], key="asset_sel_app1")
+                "국내 배당/그룹 테마 (SK그룹 등)",
+                "➕ 직접 입력 (Manual)"
+            ]
+            selected_asset_ui = st.selectbox("🌍 탐색할 해외/국내 자산군 선택:", asset_class_options, key="asset_sel_app1")
+            
+            # [수정] 직접 입력을 선택했을 때 나타나는 자산군 입력창
+            if selected_asset_ui == "➕ 직접 입력 (Manual)":
+                with st.container(border=True):
+                    st.markdown("**✍️ 커스텀 자산군 설정**")
+                    custom_asset = st.text_input("자산군 수동 입력 (예: 글로벌 비만치료제, 우주항공):", value="글로벌 비만치료제")
+                    asset_class = custom_asset.strip()
+            else:
+                asset_class = selected_asset_ui
+                
+            st.session_state.p_asset_class = asset_class
 
         proxy_options = []
         if asset_class == "사모신용 (BDC)": proxy_options = ["ARCC", "BIZD", "OBDC", "HTGC"]
         elif asset_class == "대출채권담보부증권 (CLO)": proxy_options = ["JAAA", "JBBB", "CLOA"]
-        elif asset_class == "에너지 인프라 (MLP)": proxy_options = ["AMLP", "EPD"]
         elif asset_class == "상장 실물자산 (Listed Real Assets)": proxy_options = ["VNQ", "XLRE"]
         elif asset_class == "특수 목적 리츠 (통신탑/데이터센터)": proxy_options = ["AMT", "CCI", "SRVR"]
         elif asset_class == "국내 배당/그룹 테마 (SK그룹 등)": proxy_options = ["017670", "034730", "TIGER 지주회사"]
+        # 커스텀 자산군의 경우 위의 조건문에 걸리지 않으므로 proxy_options는 빈 리스트가 됨 (아래에서 직접입력만 추가됨)
         
         proxy_reason_map = {
             "ARCC": "미국 BDC 시가총액 1위 종목으로, 가장 다각화된 포트폴리오를 보유하여 우량 사모신용의 펀더멘털을 가장 잘 대변함.",
@@ -1482,30 +1494,26 @@ with col_main:
             "JAAA": "최상위 AAA 등급 트랜치에 집중하여 주식 시장 급락 시 피난처(Safe Haven) 역할을 가장 잘 대변함.",
             "JBBB": "투자적격등급 하단(BBB) 트랜치를 타겟하여 추가 일드(Yield) 확보 전략을 검증하기에 적합함.",
             "CLOA": "풍부한 유동성을 바탕으로 전반적인 우량 CLO 시장의 흐름을 추종함.",
-            "AMLP": "에너지 인프라(파이프라인) 산업 전반을 아우르며, 수수료 기반의 예측 가능한 현금흐름을 대표함.",
-            "EPD": "미국 최대 에너지 인프라 기업으로, 안정적인 배당 성장 모델의 핵심 프록시로 작용함.",
             "VNQ": "미국 리츠(REITs) 시장 전반에 투자하여 가장 표준적인 부동산 배당 수익 궤적을 제공함.",
             "XLRE": "S&P 500 내 대형 우량 부동산 기업에 집중하여, 상대적으로 변동성이 통제된 리츠 모델을 대변함.",
-            "AMT": "글로벌 최대 통신탑 리츠(American Tower)로, 5G 및 데이터 전송망 확장에 따른 장기 임대 수익 구조를 대변함.",
+            "AMT": "글로벌 최대 통신탑 리츠(American Tower)로, 5G 인프라 확장에 따른 장기 임대 수익 구조를 대변함.",
             "CCI": "미국 내 통신 인프라(Crown Castle)에 집중하며, 높은 배당 성장성을 갖춘 통신탑 섹터 핵심 프록시.",
-            "SRVR": "데이터센터 및 통신탑 리츠를 집중 편입한 ETF로, 디지털 인프라 실물 자산 전반의 흐름을 추종함.",
-            "017670": "SK텔레콤. 국내 통신 3사 중 압도적인 시장 점유율과 경기 방어적인 캐시플로 기반의 고배당 프록시.",
-            "034730": "SK(주). 그룹 내 핵심 신사업 투자 엣지와 안정적인 인컴 현금흐름을 동시에 향유하는 지주사 대표격.",
-            "TIGER 지주회사": "국내 주요 그룹 지주사에 분산 투자하여 '배당+지배구조 개선' 성장 팩터를 동시에 검증하는 프록시."
+            "SRVR": "데이터센터 및 통신탑 리츠를 모아놓은 ETF로, 디지털 인프라 실물 자산 전반의 흐름을 추종함.",
+            "017670": "SK텔레콤. 국내 통신 3사 중 압도적인 시장 점유율과 안정적인 현금흐름을 바탕으로 한 고배당 매력.",
+            "034730": "SK(주). 그룹 내 핵심 성장 동력과 배당(인컴)을 동시에 추구하는 지주사 프록시.",
+            "TIGER 지주회사": "국내 주요 그룹 지주사에 분산 투자하여 '배당+성장' 팩터를 동시에 검증할 수 있는 대표 ETF."
         }
 
         with c_sel2:
             proxy_options.append("➕ 직접 입력 (Manual)")
             selected_proxy_ui = st.selectbox("📍 백테스트 프록시 (대표 지표) 선택:", proxy_options)
             
-            # [수정] 직접 입력 시 중복 논리 입력창 삭제 -> 오직 '티커 단일 입력' UX 제공
             if selected_proxy_ui == "➕ 직접 입력 (Manual)":
                 with st.container(border=True):
-                    st.markdown("**✍️ 커스텀 티커 수동 설정**")
-                    custom_ticker = st.text_input("전 세계 주식/ETF 티커 입력 (예: SRVR, PFF, 017670):", value="SRVR")
-                    
+                    st.markdown("**✍️ 커스텀 프록시 설정**")
+                    custom_ticker = st.text_input("티커 수동 입력 (예: SRVR, PFF, 017670):", value="SRVR")
                     st.session_state.p_proxy = custom_ticker.strip().upper()
-                    st.session_state.p_proxy_reason = "사용자 지정 커스텀 기초자산 (하단 기획 컨셉 및 유니버스 연동)"
+                    st.session_state.p_proxy_reason = "사용자 직접 입력 (본 기획서의 핵심 아이디어 및 거시적 트렌드를 대변하는 전략적 편입 자산)"
             else:
                 st.session_state.p_proxy = selected_proxy_ui
                 st.session_state.p_proxy_reason = proxy_reason_map.get(selected_proxy_ui, "선정 논리 데이터 없음")
@@ -1528,21 +1536,25 @@ with col_main:
             search_kw_map = {
                 "사모신용 (BDC)": '"사모신용" OR "BDC"',
                 "대출채권담보부증권 (CLO)": '"CLO" OR "대출채권담보부증권"',
-                "에너지 인프라 (MLP)": '"MLP" OR "에너지 인프라"',
                 "상장 실물자산 (Listed Real Assets)": '"리츠" OR "실물자산" OR "부동산 ETF"',
-                "특수 목적 리츠 (통신탑/데이터센터)": '"통신탑 리츠" OR "데이터센터 리츠" OR "인프라 리츠"',
-                "국내 배당/그룹 테마 (SK그룹 등)": '"지주사 ETF" OR "그룹주 ETF" OR "고배당 ETF"',
+                "특수 목적 리츠 (통신탑/데이터센터)": '"통신 리츠" OR "데이터센터" OR "디지털 인프라"',
+                "국내 배당/그룹 테마 (SK그룹 등)": '"배당" OR "지주사" OR "밸류업"',
                 "타겟 인컴 ETF 버퍼형": '"타겟 인컴" OR "버퍼형" OR "인컴 ETF"',
                 "0DTE 초단기 옵션 커버드콜 ETF": '"0DTE" OR "초단기" OR "위클리 커버드콜"',
                 "가상자산 비트코인 현물 ETF": '"비트코인 현물" OR "가상자산 ETF"',
                 "BDC 기업성장집합투자기구 대체투자": '"BDC" OR "사모신용"',
                 "하방 방어형 100% 버퍼 ETF": '"하방 방어" OR "버퍼 ETF"'
             }
+            
+            # 커스텀 자산군이 검색맵에 없으면 자동으로 맵에 등록 (사용자 입력어 기반)
+            if asset_class not in search_kw_map:
+                search_kw_map[asset_class] = f'"{asset_class}"'
+
             trend_strengths = []
             
-            with st.spinner("미국 혁신 테마 트렌드를 스캔 중입니다..."):
+            with st.spinner("혁신 테마 트렌드를 스캔 중입니다..."):
                 for kw in raw_keywords:
-                    search_query = search_kw_map[kw]
+                    search_query = search_kw_map.get(kw, f'"{kw}"')
                     temp_news = get_realtime_news(search_query, timeframe="14d", max_items=5)
                     c = len(temp_news) if not temp_news.empty and temp_news.iloc[0]["게시일 / 출처"] != "-" else 0
                     trend_strengths.append("🔥🔥🔥 최고조" if c >= 3 else ("🔥🔥 강세" if c >= 1 else "🔥 꾸준함"))
@@ -1557,11 +1569,14 @@ with col_main:
             st.divider()
             
             st.markdown(f"### 📡 `[정책 시그널]` 핵심 혁신 구조 규제 완화 동향")
-            selected_trend_label = st.selectbox("🔍 규제 모니터링망 가동할 혁신 구조 선택:", options=raw_keywords, index=3)
+            
+            # [수정] 사용자가 상단에서 선택/입력한 자산군을 드롭다운 최우선 옵션으로 동적 연동
+            policy_options = [asset_class] + [kw for kw in raw_keywords if kw != asset_class]
+            selected_trend_label = st.selectbox("🔍 규제 모니터링망 가동할 혁신 구조 선택:", options=policy_options, index=0)
             st.session_state['selected_trend_label'] = selected_trend_label
             
             with st.spinner("선택된 테마의 규제 완화 관련 뉴스를 스크랩 중입니다..."):
-                policy_query = f'({search_kw_map[selected_trend_label]}) AND ("금융위" OR "규제" OR "법안" OR "가이드라인")'
+                policy_query = f'({search_kw_map.get(selected_trend_label, f"{selected_trend_label}")}) AND ("금융위" OR "규제" OR "법안" OR "가이드라인")'
                 df_gap_news = get_realtime_news(policy_query, timeframe="30d", max_items=6)
                 if "링크" in df_gap_news.columns and df_gap_news["링크"].iloc[0] != "":
                     cols_grid = st.columns(2)
@@ -1576,7 +1591,16 @@ with col_main:
             st.divider()
             
             st.markdown(f"### 📰 핵심 동향 모니터링 (지난주 일~토)")
-            news_options = ["사모신용 (BDC)", "대출채권담보부증권 (CLO)", "에너지 인프라 (MLP)", "상장 실물자산 (Listed Real Assets)", "특수 목적 리츠 (통신탑/데이터센터)", "국내 배당/그룹 테마 (SK그룹 등)"] + raw_keywords
+            
+            # [수정] 뉴스 검색 옵션에도 사용자가 선택/입력한 자산군 동적 추가
+            base_news_options = [
+                "사모신용 (BDC)", "대출채권담보부증권 (CLO)", "상장 실물자산 (Listed Real Assets)", 
+                "특수 목적 리츠 (통신탑/데이터센터)", "국내 배당/그룹 테마 (SK그룹 등)"
+            ]
+            if asset_class not in base_news_options:
+                base_news_options.insert(0, asset_class)
+
+            news_options = base_news_options + [kw for kw in raw_keywords if kw not in base_news_options]
             selected_news_kw = st.selectbox("🔍 뉴스 검색망 가동할 핵심 키워드 선택:", options=news_options, index=0)
             
             with st.spinner("해당 키워드의 지난주 뉴스를 정확히 필터링 중입니다..."):
@@ -1653,9 +1677,9 @@ with col_main:
                     end_dt = datetime.today()
                     start_dt = end_dt - timedelta(days=365*3)
                     
-                    annual_yield = 0.08 if any(k in asset_class for k in ["BDC", "리츠", "배당"]) else 0.05
+                    annual_yield = 0.08 if "BDC" in asset_class else (0.06 if "CLO" in asset_class else 0.04)
                     
-                    with st.spinner(f"API에서 {st.session_state.p_proxy} 주가 궤적을 연동 중입니다..."):
+                    with st.spinner(f"API에서 {st.session_state.p_proxy} 데이터를 불러옵니다..."):
                         try:
                             port_df = fdr.DataReader(st.session_state.p_proxy, start_dt, end_dt)
                             if len(port_df) > 10:
@@ -1672,9 +1696,9 @@ with col_main:
                                 mdd = (port_cum / np.maximum.accumulate(port_cum) - 1).min() * 100
                                 backtest_success = True
                             else:
-                                st.error("🚨 파이낸스 API에서 유효한 주가 데이터를 불러오지 못했습니다.")
+                                st.error("🚨 주가 데이터를 불러오지 못했습니다. 올바른 티커인지 확인해주세요.")
                         except Exception as e:
-                            st.error("🚨 서버 응답 지연으로 주가 데이터를 파싱할 수 없습니다. 잠시 후 시도해 주세요.")
+                            st.error("🚨 API 서버 응답 지연으로 데이터를 불러올 수 없습니다. 잠시 후 다시 시도해 주세요.")
                             
                     if backtest_success:
                         st.session_state.p_sharpe = round(sharpe, 2)
@@ -1686,7 +1710,7 @@ with col_main:
                         price_return = total_return_pct - income_return
                         
                         fig_decomp = go.Figure()
-                        fig_decomp.add_trace(go.Scatter(x=dates, y=income_return, mode='lines', stackgroup='one', name=f'누적 배당/이자 (연 추정 {annual_yield*100:.1f}%)', line=dict(color='#ffb04d')))
+                        fig_decomp.add_trace(go.Scatter(x=dates, y=income_return, mode='lines', stackgroup='one', name=f'누적 배당/이자 (연 {annual_yield*100:.1f}%)', line=dict(color='#ffb04d')))
                         fig_decomp.add_trace(go.Scatter(x=dates, y=price_return, mode='lines', stackgroup='one', name='누적 자본 차익 (가격변동)', line=dict(color='#4da6ff')))
                         fig_decomp.update_layout(height=250, margin=dict(t=10,b=10,l=10,r=10), yaxis_title="누적 수익률 (%)", xaxis_title="", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                         st.plotly_chart(fig_decomp, use_container_width=True)
@@ -1706,23 +1730,22 @@ with col_main:
                     st.session_state.p_scenario = scenario
                     
                     if "코로나" in scenario:
-                        s_start, s_end, desc = "2020-02-19", "2020-03-23", "극단적 유동성 경색 국면에 대한 회복력 검증"
+                        s_start, s_end, desc = "2020-02-19", "2020-03-23", "극단적 신용 스프레드 확대에 대한 회복력 증명"
                     elif "금리" in scenario:
-                        s_start, s_end, desc = "2022-01-03", "2022-10-12", "고금리 및 인플레이션 환경에서의 방어력 검증"
+                        s_start, s_end, desc = "2022-01-03", "2022-10-12", "고금리 환경 수혜 자산에 의한 방어력 증명"
                     else:
-                        s_start, s_end, desc = "2023-03-01", "2023-05-01", "실물/담보 가치에 기반한 하방 경직성 검증"
+                        s_start, s_end, desc = "2023-03-01", "2023-05-01", "우량 담보에 의한 하방 경직성 증명"
                         
-                    with st.spinner("과거 위기 국면 주가 데이터를 파싱 중입니다..."):
+                    with st.spinner("해당 국면의 과거 실제 주가 데이터를 조회 중입니다..."):
                         try:
-                            bm_ticker = 'KS11' if any(k in asset_class for k in ["국내", "SK"]) else 'US500'
-                            sp_df = fdr.DataReader(bm_ticker, s_start, s_end)['Close']
+                            sp_df = fdr.DataReader('KS11' if "국내" in asset_class else 'US500', s_start, s_end)['Close']
                             my_df = fdr.DataReader(st.session_state.p_proxy, s_start, s_end)['Close']
                             
                             if len(sp_df) > 0 and len(my_df) > 0:
                                 sp_drop = (sp_df / sp_df.cummax() - 1).min() * 100
                                 my_drop = (my_df / my_df.cummax() - 1).min() * 100
-                                bm_name = "코스피 지수" if bm_ticker == 'KS11' else "S&P 500"
                                 
+                                bm_name = "코스피" if "국내" in asset_class else "S&P 500"
                                 df_bar = pd.DataFrame({"자산": [bm_name, f"기획 Proxy ({st.session_state.p_proxy})"], "최대 낙폭 (%)": [sp_drop, my_drop]})
                                 fig_bar = px.bar(df_bar, x="자산", y="최대 낙폭 (%)", text="최대 낙폭 (%)", color="자산", color_discrete_map={bm_name: "gray", f"기획 Proxy ({st.session_state.p_proxy})": "#ffb04d"}, template="plotly_dark")
                                 fig_bar.update_traces(textposition='auto', texttemplate='%{text:.1f}%')
@@ -1730,9 +1753,9 @@ with col_main:
                                 st.plotly_chart(fig_bar, use_container_width=True)
                                 st.info(f"💡 **AI 프롬프트 연동:** {desc} 로직이 자동 탑재됩니다.")
                             else:
-                                st.error("🚨 해당 위기 시기의 데이터가 API에 존재하지 않습니다.")
+                                st.error("🚨 해당 시기의 데이터가 API에 존재하지 않습니다.")
                         except Exception as e:
-                            st.error("🚨 서버 응답 지연으로 과거 낙폭 데이터를 연산할 수 없습니다.")
+                            st.error("🚨 API 서버 응답 지연으로 과거 낙폭 데이터를 계산할 수 없습니다. 잠시 후 다시 시도해 주세요.")
 
             st.divider()
 
@@ -1742,9 +1765,9 @@ with col_main:
                 st.markdown("**📈 옵션 페이오프(Payoff) 개념 구조도**")
                 st.caption("설정된 옵션 파라미터를 기반으로 만기 시점의 개념적인 수익률 페이오프 구조를 시각화합니다.")
                 
-                opt_strategy = st.radio("시뮬레이션 전략 선택:", ["적용 안 함 (순수 대체자산)", "초단기 커버드콜 (Covered Call)", "하방 방어형 (Buffer ETF)"], horizontal=True)
+                opt_strategy = st.radio("시뮬레이션 전략 선택:", ["적용 안 함 (순수 자산)", "초단기 커버드콜 (Covered Call)", "하방 방어형 (Buffer ETF)"], horizontal=True)
 
-                if opt_strategy != "적용 안 함 (순수 대체자산)":
+                if opt_strategy != "적용 안 함 (순수 자산)":
                     c_opt1, c_opt2 = st.columns([1, 2])
                     with c_opt1:
                         st.markdown("**⚙️ 옵션 파라미터 설정**")
@@ -1775,35 +1798,37 @@ with col_main:
                 
                 c_fx1, c_fx2 = st.columns([1, 2])
                 with c_fx1:
-                    fx_strategy = st.selectbox("환율 전략 선택:", ["환노출 (Unhedged - 환차익/차손 노출)", "환헤지 (Hedged - 변동성 제거)"])
+                    fx_strategy = st.selectbox("환율 전략 선택:", ["환노출 (Unhedged - 환차익/차손 노출)", "환헤지 (Hedged - 변동성 제거)", "국내 자산 (원화 Base)"])
                     st.session_state.p_fx = fx_strategy
                     ter = st.slider("예상 총보수율 (TER, %)", 0.1, 1.5, 0.45, 0.05)
                     fx_hedge_cost = 2.0 if "환헤지" in fx_strategy else 0.0
-                    annual_yield = 8.0 if any(k in asset_class for k in ["BDC", "리츠", "배당"]) else 5.0
+                    annual_yield = 8.0 if "BDC" in asset_class else 6.0
                     net_yield = annual_yield - ter - fx_hedge_cost
                     
                 with c_fx2:
                     if backtest_success:
-                        with st.spinner("과거 3년 실제 환율(USD/KRW) 데이터를 결합 중입니다..."):
-                            try:
-                                usdkrw_df = fdr.DataReader('USD/KRW', start_dt, end_dt)['Close']
-                                fx_aligned = usdkrw_df.reindex(dates).ffill().bfill()
-                                fx_cum = fx_aligned / fx_aligned.iloc[0]
+                        if "국내" in fx_strategy:
+                            st.info("국내 자산으로 설정되어 별도의 환율 시뮬레이션(USD/KRW)을 진행하지 않습니다.")
+                        else:
+                            with st.spinner("과거 3년 실제 환율(USD/KRW) 데이터를 결합 중입니다..."):
+                                try:
+                                    usdkrw_df = fdr.DataReader('USD/KRW', start_dt, end_dt)['Close']
+                                    fx_aligned = usdkrw_df.reindex(dates).ffill().bfill()
+                                    fx_cum = fx_aligned / fx_aligned.iloc[0]
 
-                                daily_hedge_cost = (fx_hedge_cost / 100) / 252
-                                hedged_cum = (1 + port_daily - daily_hedge_cost).cumprod() * 100
-                                unhedged_cum = ((1 + port_daily).cumprod() * 100) * fx_cum
-                                
-                                df_fx = pd.DataFrame({"기간": dates, "환헤지(H)": hedged_cum.values, "환노출(UH)": unhedged_cum.values}).melt(id_vars="기간")
-                                fig_fx = px.line(df_fx, x="기간", y="value", color="variable", template="plotly_dark", color_discrete_map={"환헤지(H)": "#4da6ff", "환노출(UH)": "#ff4d4d"})
-                                fig_fx.update_layout(height=220, margin=dict(t=10,b=10,l=10,r=10), yaxis_title="수익률 궤적", xaxis_title="", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                                st.plotly_chart(fig_fx, use_container_width=True)
-                            except Exception:
-                                st.error("🚨 서버 응답 지연으로 환율(USD/KRW) 데이터를 연동하지 못했습니다.")
+                                    daily_hedge_cost = (fx_hedge_cost / 100) / 252
+                                    hedged_cum = (1 + port_daily - daily_hedge_cost).cumprod() * 100
+                                    unhedged_cum = ((1 + port_daily).cumprod() * 100) * fx_cum
+                                    
+                                    df_fx = pd.DataFrame({"기간": dates, "환헤지(H)": hedged_cum.values, "환노출(UH)": unhedged_cum.values}).melt(id_vars="기간")
+                                    fig_fx = px.line(df_fx, x="기간", y="value", color="variable", template="plotly_dark", color_discrete_map={"환헤지(H)": "#4da6ff", "환노출(UH)": "#ff4d4d"})
+                                    fig_fx.update_layout(height=220, margin=dict(t=10,b=10,l=10,r=10), yaxis_title="수익률 궤적", xaxis_title="", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                                    st.plotly_chart(fig_fx, use_container_width=True)
+                                except Exception:
+                                    st.error("🚨 환율(USD/KRW) 데이터를 불러오지 못했습니다.")
                     else:
                         st.warning("상단 백테스트 데이터가 없어 환율 궤적을 그릴 수 없습니다.")
 
-            # [수정] 1. AMC 수지 분석 박스 안에 좌우(st.columns) 통합 배치
             with st.container(border=True):
                 st.markdown("**🏢 자산운용사(AMC) 수지 분석 및 피어(Peer) 타겟팅**")
                 c_pl_left, c_pl_right = st.columns(2)
@@ -1858,37 +1883,35 @@ with col_main:
                     fig_wf.update_layout(height=280, margin=dict(t=20, b=10, l=10, r=10), template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                     st.plotly_chart(fig_wf, use_container_width=True)
 
-            # [수정] 2. 팩트시트를 독립 컨테이너로 가로 꽉 차게 하단 배치
             with st.container(border=True):
                 st.markdown("##### 📄 Simulated Product Factsheet")
                 st.metric("최종 타겟 배당수익률 (Net Yield)", f"{net_yield:.2f}%")
                 
-                risk_level = "보통 위험 (Medium Risk)" if "환헤지" in fx_strategy else "높은 위험 (High Risk)"
-                fx_desc = f"달러 변동성 제거 (헤지 프리미엄 연 약 {fx_hedge_cost}% 발생)" if "환헤지" in fx_strategy else "달러 강세 시 환차익 추가 향유 가능 (변동성 노출)"
-                tax_desc = "퇴직연금(IRP/DC) 내 안전자산(30%) 편입용" if "환헤지" in fx_strategy else "배당소득세 및 종합과세 방어를 위한 ISA 계좌 편입용"
+                risk_level = "보통 위험 (Medium Risk)" if "환헤지" in fx_strategy or "국내" in fx_strategy else "높은 위험 (High Risk)"
+                fx_desc = f"달러 변동성 제거 (헤지 프리미엄 연 약 {fx_hedge_cost}% 발생)" if "환헤지" in fx_strategy else ("국내 원화 기반" if "국내" in fx_strategy else "달러 강세 시 환차익 추가 향유 가능 (변동성 노출)")
+                tax_desc = "퇴직연금(IRP/DC) 내 안전자산(30%) 룸 편입용" if "환헤지" in fx_strategy else "배당소득세 및 종합과세 방어를 위한 ISA 계좌 편입용"
                 
                 st.write(f"- **위험 등급:** {risk_level}")
                 st.write(f"- **FX 전략:** {fx_desc}")
                 st.success(f"💰 **세금 최적화(Tax):** {tax_desc}으로 타겟팅하는 세일즈에 유리합니다.")
-                st.info("해당 팩트시트의 핵심 소구 포인트는 우측 상단의 'AI 프롬프트' 탭으로 전달되어 최종 제안서 작성에 활용됩니다.")
+                st.info("해당 팩트시트의 핵심 소구 포인트는 우측 상단의 'AI 프롬프트' 탭으로 전달되어 최종 마케팅 제안서 작성에 자동으로 활용됩니다.")
 
         # === 3. 가상 지수 샌드박스 ===
         with sub_tabs_plan[2]:
             st.markdown("### 💡 가상 지수 샌드박스 (Synthetic Index Simulator)")
-            st.caption("실제 지수 편입 종목을 시뮬레이션하고, 벤치마크 대비 복제 오차(TE)와 상관관계를 검증합니다.")
+            st.caption("실제 지수 편입 종목을 시뮬레이션하고, S&P 500 등 벤치마크 대비 복제 오차(TE)와 상관관계를 검증합니다.")
 
             with st.container(border=True):
-                st.markdown("#### 1. 퀀트 시뮬레이션 컨트롤 패널 (Total Return 분해 기반)")
+                st.markdown("#### 1. 퀀트 시뮬레이션 컨트롤 패널 (Total Return 기반 분해)")
                 
-                default_sb_tickers = "017670, 030200, 032640" if any(k in asset_class for k in ["국내", "SK"]) else "AMT, CCI, SBAC"
-                sandbox_tickers_input = st.text_input("📌 지수 편입 종목 (전 세계 주식/ETF 티커를 쉼표(,)로 구분):", value=default_sb_tickers)
+                sandbox_tickers_input = st.text_input("📌 지수 편입 종목 (전 세계 주식/ETF 티커를 쉼표(,)로 구분):", value="AMT, CCI, SRVR")
                 sandbox_tickers = [t.strip().upper() for t in sandbox_tickers_input.split(",") if t.strip()]
                 
                 col_sb1, col_sb2, col_sb3 = st.columns([1, 1, 1])
                 with col_sb1:
                     sandbox_weight = st.selectbox("⚖️ 비중 배분 룰:", ["동일 가중 (Equal Weight)", "시가총액 가중 방식 (Cap-weighted)"])
                 with col_sb2:
-                    sandbox_div = st.slider("💰 포트폴리오 예상 연 배당수익률 (%)", 0.0, 15.0, 6.5, 0.5, help="입력하신 배당률은 순수 주가 궤적(Price Return) 위에 누적 인컴(Income) 면적으로 독립 시각화됩니다.")
+                    sandbox_div = st.slider("💰 포트폴리오 예상 연 배당수익률 (%)", 0.0, 15.0, 8.5, 0.5, help="배당이 제외된 주가 궤적(Price Return) 위에 누적 인컴(Income) 면적으로 독립 시각화됩니다.")
                 with col_sb3:
                     sandbox_error = st.slider("🌪️ 예상 오차율/마찰 비용 (Tracking Error, 연간 ±%)", 0.5, 5.0, 2.0, 0.5)
                     sandbox_hedging = st.checkbox("🛡️ 환헤지 프리미엄 비용 차감 (연 -1.5%)")
@@ -1897,7 +1920,7 @@ with col_main:
 
             st.markdown("#### 2. 하이브리드 시나리오 차트 및 복제 오차(TE) 모니터링")
             if len(sandbox_tickers) > 0:
-                with st.spinner("API에서 실제 주가 데이터를 수집하여 지수를 합성하고 있습니다..."):
+                with st.spinner("API에서 실제 주가 데이터를 수집하여 Total Return 지수를 합성하고 있습니다..."):
                     end_dt = datetime.today()
                     start_dt = end_dt - timedelta(days=365*3)
                     
@@ -1939,12 +1962,11 @@ with col_main:
                         
                         api_error = False
                         try:
-                            bm_ticker = 'KS11' if any(k in asset_class for k in ["국내", "SK"]) else 'US500'
+                            bm_ticker = 'KS11' if "국내" in asset_class else 'US500'
                             bm_df = fdr.DataReader(bm_ticker, start_dt, end_dt)['Close'].pct_change().dropna()
                             bm_df = bm_df.reindex(dates).fillna(0)
                             bm_df += (1.5 / 100 / 252)
                             bm_cum_returns = (1 + bm_df).cumprod() * 100 - 100
-                            bm_name = "코스피 (BM Price)" if bm_ticker == 'KS11' else "S&P 500 (BM Price)"
                             
                             corr_with_bm = port_daily_ret_price.corr(bm_df)
                             tracking_error_annual = np.std(port_daily_ret_price - bm_df) * np.sqrt(252) * 100
@@ -1952,11 +1974,12 @@ with col_main:
                             
                         except Exception:
                             api_error = True
-                            st.error("🚨 서버 오류로 벤치마크 데이터를 불러오지 못했습니다.")
+                            st.error("🚨 API 서버 오류로 벤치마크 데이터를 불러오지 못했습니다.")
 
                         if not api_error:
                             fig_fan = go.Figure()
-                            fig_fan.add_trace(go.Scatter(x=dates, y=bm_cum_returns, mode='lines', name=bm_name, line=dict(color='gray', width=1, dash='dot')))
+                            bm_name = "코스피" if "국내" in asset_class else "S&P 500"
+                            fig_fan.add_trace(go.Scatter(x=dates, y=bm_cum_returns, mode='lines', name=f'{bm_name} (BM Price)', line=dict(color='gray', width=1, dash='dot')))
                             
                             fig_fan.add_trace(go.Scatter(x=dates, y=y_price, mode='lines', name='순수 주가 수익률 (Price)', line=dict(color='#4da6ff', width=2)))
                             fig_fan.add_trace(go.Scatter(x=dates, y=y_total, mode='none', name=f'누적 배당 수익 (연 {sandbox_div}%)', fill='tonexty', fillcolor='rgba(255, 176, 77, 0.3)'))
@@ -1987,7 +2010,6 @@ with col_main:
                             st.plotly_chart(fig_fan, use_container_width=True)
 
                             c_m1, c_m2, c_m3, c_m4 = st.columns(4)
-                            # [수정 완결] KeyError 원인 (y_total[-1] -> .iloc[-1]) 확실히 방어
                             final_base = base_cum_returns_price.iloc[-1]
                             mdd_base = (base_cum_returns_price / np.maximum.accumulate(base_cum_returns_price) - 1).min() * 100
                             years_elapsed = years[-1] if years[-1] > 0 else 1
@@ -1997,7 +2019,7 @@ with col_main:
                             c_m2.metric("최종 총수익률 (Total Return)", f"{y_total.iloc[-1]:.1f}%", f"배당(인컴) 분해 적용")
                             
                             corr_color = "normal" if corr_with_bm < 0.5 else "off"
-                            c_m3.metric("벤치마크 상관계수 (분산도)", f"{corr_with_bm:.2f}", "수치가 낮을수록 헷지 우수", delta_color=corr_color)
+                            c_m3.metric(f"{bm_name} 상관계수 (분산도)", f"{corr_with_bm:.2f}", "수치가 낮을수록 헷지 우수", delta_color=corr_color)
                             c_m4.metric("복제 추적오차 (Tracking Error)", f"{tracking_error_annual:.1f}%", "벤치마크 대비 변동성 차이", delta_color="inverse")
                             
                             st.success("💡 **QC(품질 관리) 모니터링:** 벤치마크 대비 상관계수와 추적오차가 적정 수준인지 검증하여, 마케팅 시 세일즈 포인트(낮은 상관관계에 따른 분산투자 효과)로 활용할 수 있습니다.")
