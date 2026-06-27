@@ -619,7 +619,7 @@ with col_main:
                     st.divider()
                     if selected_etfs:
                         volume_lines = []
-                        with st.spinner("한국거래소(KRX)에서 거래 데이터를 불러오는 중입니다..."):
+                        with st.spinner("한국거래소(KRX)에서 거래 데이터를 불러오는 중 창입니다..."):
                             cols = st.columns(2)
                             symbols_mapping = get_etf_mapping()
                             end_date = datetime.today()
@@ -1255,8 +1255,47 @@ with col_main:
 
         with sub_tabs[5]:
             st.markdown("### 🗣️ 고객 Voice (VOC) & 투자자 심리 모니터링")
+
+            # =====================================================================
+            # [신규 추가] Sub-Agent 다운로드 및 사용 가이드 영역
+            # =====================================================================
             with st.container(border=True):
-                st.markdown("#### 🤖 [Sub-Agent 연동] 네이버 종토방 분석 결과 시각화")
+                st.markdown("#### 🤖 [데이터 수집] 네이버 종토방 크롤링 Sub-Agent")
+                st.caption("메인 대시보드에 연동할 종토방 엑셀 데이터를 추출하고 1차 감성분석을 수행하는 외부 코드입니다.")
+                
+                try:
+                    with open("naver_jongtobang_crawler.ipynb", "r", encoding="utf-8") as f:
+                        ipynb_raw_text = f.read()
+                        
+                    st.download_button(
+                        label="📥 Sub-Agent 파이썬 코드 다운로드 (.ipynb)",
+                        data=ipynb_raw_text.encode('utf-8'),
+                        file_name="naver_jongtobang_crawler_분석.ipynb",
+                        mime="application/json",
+                        use_container_width=True
+                    )
+                except FileNotFoundError:
+                    st.error("⚠️ 'naver_jongtobang_crawler.ipynb' 파일을 찾을 수 없습니다. 깃허브 최상위 경로에 파일이 업로드되었는지 확인해주세요.")
+                    ipynb_raw_text = "파일을 찾을 수 없습니다."
+
+                with st.expander("💡 Sub-Agent 사용 가이드 (클릭하여 펼치기)"):
+                    st.markdown("""
+                    **[Sub-Agent 실행 및 대시보드 연동 방법]**
+                    1. **환경 세팅:** 다운로드한 `.ipynb` 파일을 **Google Colab** 또는 로컬 Jupyter 환경에서 엽니다.
+                    2. **변수 설정:** 코드 두 번째 셀의 `STOCK_CODE`(종목코드)와 `TARGET_DATE`(수집 날짜)를 분석하고자 하는 타겟으로 변경합니다.
+                    3. **데이터 수집:** 위에서부터 순서대로 셀을 실행하여 크롤링 및 감성 분석을 진행합니다.
+                    4. **파일 획득:** 실행이 모두 완료되면 하단에서 통합 분석 결과가 담긴 **엑셀 파일이 자동 다운로드**됩니다.
+                    5. **대시보드 연동:** 다운로드된 엑셀 파일을 본 대시보드 우측 패널의 **'4. 종토방 VOC 엑셀'** 칸에 업로드하시면 아래 시각화 차트가 즉시 활성화됩니다.
+                    """)
+                
+                with st.expander("💻 Sub-Agent 전체 코드 미리보기"):
+                    st.info("파일 다운로드 없이 바로 코드를 복사해서 사용하실 분들을 위한 영역입니다.")
+                    st.code(ipynb_raw_text, language="python")
+
+            st.divider()
+
+            with st.container(border=True):
+                st.markdown("#### 📊 [Sub-Agent 연동] 네이버 종토방 분석 결과 시각화")
                 if uploaded_voc is not None:
                     voc_data = {}
                     try:
