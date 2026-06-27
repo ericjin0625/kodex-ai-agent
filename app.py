@@ -57,43 +57,41 @@ if 'p_event_budget' not in st.session_state: st.session_state.p_event_budget = 0
 if 'stat_roas' not in st.session_state: st.session_state.stat_roas = 0.0
 
 # ==========================================
-# 2. Glassmorphism 커스텀 CSS
+# 2. Light Theme 커스텀 CSS (수정됨)
 # ==========================================
-glassmorphism_css = """
+light_theme_css = """
 <style>
 .stApp {
-    background: linear-gradient(135deg, #0b101e 0%, #171b3c 50%, #0f172a 100%);
+    background: #ffffff;
     background-attachment: fixed;
 }
 [data-testid="stVerticalBlockBorderWrapper"] {
-    background: rgba(255, 255, 255, 0.02) !important;
-    backdrop-filter: blur(16px) !important;
-    -webkit-backdrop-filter: blur(16px) !important;
+    background: #f8f9fa !important;
     border-radius: 16px !important;
-    border: 1px solid rgba(255, 255, 255, 0.06) !important;
-    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2) !important;
+    border: 1px solid #dee2e6 !important;
+    box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.05) !important;
     padding: 20px !important;
 }
 .stDataFrame { background: transparent !important; }
 [data-baseweb="tab-list"] { gap: 8px; padding-bottom: 12px; flex-wrap: wrap; }
-[data-baseweb="tab"] { background: rgba(255, 255, 255, 0.04) !important; border-radius: 20px !important; border: 1px solid rgba(255, 255, 255, 0.08) !important; padding: 8px 16px !important; color: #94a3b8 !important; }
-[data-baseweb="tab"][aria-selected="true"] { background: rgba(77, 166, 255, 0.12) !important; border: 1px solid rgba(77, 166, 255, 0.5) !important; color: #ffffff !important; box-shadow: 0 0 12px rgba(77, 166, 255, 0.25) !important; font-weight: 600 !important; }
-[data-testid="stMarkdownContainer"] h1, [data-testid="stMarkdownContainer"] h2, [data-testid="stMarkdownContainer"] h3, [data-testid="stMarkdownContainer"] h4, [data-testid="stMarkdownContainer"] h5, [data-testid="stMarkdownContainer"] h6, [data-testid="stMarkdownContainer"] p, [data-testid="stMarkdownContainer"] span { color: #f8fafc !important; }
-label, label p, [data-testid="stWidgetLabel"] p { color: #f8fafc !important; }
-[data-testid="stCaptionContainer"] p { color: #94a3b8 !important; }
-[data-testid="stMetricLabel"] p { color: #cbd5e1 !important; }
-[data-testid="stMetricValue"] div { color: #ffffff !important; }
-div[data-baseweb="textarea"] textarea, .stTextArea textarea { background-color: #0f172a !important; color: #ffffff !important; -webkit-text-fill-color: #ffffff !important; border: 1px solid rgba(77, 166, 255, 0.5) !important; }
+[data-baseweb="tab"] { background: #f1f3f5 !important; border-radius: 20px !important; border: 1px solid #dee2e6 !important; padding: 8px 16px !important; color: #495057 !important; }
+[data-baseweb="tab"][aria-selected="true"] { background: #e7f5ff !important; border: 1px solid #339af0 !important; color: #000000 !important; font-weight: 600 !important; }
+[data-testid="stMarkdownContainer"] h1, [data-testid="stMarkdownContainer"] h2, [data-testid="stMarkdownContainer"] h3, [data-testid="stMarkdownContainer"] h4, [data-testid="stMarkdownContainer"] h5, [data-testid="stMarkdownContainer"] h6, [data-testid="stMarkdownContainer"] p, [data-testid="stMarkdownContainer"] span { color: #000000 !important; }
+label, label p, [data-testid="stWidgetLabel"] p { color: #000000 !important; }
+[data-testid="stCaptionContainer"] p { color: #6c757d !important; }
+[data-testid="stMetricLabel"] p { color: #495057 !important; }
+[data-testid="stMetricValue"] div { color: #000000 !important; }
+div[data-baseweb="textarea"] textarea, .stTextArea textarea { background-color: #ffffff !important; color: #000000 !important; -webkit-text-fill-color: #000000 !important; border: 1px solid #ced4da !important; }
 div[data-testid="stRadio"] > div[role="radiogroup"] { display: flex; flex-direction: row; gap: 10px; background: transparent !important; }
-div[data-testid="stRadio"] > div[role="radiogroup"] > label { background: rgba(255, 255, 255, 0.05) !important; padding: 8px 15px !important; border-radius: 50px !important; border: 1px solid rgba(255, 255, 255, 0.1) !important; cursor: pointer !important; flex: 1 !important; display: flex !important; align-items: center !important; justify-content: center !important; transition: all 0.3s ease !important; }
-div[data-testid="stRadio"] > div[role="radiogroup"] > label:hover { background: rgba(255, 255, 255, 0.1) !important; }
-div[data-testid="stRadio"] > div[role="radiogroup"] > label[data-checked="true"] { background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%) !important; border: 2px solid #4da6ff !important; box-shadow: 0 0 15px rgba(77, 166, 255, 0.4) !important; }
-div[data-testid="stRadio"] > div[role="radiogroup"] > label p { font-size: 16px !important; font-weight: 800 !important; margin: 0 !important; color: #ffffff !important; white-space: nowrap !important; text-align: center !important; }
+div[data-testid="stRadio"] > div[role="radiogroup"] > label { background: #f8f9fa !important; padding: 8px 15px !important; border-radius: 50px !important; border: 1px solid #dee2e6 !important; cursor: pointer !important; flex: 1 !important; display: flex !important; align-items: center !important; justify-content: center !important; transition: all 0.3s ease !important; }
+div[data-testid="stRadio"] > div[role="radiogroup"] > label:hover { background: #e9ecef !important; }
+div[data-testid="stRadio"] > div[role="radiogroup"] > label[data-checked="true"] { background: #ffffff !important; border: 2px solid #339af0 !important; }
+div[data-testid="stRadio"] > div[role="radiogroup"] > label p { font-size: 16px !important; font-weight: 800 !important; margin: 0 !important; color: #000000 !important; white-space: nowrap !important; text-align: center !important; }
 div[data-testid="stRadio"] > div[role="radiogroup"] > label > div:first-child { display: none !important; }
 #MainMenu {visibility: hidden;} header {visibility: hidden;} footer {visibility: hidden;} .stDeployButton {display: none;}
 </style>
 """
-st.markdown(glassmorphism_css, unsafe_allow_html=True)
+st.markdown(light_theme_css, unsafe_allow_html=True)
 
 # ==========================================
 # 3. 파싱 및 연산 함수 모음 
@@ -202,11 +200,11 @@ def get_macro_snapshot():
 
 def render_compact_metric(title, data):
     if data['val'] == "정보 불가":
-        return f"""<div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 12px 16px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;"><div style="color: #cbd5e1; font-size: 15px; font-weight: 600;">{title}</div><div style="text-align: right;"><div style="color: #ff4d4d; font-size: 13px; font-weight: 600;">(업데이트 전)</div></div></div>"""
-    color = "#ff4d4d" if data['is_up'] else "#4da6ff"
+        return f"""<div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 12px 16px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;"><div style="color: #495057; font-size: 15px; font-weight: 600;">{title}</div><div style="text-align: right;"><div style="color: #dc3545; font-size: 13px; font-weight: 600;">(업데이트 전)</div></div></div>"""
+    color = "#dc3545" if data['is_up'] else "#0d6efd"
     arrow = "▲" if data['is_up'] else "▼"
     delta_str = str(data['delta']).replace('+', '').replace('-', '')
-    return f"""<div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 12px 16px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;"><div style="color: #cbd5e1; font-size: 15px; font-weight: 600;">{title}</div><div style="text-align: right;"><div style="color: #ffffff; font-size: 17px; font-weight: 800;">{data['val']}</div><div style="color: {color}; font-size: 12px; font-weight: 600; margin-top: 2px;">{arrow} {delta_str} ({data['pct']})</div></div></div>"""
+    return f"""<div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 12px 16px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;"><div style="color: #495057; font-size: 15px; font-weight: 600;">{title}</div><div style="text-align: right;"><div style="color: #000000; font-size: 17px; font-weight: 800;">{data['val']}</div><div style="color: {color}; font-size: 12px; font-weight: 600; margin-top: 2px;">{arrow} {delta_str} ({data['pct']})</div></div></div>"""
 
 @st.cache_data(ttl=3600)
 def get_realtime_news(keyword="ETF", timeframe="7d", max_items=12):
@@ -376,7 +374,7 @@ def parse_week_range(w_str, year):
 col_main, col_right = st.columns([9.0, 1.0])
 
 with col_right:
-    st.markdown("""<div style='text-align: right; margin-bottom: 20px;'><h2 style='font-weight: 800; font-size: 16px; line-height: 1.1; letter-spacing: -1px; background: linear-gradient(to right, #ffffff, #93c5fd); -webkit-background-clip: text; -webkit-text-fill-color: transparent;'>SAMSUNG AMC<br>Intelligence</h2></div>""", unsafe_allow_html=True)
+    st.markdown("""<div style='text-align: right; margin-bottom: 20px;'><h2 style='font-weight: 800; font-size: 16px; line-height: 1.1; letter-spacing: -1px; background: linear-gradient(to right, #1e3a8a, #3b82f6); -webkit-background-clip: text; -webkit-text-fill-color: transparent;'>SAMSUNG AMC<br>Intelligence</h2></div>""", unsafe_allow_html=True)
     
     placeholder_week_dropdown = st.empty()
     placeholder_excel_upload = st.empty()
@@ -422,7 +420,7 @@ with col_main:
         sub_tabs = st.tabs(["🏠 Home", "📊 Weekly Info", "📈 순매수/거래대금 및 수익률", "📰 뉴스 & 트렌드", "📺 이벤트 및 성과 검증", "🗣️ 고객 UX", "🥧 ETF/AUM 현황", "🤖 주간 브리핑 AI 프롬프트"])
 
         with sub_tabs[0]:
-            st.markdown("<br><div style='text-align: center;'><h1>Macro & Market Dashboard</h1><p>실시간 거시 경제 및 시장 지표 요약</p></div><br>", unsafe_allow_html=True)
+            st.markdown("<br><div style='text-align: center;'><h1 style='color: #000;'>Macro & Market Dashboard</h1><p style='color: #333;'>실시간 거시 경제 및 시장 지표 요약</p></div><br>", unsafe_allow_html=True)
             macros = get_macro_snapshot()
             c_m1, c_m2, c_m3 = st.columns(3)
             with c_m1: 
@@ -450,7 +448,7 @@ with col_main:
                     c_tbl, c_cht = st.columns([4, 5])
                     with c_tbl: st.dataframe(df_filtered[["종목명", target_subject]], use_container_width=True, hide_index=True)
                     with c_cht:
-                        fig = px.bar(df_filtered, x=target_subject, y="종목명", orientation='h', template="plotly_dark")
+                        fig = px.bar(df_filtered, x=target_subject, y="종목명", orientation='h', template="plotly_white")
                         fig.update_layout(yaxis={'categoryorder':'total ascending'}, height=380, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                         st.plotly_chart(fig, use_container_width=True)
                     
@@ -472,7 +470,7 @@ with col_main:
                     with col_theme_chart:
                         fig_pie = px.pie(df_pie_data, names='AI_자동_테마', values=target_subject, hole=0.4, color_discrete_sequence=px.colors.sequential.Blues_r)
                         fig_pie.update_traces(textposition='inside', textinfo='percent+label')
-                        fig_pie.update_layout(height=400, template="plotly_dark", showlegend=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                        fig_pie.update_layout(height=400, template="plotly_white", showlegend=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                         st.plotly_chart(fig_pie, use_container_width=True)
                 else: st.warning("업로드된 엑셀 파일의 양식이 올바르지 않습니다.")
             else: st.info("👉 우측 패널에 ETF 순매수 엑셀 데이터를 업로드해주세요.")
@@ -485,7 +483,7 @@ with col_main:
                 with col_text: st.markdown(f"<p style='margin-top: 30px; font-weight: bold;'>부터    {selected_week} 까지의</p>", unsafe_allow_html=True)
                 with col_slider: top_n_tab2 = st.slider("TOP N개 ETF 순매수 순위:", 10, 100, 50, 10, key="top_n_tab2", label_visibility="collapsed")
                 with col_inv:
-                    st.markdown("<div style='margin-bottom:-15px; font-size:13px; color:#94a3b8;'>분석 주체:</div>", unsafe_allow_html=True)
+                    st.markdown("<div style='margin-bottom:-15px; font-size:13px; color:#6c757d;'>분석 주체:</div>", unsafe_allow_html=True)
                     inv_type_tab2 = st.selectbox("투자자 선택", ["개인", "기관", "외국인"], label_visibility="collapsed", key="inv_type_tab2")
                 
                 st.divider()
@@ -511,7 +509,7 @@ with col_main:
                         df_total = df_tab2_combined.sort_values(by="전체순매수", ascending=False).head(top_n_tab2)
                         with st.container(border=True):
                             fig_total = px.bar(df_total, x="전체순매수", y="종목명", orientation='h', color_discrete_sequence=['#4da6ff'])
-                            fig_total.update_layout(xaxis_title="전체 순매수 금액 (억원)", yaxis={'categoryorder':'total ascending'}, height=500, template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                            fig_total.update_layout(xaxis_title="전체 순매수 금액 (억원)", yaxis={'categoryorder':'total ascending'}, height=500, template="plotly_white", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                             st.plotly_chart(fig_total, use_container_width=True)
 
                     with col_chart2:
@@ -519,7 +517,7 @@ with col_main:
                         df_inv = df_tab2_combined.sort_values(by=inv_type_tab2, ascending=False).head(top_n_tab2)
                         with st.container(border=True):
                             fig_inv = px.bar(df_inv, x=inv_type_tab2, y="종목명", orientation='h', color_discrete_sequence=['#ff4d4d'])
-                            fig_inv.update_layout(xaxis_title=f"{inv_type_tab2} 순매수 금액 (억원)", yaxis={'categoryorder':'total ascending'}, height=500, template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                            fig_inv.update_layout(xaxis_title=f"{inv_type_tab2} 순매수 금액 (억원)", yaxis={'categoryorder':'total ascending'}, height=500, template="plotly_white", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                             st.plotly_chart(fig_inv, use_container_width=True)
 
                 st.divider()
@@ -598,12 +596,12 @@ with col_main:
                                             z = np.polyfit(x_data, y_data, 1)
                                             p = np.poly1d(z)
                                             fig.add_scatter(x=x_data, y=p(x_data), mode='lines', name='추세선', line=dict(color='#ff4d4d', dash='dot'))
-                                            fig.add_annotation(x=0.05, y=0.95, xref="paper", yref="paper", text=f"상관계수 r = {r_val:.2f}", showarrow=False, font=dict(color="#ffb04d", size=14), bgcolor="rgba(0,0,0,0.5)")
+                                            fig.add_annotation(x=0.05, y=0.95, xref="paper", yref="paper", text=f"상관계수 r = {r_val:.2f}", showarrow=False, font=dict(color="#ffb04d", size=14), bgcolor="rgba(255,255,255,0.8)")
                                     
-                                    fig.update_traces(textposition='top center', marker=dict(size=9, color='#4da6ff', opacity=0.7), textfont=dict(size=11, color='lightgray'))
+                                    fig.update_traces(textposition='top center', marker=dict(size=9, color='#4da6ff', opacity=0.7), textfont=dict(size=11, color='black'))
                                     fig.add_vline(x=0, line_dash="dash", line_color="gray", opacity=0.5)
                                     fig.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
-                                    fig.update_layout(height=450, margin=dict(l=10,r=10,t=40,b=10), template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                                    fig.update_layout(height=450, margin=dict(l=10,r=10,t=40,b=10), template="plotly_white", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                                     st.plotly_chart(fig, use_container_width=True)
                             
                             draw_scatter(c_s1, "T-0 수익률(%)", "**T-0 (이번주 수익률) 반응**")
@@ -619,7 +617,7 @@ with col_main:
                     st.divider()
                     if selected_etfs:
                         volume_lines = []
-                        with st.spinner("한국거래소(KRX)에서 거래 데이터를 불러오는 중 창입니다..."):
+                        with st.spinner("한국거래소(KRX)에서 거래 데이터를 불러오는 중입니다..."):
                             cols = st.columns(2)
                             symbols_mapping = get_etf_mapping()
                             end_date = datetime.today()
@@ -635,8 +633,8 @@ with col_main:
                                             last_vol = df_weekly['거래량'].iloc[-1] if not df_weekly.empty else 0
                                             volume_lines.append(f"- {etf_name}: 최근 주간 거래량 {last_vol:,.0f}주")
                                             
-                                            fig_line = px.line(df_weekly, x='주 시작일', y='거래량', title=f"**{etf_name}** 실제 주간 거래량 추이", markers=True, color_discrete_sequence=['#4da6ff'])
-                                            fig_line.update_layout(height=350, template="plotly_dark", yaxis_title="주간 거래량 (주)", xaxis_title=None, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                                            fig_line = px.line(df_weekly, x='주 시작일', y='거래량', title=f"**{etf_name}** 실제 주간 거래량 추이", markers=True, color_discrete_sequence=['#0d6efd'])
+                                            fig_line.update_layout(height=350, template="plotly_white", yaxis_title="주간 거래량 (주)", xaxis_title=None, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                                             st.plotly_chart(fig_line, use_container_width=True)
                                         except: st.error(f"{etf_name}의 데이터를 불러오지 못했습니다.")
                             if volume_lines:
@@ -663,7 +661,7 @@ with col_main:
                 titles_gen = df_general_news["원본제목"].tolist()
                 kws_gen = extract_keywords_from_titles(titles_gen, top_n=7)
                 if kws_gen:
-                    tags_html = "".join([f"<span style='background:rgba(77, 166, 255, 0.15); border: 1px solid rgba(77, 166, 255, 0.4); border-radius: 15px; padding: 4px 10px; margin-right: 8px; font-size: 13px; font-weight: bold; color: #4da6ff;'>#{kw}</span>" for kw in kws_gen])
+                    tags_html = "".join([f"<span style='background:rgba(13, 110, 253, 0.1); border: 1px solid rgba(13, 110, 253, 0.3); border-radius: 15px; padding: 4px 10px; margin-right: 8px; font-size: 13px; font-weight: bold; color: #0d6efd;'>#{kw}</span>" for kw in kws_gen])
                     st.markdown(f"<div style='margin-bottom: 15px;'>{tags_html}</div>", unsafe_allow_html=True)
 
                 for i in range(0, len(df_general_news), 2):
@@ -674,7 +672,7 @@ with col_main:
                             with cols[j]:
                                 with st.container(border=True):
                                     st.caption(f"📅 {row['게시일 / 출처']}")
-                                    st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:15px; font-weight:bold; color:#4da6ff; text-decoration:none;'>{row['원본제목']} 🔗</a>", unsafe_allow_html=True)
+                                    st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:15px; font-weight:bold; color:#0d6efd; text-decoration:none;'>{row['원본제목']} 🔗</a>", unsafe_allow_html=True)
             else: st.dataframe(df_general_news, use_container_width=True, hide_index=True)
                 
             st.divider()
@@ -692,7 +690,7 @@ with col_main:
                 titles_dyn = df_dynamic_news["원본제목"].tolist()
                 kws_dyn = extract_keywords_from_titles(titles_dyn, top_n=7)
                 if kws_dyn:
-                    tags_dyn_html = "".join([f"<span style='background:rgba(255, 176, 77, 0.15); border: 1px solid rgba(255, 176, 77, 0.4); border-radius: 15px; padding: 4px 10px; margin-right: 8px; font-size: 13px; font-weight: bold; color: #ffb04d;'>#{kw}</span>" for kw in kws_dyn])
+                    tags_dyn_html = "".join([f"<span style='background:rgba(253, 126, 20, 0.1); border: 1px solid rgba(253, 126, 20, 0.3); border-radius: 15px; padding: 4px 10px; margin-right: 8px; font-size: 13px; font-weight: bold; color: #fd7e14;'>#{kw}</span>" for kw in kws_dyn])
                     st.markdown(f"<div style='margin-bottom: 15px;'>{tags_dyn_html}</div>", unsafe_allow_html=True)
 
                 for i in range(0, len(df_dynamic_news), 2):
@@ -703,7 +701,7 @@ with col_main:
                             with cols[j]:
                                 with st.container(border=True):
                                     st.caption(f"📅 {row['게시일 / 출처']}")
-                                    st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:15px; font-weight:bold; color:#4da6ff; text-decoration:none;'>{row['원본제목']} 🔗</a>", unsafe_allow_html=True)
+                                    st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:15px; font-weight:bold; color:#0d6efd; text-decoration:none;'>{row['원본제목']} 🔗</a>", unsafe_allow_html=True)
             else: st.dataframe(df_dynamic_news, use_container_width=True, hide_index=True)
 
         with sub_tabs[4]:
@@ -907,10 +905,10 @@ with col_main:
                                             valid_weeks.append(w)
 
                                     fig_decomp = go.Figure(data=[
-                                        go.Bar(name='시장효과 (지수변동 추정)', x=valid_weeks, y=market_eff, marker_color='gray'),
-                                        go.Bar(name='순수 설정효과 (순매수)', x=valid_weeks, y=setup_eff, marker_color='#ff4d4d')
+                                        go.Bar(name='시장효과 (지수변동 추정)', x=valid_weeks, y=market_eff, marker_color='#ced4da'),
+                                        go.Bar(name='순수 설정효과 (순매수)', x=valid_weeks, y=setup_eff, marker_color='#dc3545')
                                     ])
-                                    fig_decomp.update_layout(barmode='stack', height=350, margin=dict(t=10, b=10, l=10, r=10), template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
+                                    fig_decomp.update_layout(barmode='stack', height=350, margin=dict(t=10, b=10, l=10, r=10), template="plotly_white", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
                                     st.plotly_chart(fig_decomp, use_container_width=True)
                                 except:
                                     st.info("시장효과를 분리할 기초 지수 데이터 매칭에 실패했습니다.")
@@ -921,14 +919,14 @@ with col_main:
                                 if lag_corrs and any(lag_corrs) and len(lag_corrs) == 5:
                                     lags = ["0주 (당일)", "+1주", "+2주", "+3주", "+4주"]
                                     max_idx = np.argmax(lag_corrs)
-                                    colors = ['gray'] * 5
-                                    colors[max_idx] = '#4da6ff'
+                                    colors = ['#ced4da'] * 5
+                                    colors[max_idx] = '#0d6efd'
                                     
                                     fig_lag = go.Figure(data=[
                                         go.Bar(x=lags, y=lag_corrs, marker_color=colors, text=[f"{c:.2f}" for c in lag_corrs], textposition='auto')
                                     ])
-                                    fig_lag.add_annotation(x=lags[max_idx], y=lag_corrs[max_idx], text=f"최대 상관 시점", showarrow=True, arrowhead=1, arrowcolor="#ffb04d", font=dict(color="#ffb04d", size=13), yshift=10)
-                                    fig_lag.update_layout(height=350, yaxis_title="Pearson (r)", xaxis_title="경과 시간", template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                                    fig_lag.add_annotation(x=lags[max_idx], y=lag_corrs[max_idx], text=f"최대 상관 시점", showarrow=True, arrowhead=1, arrowcolor="#fd7e14", font=dict(color="#fd7e14", size=13), yshift=10)
+                                    fig_lag.update_layout(height=350, yaxis_title="Pearson (r)", xaxis_title="경과 시간", template="plotly_white", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                                     st.plotly_chart(fig_lag, use_container_width=True)
                                 else:
                                     st.warning("실제 데이터랩과 주간 순매수 간 매칭되는 데이터 기간이 부족하여 상관계수를 도출할 수 없습니다. (데이터랩과 순매수 엑셀의 날짜 구간을 맞춰주세요.)")
@@ -973,8 +971,8 @@ with col_main:
                         
                     df_evt_scatter = pd.DataFrame(event_scatter_data)
                     fig_evt_scatter = px.scatter(df_evt_scatter, x="경품예산(원)", y="파급력(주간평균 유입액)", text="이벤트명", color="브랜드", size="경품예산(원)", hover_data=["경품예산(원)"])
-                    fig_evt_scatter.update_traces(textposition='top center', marker=dict(opacity=0.8), textfont=dict(size=11, color='lightgray'))
-                    fig_evt_scatter.update_layout(height=350, margin=dict(l=10,r=10,t=20,b=10), template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                    fig_evt_scatter.update_traces(textposition='top center', marker=dict(opacity=0.8), textfont=dict(size=11, color='black'))
+                    fig_evt_scatter.update_layout(height=350, margin=dict(l=10,r=10,t=20,b=10), template="plotly_white", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                     st.plotly_chart(fig_evt_scatter, use_container_width=True)
                     st.caption("우측 상단으로 갈수록 고비용-고효율, 좌측 상단에 위치할수록 저비용-고효율(바이럴 굿즈 등) 이벤트입니다.")
                 elif len(all_selected) == 1:
@@ -983,7 +981,7 @@ with col_main:
                     st.info("💡 이벤트 드롭다운에서 분석할 이벤트를 선택하시면 예산 대비 효율성 산점도가 활성화됩니다.")
 
                 with st.spinner("수급 임팩트 데이터를 렌더링하고 있습니다..."):
-                    fig_evt = px.line(df_trend, x='주차', y='전체순매수', color='종목명', markers=True, template="plotly_dark", color_discrete_map={target_etf: '#ff4d4d', comp_etf: '#4da6ff'})
+                    fig_evt = px.line(df_trend, x='주차', y='전체순매수', color='종목명', markers=True, template="plotly_white", color_discrete_map={target_etf: '#dc3545', comp_etf: '#0d6efd'})
                     
                     vol_data = []
                     symbols_mapping = get_etf_mapping()
@@ -1022,7 +1020,7 @@ with col_main:
                         
                     df_vol = pd.DataFrame(vol_data)
                     
-                    fig_vol = px.line(df_vol, x='주차', y='거래량', color='종목명', markers=True, template="plotly_dark", color_discrete_map={target_etf: '#ff4d4d', comp_etf: '#4da6ff'})
+                    fig_vol = px.line(df_vol, x='주차', y='거래량', color='종목명', markers=True, template="plotly_white", color_discrete_map={target_etf: '#dc3545', comp_etf: '#0d6efd'})
 
                     BRAND_COLORS = {
                         'KODEX': 'rgba(10, 88, 202, 0.2)',
@@ -1139,7 +1137,7 @@ with col_main:
                             dl_summaries.append(f"[{file_name_without_ext}]\n" + "\n".join([f"- {idx}: {val}" for idx, val in recent_14d_mean.items()]))
                             df_melted = clean_df.melt(id_vars=['날짜'], var_name='종목명', value_name='검색량')
                             with st.container(border=True):
-                                fig_trend = px.line(df_melted, x='날짜', y='검색량', color='종목명', template="plotly_dark")
+                                fig_trend = px.line(df_melted, x='날짜', y='검색량', color='종목명', template="plotly_white")
                                 fig_trend.update_layout(height=350, xaxis_title=None, yaxis_title="상대적 검색량", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5))
                                 st.plotly_chart(fig_trend, use_container_width=True)
                     except: pass
@@ -1192,12 +1190,12 @@ with col_main:
                         df_agg = df_yt.groupby("검색 타겟")["조회수"].mean().reset_index()
                         
                         color_map = {
-                            f"🎯 자사 타겟 ({current_target})": '#ff4d4d',
-                            f"⚔️ 경쟁 대조군 ({current_comp})": '#4da6ff',
-                            f"🔥 주간 핫 테마 ({current_theme} ETF)": '#ffb04d'
+                            f"🎯 자사 타겟 ({current_target})": '#dc3545',
+                            f"⚔️ 경쟁 대조군 ({current_comp})": '#0d6efd',
+                            f"🔥 주간 핫 테마 ({current_theme} ETF)": '#fd7e14'
                         }
                         
-                        fig_yt = px.bar(df_agg, x="검색 타겟", y="조회수", text_auto='.0f', color="검색 타겟", color_discrete_map=color_map, template="plotly_dark")
+                        fig_yt = px.bar(df_agg, x="검색 타겟", y="조회수", text_auto='.0f', color="검색 타겟", color_discrete_map=color_map, template="plotly_white")
                         fig_yt.update_layout(height=350, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False, xaxis_title=None)
                         st.plotly_chart(fig_yt, use_container_width=True)
                     with c_yt2:
@@ -1235,7 +1233,7 @@ with col_main:
                     st.markdown("**🔵 KODEX (삼성) 블로그**")
                     if kodex_posts:
                         for p in kodex_posts:
-                            st.markdown(f"- [{p['date']}] <a href='{p['link']}' target='_blank' style='color:#4da6ff; text-decoration:none;'>{p['title']}</a>", unsafe_allow_html=True)
+                            st.markdown(f"- [{p['date']}] <a href='{p['link']}' target='_blank' style='color:#0d6efd; text-decoration:none;'>{p['title']}</a>", unsafe_allow_html=True)
                     else:
                         st.info("지난 주 KODEX 블로그에 올라온 포스트가 없습니다.")
                         
@@ -1245,7 +1243,7 @@ with col_main:
                         for brand, posts in other_posts.items():
                             with st.expander(f"{brand} ({len(posts)}건)"):
                                 for p in posts:
-                                    st.markdown(f"- [{p['date']}] <a href='{p['link']}' target='_blank' style='color:#4da6ff; text-decoration:none;'>{p['title']}</a>", unsafe_allow_html=True)
+                                    st.markdown(f"- [{p['date']}] <a href='{p['link']}' target='_blank' style='color:#0d6efd; text-decoration:none;'>{p['title']}</a>", unsafe_allow_html=True)
                     else:
                         st.info("지난 주 기타 운용사 블로그에 올라온 포스트가 없습니다.")
                 
@@ -1255,47 +1253,8 @@ with col_main:
 
         with sub_tabs[5]:
             st.markdown("### 🗣️ 고객 Voice (VOC) & 투자자 심리 모니터링")
-
-            # =====================================================================
-            # [신규 추가] Sub-Agent 다운로드 및 사용 가이드 영역
-            # =====================================================================
             with st.container(border=True):
-                st.markdown("#### 🤖 [데이터 수집] 네이버 종토방 크롤링 Sub-Agent")
-                st.caption("메인 대시보드에 연동할 종토방 엑셀 데이터를 추출하고 1차 감성분석을 수행하는 외부 코드입니다.")
-                
-                try:
-                    with open("naver_jongtobang_crawler.ipynb", "r", encoding="utf-8") as f:
-                        ipynb_raw_text = f.read()
-                        
-                    st.download_button(
-                        label="📥 Sub-Agent 파이썬 코드 다운로드 (.ipynb)",
-                        data=ipynb_raw_text.encode('utf-8'),
-                        file_name="naver_jongtobang_crawler_분석.ipynb",
-                        mime="application/json",
-                        use_container_width=True
-                    )
-                except FileNotFoundError:
-                    st.error("⚠️ 'naver_jongtobang_crawler.ipynb' 파일을 찾을 수 없습니다. 깃허브 최상위 경로에 파일이 업로드되었는지 확인해주세요.")
-                    ipynb_raw_text = "파일을 찾을 수 없습니다."
-
-                with st.expander("💡 Sub-Agent 사용 가이드 (클릭하여 펼치기)"):
-                    st.markdown("""
-                    **[Sub-Agent 실행 및 대시보드 연동 방법]**
-                    1. **환경 세팅:** 다운로드한 `.ipynb` 파일을 **Google Colab** 또는 로컬 Jupyter 환경에서 엽니다.
-                    2. **변수 설정:** 코드 두 번째 셀의 `STOCK_CODE`(종목코드)와 `TARGET_DATE`(수집 날짜)를 분석하고자 하는 타겟으로 변경합니다.
-                    3. **데이터 수집:** 위에서부터 순서대로 셀을 실행하여 크롤링 및 감성 분석을 진행합니다.
-                    4. **파일 획득:** 실행이 모두 완료되면 하단에서 통합 분석 결과가 담긴 **엑셀 파일이 자동 다운로드**됩니다.
-                    5. **대시보드 연동:** 다운로드된 엑셀 파일을 본 대시보드 우측 패널의 **'4. 종토방 VOC 엑셀'** 칸에 업로드하시면 아래 시각화 차트가 즉시 활성화됩니다.
-                    """)
-                
-                with st.expander("💻 Sub-Agent 전체 코드 미리보기"):
-                    st.info("파일 다운로드 없이 바로 코드를 복사해서 사용하실 분들을 위한 영역입니다.")
-                    st.code(ipynb_raw_text, language="python")
-
-            st.divider()
-
-            with st.container(border=True):
-                st.markdown("#### 📊 [Sub-Agent 연동] 네이버 종토방 분석 결과 시각화")
+                st.markdown("#### 🤖 [Sub-Agent 연동] 네이버 종토방 분석 결과 시각화")
                 if uploaded_voc is not None:
                     voc_data = {}
                     try:
@@ -1343,8 +1302,8 @@ with col_main:
                         if 'sentiment' in voc_data and not voc_data['sentiment'].empty:
                             try:
                                 df_s = voc_data['sentiment'].dropna(subset=['감성'])
-                                fig_s = px.pie(df_s, names='감성', values='비율(%)', hole=0.5, color='감성', color_discrete_map={'긍정':'#4da6ff', '중립':'#cbd5e1', '부정':'#ff4d4d'})
-                                fig_s.update_layout(height=300, template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                                fig_s = px.pie(df_s, names='감성', values='비율(%)', hole=0.5, color='감성', color_discrete_map={'긍정':'#0d6efd', '중립':'#adb5bd', '부정':'#dc3545'})
+                                fig_s.update_layout(height=300, template="plotly_white", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                                 st.plotly_chart(fig_s, use_container_width=True)
                             except: pass
                     with c_voc2:
@@ -1352,8 +1311,8 @@ with col_main:
                         if 'keyword' in voc_data and not voc_data['keyword'].empty:
                             try:
                                 df_k = voc_data['keyword'].dropna(subset=['키워드']).head(10)
-                                fig_k = px.bar(df_k, x='언급횟수', y='키워드', orientation='h', template="plotly_dark", color_discrete_sequence=['#ffb04d'])
-                                fig_k.update_layout(yaxis={'categoryorder':'total ascending'}, height=300, template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                                fig_k = px.bar(df_k, x='언급횟수', y='키워드', orientation='h', template="plotly_white", color_discrete_sequence=['#fd7e14'])
+                                fig_k.update_layout(yaxis={'categoryorder':'total ascending'}, height=300, template="plotly_white", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                                 st.plotly_chart(fig_k, use_container_width=True)
                             except: pass
 
@@ -1363,9 +1322,9 @@ with col_main:
                         try:
                             df_t = voc_data['time'].dropna(subset=['시간대'])
                             fig_t = go.Figure()
-                            fig_t.add_trace(go.Bar(x=df_t['시간대'], y=df_t['게시글 수'], name='게시글 수', marker_color='#4da6ff', yaxis='y1'))
-                            fig_t.add_trace(go.Scatter(x=df_t['시간대'], y=df_t['평균 감성점수'], name='평균 감성점수', mode='lines+markers', marker_color='#ffb04d', yaxis='y2'))
-                            fig_t.update_layout(height=350, template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', yaxis=dict(title='게시글 수', side='left'), yaxis2=dict(title='평균 감성점수', overlaying='y', side='right', range=[1, 5]), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
+                            fig_t.add_trace(go.Bar(x=df_t['시간대'], y=df_t['게시글 수'], name='게시글 수', marker_color='#0d6efd', yaxis='y1'))
+                            fig_t.add_trace(go.Scatter(x=df_t['시간대'], y=df_t['평균 감성점수'], name='평균 감성점수', mode='lines+markers', marker_color='#fd7e14', yaxis='y2'))
+                            fig_t.update_layout(height=350, template="plotly_white", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', yaxis=dict(title='게시글 수', side='left'), yaxis2=dict(title='평균 감성점수', overlaying='y', side='right', range=[1, 5]), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
                             st.plotly_chart(fig_t, use_container_width=True)
                         except: pass
 
@@ -1379,16 +1338,16 @@ with col_main:
                                     df_p['조회수'] = pd.to_numeric(df_p['조회수'], errors='coerce').fillna(0)
                                     top_posts = df_p.sort_values(by='조회수', ascending=False).head(3)
                                     for _, row in top_posts.iterrows():
-                                        sentiment_color = "#ff4d4d" if "부정" in str(row.get('감성','')) else ("#4da6ff" if "긍정" in str(row.get('감성','')) else "#cbd5e1")
-                                        st.markdown(f"**<span style='color:{sentiment_color}'>[{row.get('감성', '분류없음')}]</span> {row.get('제목', '제목없음')}** <span style='color:#ffb04d; font-size:12px;'>(👁️ {int(row['조회수'])})</span>", unsafe_allow_html=True)
+                                        sentiment_color = "#dc3545" if "부정" in str(row.get('감성','')) else ("#0d6efd" if "긍정" in str(row.get('감성','')) else "#6c757d")
+                                        st.markdown(f"**<span style='color:{sentiment_color}'>[{row.get('감성', '분류없음')}]</span> {row.get('제목', '제목없음')}** <span style='color:#fd7e14; font-size:12px;'>(👁️ {int(row['조회수'])})</span>", unsafe_allow_html=True)
                                         content = str(row.get('본문', '')).replace('nan', '')
                                         st.info(f"{content[:200]}..." if len(content) > 200 else content)
                             except: pass
                     
                     with st.expander("💡 AI Sub-Agent 분석 요약 (클릭하여 펼치기)", expanded=False):
                         if 'insight' in voc_data and voc_data['insight'].strip():
-                            insight_html = voc_data['insight'].replace(chr(10), '<br>').replace('【', '<br><b style="color:#4da6ff; font-size:16px;">【').replace('】', '】</b><br>')
-                            st.markdown(f"<div style='padding:15px; background:rgba(255,255,255,0.02); border-radius:10px; border:1px solid rgba(255,255,255,0.05);'>{insight_html}</div>", unsafe_allow_html=True)
+                            insight_html = voc_data['insight'].replace(chr(10), '<br>').replace('【', '<br><b style="color:#0d6efd; font-size:16px;">【').replace('】', '】</b><br>')
+                            st.markdown(f"<div style='padding:15px; background:rgba(0,0,0,0.02); border-radius:10px; border:1px solid rgba(0,0,0,0.1);'>{insight_html}</div>", unsafe_allow_html=True)
                 else: st.info("👉 우측 패널에 종목토론방 엑셀 파일을 업로드해주세요.")
 
             st.divider()
@@ -1399,7 +1358,7 @@ with col_main:
                 if "링크" in df_app_voc.columns and df_app_voc["링크"].iloc[0] != "":
                     for idx, row in df_app_voc.iterrows():
                         with st.container(border=True):
-                            st.markdown(f"🚨 <a href='{row['링크']}' target='_blank' style='color:#ff4d4d; text-decoration:none;'>{row['원본제목']} 🔗</a>", unsafe_allow_html=True)
+                            st.markdown(f"🚨 <a href='{row['링크']}' target='_blank' style='color:#dc3545; text-decoration:none;'>{row['원본제목']} 🔗</a>", unsafe_allow_html=True)
                             st.caption(f"📅 {row['게시일 / 출처']}")
                 else: st.info("검색 범위(최대 1년) 내 포착된 리스크성 기사가 없습니다.")
 
@@ -1423,7 +1382,7 @@ with col_main:
                             else: df_pie_final = df_brand_aum
                             fig_market_share = px.pie(df_pie_final, names='브랜드', values='AUM(억원)', hole=0.4, color_discrete_sequence=px.colors.sequential.Blues_r)
                             fig_market_share.update_traces(textposition='inside', textinfo='percent+label')
-                            fig_market_share.update_layout(height=420, margin=dict(t=20, l=20, r=20, b=20), template="plotly_dark", showlegend=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                            fig_market_share.update_layout(height=420, margin=dict(t=20, l=20, r=20, b=20), template="plotly_white", showlegend=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                             st.plotly_chart(fig_market_share, use_container_width=True)
                         with col_table:
                             c_title, c_btn = st.columns([7, 3])
@@ -1450,7 +1409,7 @@ with col_main:
                                 styles = []
                                 for col in pivot_df.columns:
                                     s = ""
-                                    if row.name == '총 AUM': s += "color: #ff4d4d; font-weight: bold; "
+                                    if row.name == '총 AUM': s += "color: #dc3545; font-weight: bold; "
                                     if col == 'KODEX': s += "font-weight: bold; "
                                     styles.append(s)
                                 return styles
@@ -1483,7 +1442,7 @@ with col_main:
                     except: pass
                 if trend_data:
                     df_trend = pd.concat(trend_data)
-                    fig_trend = px.line(df_trend, x='주차', y='순매수합계', color='브랜드', markers=True, template="plotly_dark", color_discrete_sequence=px.colors.qualitative.Set2)
+                    fig_trend = px.line(df_trend, x='주차', y='순매수합계', color='브랜드', markers=True, template="plotly_white", color_discrete_sequence=px.colors.qualitative.Set2)
                     fig_trend.update_layout(height=400, yaxis_title="전체 순매수 합계", xaxis_title=None, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                     st.plotly_chart(fig_trend, use_container_width=True)
             else: st.info("👉 우측 패널에 엑셀 데이터를 업로드하시면 트렌드 그래프가 활성화됩니다.")
@@ -1732,7 +1691,7 @@ with col_main:
                         with cols_grid[idx % 2]:
                             with st.container(border=True):
                                 st.caption(f"📅 {row['게시일 / 출처']}")
-                                st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:14px; font-weight:bold; color:#ffb04d; text-decoration:none;'>[규제] {row['원본제목']} 🔗</a>", unsafe_allow_html=True)
+                                st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:14px; font-weight:bold; color:#fd7e14; text-decoration:none;'>[규제] {row['원본제목']} 🔗</a>", unsafe_allow_html=True)
                 else: 
                     st.info("관련된 최신 정책/규제 뉴스 피드가 존재하지 않습니다.")
             
@@ -1775,7 +1734,7 @@ with col_main:
                         with cols_grid[idx % 2]:
                             with st.container(border=True):
                                 st.caption(f"📅 {row['게시일 / 출처']}")
-                                st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:14px; font-weight:bold; color:#4da6ff; text-decoration:none;'>{row['원본제목']} 🔗</a>", unsafe_allow_html=True)
+                                st.markdown(f"<a href='{row['링크']}' target='_blank' style='font-size:14px; font-weight:bold; color:#0d6efd; text-decoration:none;'>{row['원본제목']} 🔗</a>", unsafe_allow_html=True)
                 else:
                     st.info(f"선택하신 '{selected_news_kw}' 관련 지난주({last_sun.strftime('%Y-%m-%d')} ~ {last_sat.strftime('%Y-%m-%d')}) 기사가 존재하지 않습니다.")
 
@@ -1857,8 +1816,8 @@ with col_main:
                         price_return = total_return_pct - income_return
                         
                         fig_decomp = go.Figure()
-                        fig_decomp.add_trace(go.Scatter(x=dates, y=income_return, mode='lines', stackgroup='one', name=f'누적 배당/이자 (연 {annual_yield*100:.1f}%)', line=dict(color='#ffb04d')))
-                        fig_decomp.add_trace(go.Scatter(x=dates, y=price_return, mode='lines', stackgroup='one', name='누적 자본 차익 (가격변동)', line=dict(color='#4da6ff')))
+                        fig_decomp.add_trace(go.Scatter(x=dates, y=income_return, mode='lines', stackgroup='one', name=f'누적 배당/이자 (연 {annual_yield*100:.1f}%)', line=dict(color='#fd7e14')))
+                        fig_decomp.add_trace(go.Scatter(x=dates, y=price_return, mode='lines', stackgroup='one', name='누적 자본 차익 (가격변동)', line=dict(color='#0d6efd')))
                         fig_decomp.update_layout(height=250, margin=dict(t=10,b=10,l=10,r=10), yaxis_title="누적 수익률 (%)", xaxis_title="", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                         st.plotly_chart(fig_decomp, use_container_width=True)
 
@@ -1894,7 +1853,7 @@ with col_main:
                                 
                                 bm_name = "코스피" if "국내" in asset_class else "S&P 500"
                                 df_bar = pd.DataFrame({"자산": [bm_name, f"기획 Proxy ({st.session_state.p_proxy})"], "최대 낙폭 (%)": [sp_drop, my_drop]})
-                                fig_bar = px.bar(df_bar, x="자산", y="최대 낙폭 (%)", text="최대 낙폭 (%)", color="자산", color_discrete_map={bm_name: "gray", f"기획 Proxy ({st.session_state.p_proxy})": "#ffb04d"}, template="plotly_dark")
+                                fig_bar = px.bar(df_bar, x="자산", y="최대 낙폭 (%)", text="최대 낙폭 (%)", color="자산", color_discrete_map={bm_name: "#6c757d", f"기획 Proxy ({st.session_state.p_proxy})": "#fd7e14"}, template="plotly_white")
                                 fig_bar.update_traces(textposition='auto', texttemplate='%{text:.1f}%')
                                 fig_bar.update_layout(height=250, margin=dict(t=10, b=10, l=10, r=10), showlegend=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                                 st.plotly_chart(fig_bar, use_container_width=True)
@@ -1935,9 +1894,9 @@ with col_main:
                                               
                         fig_opt = go.Figure()
                         fig_opt.add_trace(go.Scatter(x=x_vals, y=x_vals, mode='lines', name='기초자산 (Base)', line=dict(color='gray', dash='dot')))
-                        fig_opt.add_trace(go.Scatter(x=x_vals, y=y_vals, mode='lines', name=f'{opt_strategy} 페이오프', line=dict(color='#4da6ff' if "Covered" in opt_strategy else '#ffb04d', width=3)))
+                        fig_opt.add_trace(go.Scatter(x=x_vals, y=y_vals, mode='lines', name=f'{opt_strategy} 페이오프', line=dict(color='#0d6efd' if "Covered" in opt_strategy else '#fd7e14', width=3)))
                         
-                        fig_opt.update_layout(height=230, margin=dict(t=10,b=10,l=10,r=10), template="plotly_dark", xaxis_title="기초자산 수익률 (%)", yaxis_title="전략 수익률 (%)", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
+                        fig_opt.update_layout(height=230, margin=dict(t=10,b=10,l=10,r=10), template="plotly_white", xaxis_title="기초자산 수익률 (%)", yaxis_title="전략 수익률 (%)", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5))
                         st.plotly_chart(fig_opt, use_container_width=True)
 
             with st.container(border=True):
@@ -1968,7 +1927,7 @@ with col_main:
                                     unhedged_cum = ((1 + port_daily).cumprod() * 100) * fx_cum
                                     
                                     df_fx = pd.DataFrame({"기간": dates, "환헤지(H)": hedged_cum.values, "환노출(UH)": unhedged_cum.values}).melt(id_vars="기간")
-                                    fig_fx = px.line(df_fx, x="기간", y="value", color="variable", template="plotly_dark", color_discrete_map={"환헤지(H)": "#4da6ff", "환노출(UH)": "#ff4d4d"})
+                                    fig_fx = px.line(df_fx, x="기간", y="value", color="variable", template="plotly_white", color_discrete_map={"환헤지(H)": "#0d6efd", "환노출(UH)": "#dc3545"})
                                     fig_fx.update_layout(height=220, margin=dict(t=10,b=10,l=10,r=10), yaxis_title="수익률 궤적", xaxis_title="", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                                     st.plotly_chart(fig_fx, use_container_width=True)
                                 except Exception:
@@ -2022,12 +1981,12 @@ with col_main:
                         textposition = "outside",
                         text = [f"+{expected_revenue:.1f}억", f"-{fixed_cost:.1f}억", f"-{mkt_cost:.1f}억", f"{net_profit:.1f}억"],
                         y = [expected_revenue, -fixed_cost, -mkt_cost, net_profit],
-                        connector = {"line":{"color":"rgba(255,255,255,0.2)"}},
-                        decreasing = {"marker":{"color":"#ff4d4d"}},
-                        increasing = {"marker":{"color":"#4da6ff"}},
-                        totals = {"marker":{"color":"#ffb04d" if net_profit > 0 else "gray"}}
+                        connector = {"line":{"color":"rgba(0,0,0,0.1)"}},
+                        decreasing = {"marker":{"color":"#dc3545"}},
+                        increasing = {"marker":{"color":"#0d6efd"}},
+                        totals = {"marker":{"color":"#fd7e14" if net_profit > 0 else "#6c757d"}}
                     ))
-                    fig_wf.update_layout(height=280, margin=dict(t=20, b=10, l=10, r=10), template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                    fig_wf.update_layout(height=280, margin=dict(t=20, b=10, l=10, r=10), template="plotly_white", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                     st.plotly_chart(fig_wf, use_container_width=True)
 
             with st.container(border=True):
@@ -2128,12 +2087,12 @@ with col_main:
                             bm_name = "코스피" if "국내" in asset_class else "S&P 500"
                             fig_fan.add_trace(go.Scatter(x=dates, y=bm_cum_returns, mode='lines', name=f'{bm_name} (BM Price)', line=dict(color='gray', width=1, dash='dot')))
                             
-                            fig_fan.add_trace(go.Scatter(x=dates, y=y_price, mode='lines', name='순수 주가 수익률 (Price)', line=dict(color='#4da6ff', width=2)))
-                            fig_fan.add_trace(go.Scatter(x=dates, y=y_total, mode='none', name=f'누적 배당 수익 (연 {sandbox_div}%)', fill='tonexty', fillcolor='rgba(255, 176, 77, 0.3)'))
-                            fig_fan.add_trace(go.Scatter(x=dates, y=y_total, mode='lines', name='총 수익률 (Total Return)', line=dict(color='#ffb04d', width=3)))
+                            fig_fan.add_trace(go.Scatter(x=dates, y=y_price, mode='lines', name='순수 주가 수익률 (Price)', line=dict(color='#0d6efd', width=2)))
+                            fig_fan.add_trace(go.Scatter(x=dates, y=y_total, mode='none', name=f'누적 배당 수익 (연 {sandbox_div}%)', fill='tonexty', fillcolor='rgba(253, 126, 20, 0.2)'))
+                            fig_fan.add_trace(go.Scatter(x=dates, y=y_total, mode='lines', name='총 수익률 (Total Return)', line=dict(color='#fd7e14', width=3)))
 
-                            fig_fan.add_trace(go.Scatter(x=dates, y=worst_cum_returns, mode='lines', name=f'Worst Case (-{sandbox_error}%)', line=dict(color='#ff4d4d', width=1, dash='dash')))
-                            fig_fan.add_trace(go.Scatter(x=dates, y=best_cum_returns, mode='lines', name=f'Best Case (+{sandbox_error}%)', fill='tonexty', fillcolor='rgba(77, 166, 255, 0.1)', line=dict(color='#4da6ff', width=1, dash='dash')))
+                            fig_fan.add_trace(go.Scatter(x=dates, y=worst_cum_returns, mode='lines', name=f'Worst Case (-{sandbox_error}%)', line=dict(color='#dc3545', width=1, dash='dash')))
+                            fig_fan.add_trace(go.Scatter(x=dates, y=best_cum_returns, mode='lines', name=f'Best Case (+{sandbox_error}%)', fill='tonexty', fillcolor='rgba(13, 110, 253, 0.1)', line=dict(color='#0d6efd', width=1, dash='dash')))
 
                             fig_fan.update_xaxes(
                                 rangeselector=dict(
@@ -2142,7 +2101,7 @@ with col_main:
                                         dict(count=1, label="1년", step="year", stepmode="backward"),
                                         dict(step="all", label="전체(3년)")
                                     ]),
-                                    bgcolor="#1e3a8a", activecolor="#3b82f6", font=dict(color="white")
+                                    bgcolor="#f8f9fa", activecolor="#e9ecef", font=dict(color="black")
                                 )
                             )
 
@@ -2150,7 +2109,7 @@ with col_main:
                                 height=450, margin=dict(t=20, b=20, l=20, r=20),
                                 yaxis_title="누적 수익률 (%)", xaxis_title="",
                                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
-                                template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
+                                template="plotly_white", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
                             )
                             
                             st.markdown(f"##### **📈 실제 주가 기반 가상 지수 수익률 (편입 종목: {', '.join(valid_tickers)})**")
