@@ -57,46 +57,83 @@ if 'p_event_budget' not in st.session_state: st.session_state.p_event_budget = 0
 if 'stat_roas' not in st.session_state: st.session_state.stat_roas = 0.0
 
 # ==========================================
-# 2. Glassmorphism 커스텀 CSS
+# 2. 반응형 라이트/다크 모드 커스텀 CSS (아이보리 & 차콜 테마 적용)
 # ==========================================
-glassmorphism_css = """
+responsive_theme_css = """
 <style>
-.stApp {
-    background: linear-gradient(135deg, #0b101e 0%, #171b3c 50%, #0f172a 100%);
-    background-attachment: fixed;
+/* 부드러운 화면 전환 효과 */
+html, body, [data-testid="stAppViewContainer"] {
+    transition: background-color 0.3s ease, color 0.3s ease;
 }
-[data-testid="stVerticalBlockBorderWrapper"] {
-    background: rgba(255, 255, 255, 0.02) !important;
-    backdrop-filter: blur(16px) !important;
-    -webkit-backdrop-filter: blur(16px) !important;
-    border-radius: 16px !important;
-    border: 1px solid rgba(255, 255, 255, 0.06) !important;
-    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2) !important;
-    padding: 20px !important;
-}
+
+/* 데이터 프레임 투명화 및 탭 디자인 조정 */
 .stDataFrame { background: transparent !important; }
 [data-baseweb="tab-list"] { gap: 8px; padding-bottom: 12px; flex-wrap: wrap; }
-[data-baseweb="tab"] { background: rgba(255, 255, 255, 0.04) !important; border-radius: 20px !important; border: 1px solid rgba(255, 255, 255, 0.08) !important; padding: 8px 16px !important; color: #94a3b8 !important; }
-[data-baseweb="tab"][aria-selected="true"] { background: rgba(77, 166, 255, 0.12) !important; border: 1px solid rgba(77, 166, 255, 0.5) !important; color: #ffffff !important; box-shadow: 0 0 12px rgba(77, 166, 255, 0.25) !important; font-weight: 600 !important; }
-[data-testid="stMarkdownContainer"] h1, [data-testid="stMarkdownContainer"] h2, [data-testid="stMarkdownContainer"] h3, [data-testid="stMarkdownContainer"] h4, [data-testid="stMarkdownContainer"] h5, [data-testid="stMarkdownContainer"] h6, [data-testid="stMarkdownContainer"] p, [data-testid="stMarkdownContainer"] span { color: #f8fafc !important; }
-label, label p, [data-testid="stWidgetLabel"] p { color: #f8fafc !important; }
-[data-testid="stCaptionContainer"] p { color: #94a3b8 !important; }
-[data-testid="stMetricLabel"] p { color: #cbd5e1 !important; }
-[data-testid="stMetricValue"] div { color: #ffffff !important; }
-div[data-baseweb="textarea"] textarea, .stTextArea textarea { background-color: #0f172a !important; color: #ffffff !important; -webkit-text-fill-color: #ffffff !important; border: 1px solid rgba(77, 166, 255, 0.5) !important; }
+[data-baseweb="tab"] { border-radius: 20px !important; padding: 8px 16px !important; }
 div[data-testid="stRadio"] > div[role="radiogroup"] { display: flex; flex-direction: row; gap: 10px; background: transparent !important; }
-div[data-testid="stRadio"] > div[role="radiogroup"] > label { background: rgba(255, 255, 255, 0.05) !important; padding: 8px 15px !important; border-radius: 50px !important; border: 1px solid rgba(255, 255, 255, 0.1) !important; cursor: pointer !important; flex: 1 !important; display: flex !important; align-items: center !important; justify-content: center !important; transition: all 0.3s ease !important; }
-div[data-testid="stRadio"] > div[role="radiogroup"] > label:hover { background: rgba(255, 255, 255, 0.1) !important; }
-div[data-testid="stRadio"] > div[role="radiogroup"] > label[data-checked="true"] { background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%) !important; border: 2px solid #4da6ff !important; box-shadow: 0 0 15px rgba(77, 166, 255, 0.4) !important; }
-div[data-testid="stRadio"] > div[role="radiogroup"] > label p { font-size: 16px !important; font-weight: 800 !important; margin: 0 !important; color: #ffffff !important; white-space: nowrap !important; text-align: center !important; }
+div[data-testid="stRadio"] > div[role="radiogroup"] > label { padding: 8px 15px !important; border-radius: 50px !important; cursor: pointer !important; flex: 1 !important; display: flex !important; align-items: center !important; justify-content: center !important; transition: all 0.3s ease !important; }
+div[data-testid="stRadio"] > div[role="radiogroup"] > label p { font-size: 16px !important; font-weight: 800 !important; margin: 0 !important; white-space: nowrap !important; text-align: center !important; }
 div[data-testid="stRadio"] > div[role="radiogroup"] > label > div:first-child { display: none !important; }
+
 #MainMenu {visibility: hidden;} header {visibility: hidden;} footer {visibility: hidden;} .stDeployButton {display: none;}
+
+/* -----------------------------------------
+   [다크 모드] 기기 설정이 다크 모드일 때 
+   ----------------------------------------- */
+@media (prefers-color-scheme: dark) {
+    .stApp { background: linear-gradient(135deg, #0b101e 0%, #171b3c 50%, #0f172a 100%); background-attachment: fixed; }
+    h1, h2, h3, h4, h5, h6, p, span, label, .stMarkdown, [data-testid="stWidgetLabel"] p, [data-testid="stMetricValue"] div { color: #f8fafc !important; }
+    [data-testid="stCaptionContainer"] p, [data-testid="stMetricLabel"] p { color: #cbd5e1 !important; }
+    
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        background: rgba(255, 255, 255, 0.02) !important;
+        backdrop-filter: blur(16px) !important; -webkit-backdrop-filter: blur(16px) !important;
+        border-radius: 16px !important; border: 1px solid rgba(255, 255, 255, 0.06) !important;
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2) !important; padding: 20px !important;
+    }
+    
+    [data-baseweb="tab"] { background: rgba(255, 255, 255, 0.04) !important; border: 1px solid rgba(255, 255, 255, 0.08) !important; color: #94a3b8 !important; }
+    [data-baseweb="tab"][aria-selected="true"] { background: rgba(77, 166, 255, 0.12) !important; border: 1px solid rgba(77, 166, 255, 0.5) !important; color: #ffffff !important; box-shadow: 0 0 12px rgba(77, 166, 255, 0.25) !important; font-weight: 600 !important; }
+    
+    div[data-testid="stRadio"] > div[role="radiogroup"] > label { background: rgba(255, 255, 255, 0.05) !important; border: 1px solid rgba(255, 255, 255, 0.1) !important; }
+    div[data-testid="stRadio"] > div[role="radiogroup"] > label:hover { background: rgba(255, 255, 255, 0.1) !important; }
+    div[data-testid="stRadio"] > div[role="radiogroup"] > label[data-checked="true"] { background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%) !important; border: 2px solid #4da6ff !important; box-shadow: 0 0 15px rgba(77, 166, 255, 0.4) !important; }
+    div[data-testid="stRadio"] > div[role="radiogroup"] > label p { color: #ffffff !important; }
+    
+    div[data-baseweb="textarea"] textarea, .stTextArea textarea { background-color: #0f172a !important; color: #ffffff !important; -webkit-text-fill-color: #ffffff !important; border: 1px solid rgba(77, 166, 255, 0.5) !important; }
+}
+
+/* -----------------------------------------
+   [라이트 모드] 기기 설정이 라이트 모드일 때 (아이보리 & 차콜)
+   ----------------------------------------- */
+@media (prefers-color-scheme: light) {
+    .stApp { background: #FDFBF7 !important; background-attachment: fixed; }
+    h1, h2, h3, h4, h5, h6, p, span, label, .stMarkdown, [data-testid="stWidgetLabel"] p, [data-testid="stMetricValue"] div { color: #1E293B !important; }
+    [data-testid="stCaptionContainer"] p, [data-testid="stMetricLabel"] p { color: #475569 !important; }
+    
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        background: rgba(255, 255, 255, 0.65) !important;
+        backdrop-filter: blur(16px) !important; -webkit-backdrop-filter: blur(16px) !important;
+        border-radius: 16px !important; border: 1px solid rgba(30, 41, 59, 0.08) !important;
+        box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.04) !important; padding: 20px !important;
+    }
+
+    [data-baseweb="tab"] { background: rgba(30, 41, 59, 0.04) !important; border: 1px solid rgba(30, 41, 59, 0.08) !important; color: #64748B !important; }
+    [data-baseweb="tab"][aria-selected="true"] { background: rgba(77, 166, 255, 0.1) !important; border: 1px solid rgba(77, 166, 255, 0.6) !important; color: #0F172A !important; box-shadow: 0 0 10px rgba(77, 166, 255, 0.15) !important; font-weight: 700 !important; }
+
+    div[data-testid="stRadio"] > div[role="radiogroup"] > label { background: rgba(30, 41, 59, 0.03) !important; border: 1px solid rgba(30, 41, 59, 0.1) !important; }
+    div[data-testid="stRadio"] > div[role="radiogroup"] > label:hover { background: rgba(30, 41, 59, 0.08) !important; }
+    div[data-testid="stRadio"] > div[role="radiogroup"] > label[data-checked="true"] { background: #ffffff !important; border: 2px solid #4da6ff !important; box-shadow: 0 0 12px rgba(77, 166, 255, 0.2) !important; }
+    div[data-testid="stRadio"] > div[role="radiogroup"] > label p { color: #0F172A !important; }
+
+    div[data-baseweb="textarea"] textarea, .stTextArea textarea, .stTextInput input, .stNumberInput input, .stSelectbox div { background-color: #ffffff !important; color: #1E293B !important; -webkit-text-fill-color: #1E293B !important; border: 1px solid #E2E8F0 !important; }
+}
 </style>
 """
-st.markdown(glassmorphism_css, unsafe_allow_html=True)
+st.markdown(responsive_theme_css, unsafe_allow_html=True)
 
 # ==========================================
-# 3. 파싱 및 연산 함수 모음 
+# 3. 파싱 및 연산 함수 모음 (변경 없음)
 # ==========================================
 def extract_keywords_from_titles(titles, top_n=6):
     try:
@@ -202,11 +239,11 @@ def get_macro_snapshot():
 
 def render_compact_metric(title, data):
     if data['val'] == "정보 불가":
-        return f"""<div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 12px 16px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;"><div style="color: #cbd5e1; font-size: 15px; font-weight: 600;">{title}</div><div style="text-align: right;"><div style="color: #ff4d4d; font-size: 13px; font-weight: 600;">(업데이트 전)</div></div></div>"""
+        return f"""<div style="background: rgba(128, 128, 128, 0.05); border: 1px solid rgba(128, 128, 128, 0.1); border-radius: 8px; padding: 12px 16px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;"><div style="font-size: 15px; font-weight: 600;">{title}</div><div style="text-align: right;"><div style="color: #ff4d4d; font-size: 13px; font-weight: 600;">(업데이트 전)</div></div></div>"""
     color = "#ff4d4d" if data['is_up'] else "#4da6ff"
     arrow = "▲" if data['is_up'] else "▼"
     delta_str = str(data['delta']).replace('+', '').replace('-', '')
-    return f"""<div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 12px 16px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;"><div style="color: #cbd5e1; font-size: 15px; font-weight: 600;">{title}</div><div style="text-align: right;"><div style="color: #ffffff; font-size: 17px; font-weight: 800;">{data['val']}</div><div style="color: {color}; font-size: 12px; font-weight: 600; margin-top: 2px;">{arrow} {delta_str} ({data['pct']})</div></div></div>"""
+    return f"""<div style="background: rgba(128, 128, 128, 0.05); border: 1px solid rgba(128, 128, 128, 0.1); border-radius: 8px; padding: 12px 16px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;"><div style="font-size: 15px; font-weight: 600;">{title}</div><div style="text-align: right;"><div style="font-size: 17px; font-weight: 800;">{data['val']}</div><div style="color: {color}; font-size: 12px; font-weight: 600; margin-top: 2px;">{arrow} {delta_str} ({data['pct']})</div></div></div>"""
 
 @st.cache_data(ttl=3600)
 def get_realtime_news(keyword="ETF", timeframe="7d", max_items=12):
@@ -371,18 +408,30 @@ def parse_week_range(w_str, year):
         return None, None
 
 # =========================================================================
-# 4. 화면 분할 (우측 패널)
+# 4. 화면 분할 (메인 콘텐츠 8.75 : 우측 패널 1.25)
 # =========================================================================
-col_main, col_right = st.columns([9.0, 1.0])
+col_main, col_right = st.columns([8.75, 1.25])
 
 with col_right:
-    st.markdown("""<div style='text-align: right; margin-bottom: 20px;'><h2 style='font-weight: 800; font-size: 16px; line-height: 1.1; letter-spacing: -1px; background: linear-gradient(to right, #ffffff, #93c5fd); -webkit-background-clip: text; -webkit-text-fill-color: transparent;'>SAMSUNG AMC<br>Intelligence</h2></div>""", unsafe_allow_html=True)
+    # 사이즈 매칭 및 정렬
+    st.markdown(
+        """
+        <div style='text-align: right; margin-bottom: 25px;'>
+            <span style='font-size: 23px; font-weight: 800; letter-spacing: -0.5px; line-height: 1.3;'>
+                SAMSUNG AMC<br>Intelligence
+            </span>
+        </div>
+        """, 
+        unsafe_allow_html=True
+    )
     
     placeholder_week_dropdown = st.empty()
     placeholder_excel_upload = st.empty()
     
     with placeholder_excel_upload.container():
-        st.text_input("🔗 1. 이벤트 시트 (공유 링크)", key="sheet_url_global", placeholder="https://docs.google.com/...")
+        # 디폴트 시트 링크 세팅
+        default_sheet_url = "https://docs.google.com/spreadsheets/d/1vbgATMYbSBBh3VsYyBIaPslPnmJ0nzhdlpyflcW6-kk/edit?usp=sharing"
+        st.text_input("🔗 1. 이벤트 시트 (공유 링크)", value=default_sheet_url, key="sheet_url_global")
         
         uploaded_excel = st.file_uploader("📈 2. 주간 순매수 엑셀", type=["xlsx", "xls"], key="excel_global")
         available_weeks = ["데이터 없음"]
@@ -397,6 +446,21 @@ with col_right:
         
     uploaded_dls = st.file_uploader("🔍 3. DataLab 다중 비교", type=["csv", "xlsx", "xls"], key="dl_global", accept_multiple_files=True)
     uploaded_voc = st.file_uploader("💬 4. 종토방 VOC 엑셀", type=["xlsx", "xls"], key="voc_global")
+
+    # 사이드바 하단 텍스트 (위 타이틀과 크기 동일 매칭)
+    st.markdown(
+        """
+        <div style='margin-top: 80px; padding-top: 20px; border-top: 1px solid rgba(128,128,128,0.15); text-align: right;'>
+            <div style='font-size: 23px; font-weight: 800; margin-bottom: 12px; letter-spacing: -0.5px;'>
+                커리어하이
+            </div>
+            <div style='font-size: 23px; font-weight: 800; letter-spacing: -0.5px;'>
+                삼성자산운용
+            </div>
+        </div>
+        """, 
+        unsafe_allow_html=True
+    )
 
 # =========================================================================
 # 5. 메인 패널 
