@@ -1732,6 +1732,7 @@ with col_main:
             
         st.info(f"💡 **프록시 선정 논리(AI 프롬프트 연동):** {st.session_state.p_proxy_reason}")
 
+        # [수정 영역] 상품 기획 탭에도 AI 프롬프트 서브탭 추가
         sub_tabs_plan = st.tabs([
             "📡 1. 규제 공백 및 신상품 모니터링", 
             "🔍 2. 기존 프록시 기반 상품 구조화 (Proxy Simulator)", 
@@ -1744,12 +1745,7 @@ with col_main:
             st.markdown("### 🇺🇸 혁신 구조 공백 분석 (Mega Trends vs 당사 라인업)")
             st.caption("시장에서 자금이 유입되는 혁신 테마 중, 국내 시장 및 자사 라인업에 공백이 있는 영역을 모니터링합니다.")
             
-            # [수정 5] 규제 공백 분석 테이블 동적 할당 (커스텀 입력 반영)
             raw_keywords = ["타겟 인컴 ETF 버퍼형", "0DTE 초단기 옵션 커버드콜 ETF", "가상자산 비트코인 현물 ETF", "BDC 기업성장집합투자기구 대체투자", "하방 방어형 100% 버퍼 ETF"]
-            base_themes = ["사모신용 (BDC)", "대출채권담보부증권 (CLO)", "상장 실물자산 (Listed Real Assets)", "특수 목적 리츠 (통신탑/데이터센터)", "국내 배당/그룹 테마 (SK그룹 등)"]
-            
-            if asset_class not in raw_keywords and asset_class not in base_themes:
-                raw_keywords.insert(0, asset_class)
             
             search_kw_map = {
                 "사모신용 (BDC)": '"사모신용" OR "BDC"',
@@ -1775,24 +1771,12 @@ with col_main:
                     temp_news = get_realtime_news(search_query, timeframe="14d", max_items=5)
                     c = len(temp_news) if not temp_news.empty and temp_news.iloc[0]["게시일 / 출처"] != "-" else 0
                     trend_strengths.append("🔥🔥🔥 최고조" if c >= 3 else ("🔥🔥 강세" if c >= 1 else "🔥 꾸준함"))
-            
-            # 동적 테이블 생성
-            lineup_status = ["공백 (0개)"] * len(raw_keywords)
-            action_plans = ["즉시 벤치마킹 기획 가동"] * len(raw_keywords)
-            
-            # 기존 하드코딩 값 매핑 유지 (디테일)
-            for i, kw in enumerate(raw_keywords):
-                if kw == "0DTE 초단기 옵션 커버드콜 ETF": lineup_status[i], action_plans[i] = "일부 유사 (1개)", "분배율 메시지 고도화"
-                elif kw == "가상자산 비트코인 현물 ETF": lineup_status[i], action_plans[i] = "규제 한계 (0개)", "정책 완화 시그널 추적"
-                elif kw == "BDC 기업성장집합투자기구 대체투자": lineup_status[i], action_plans[i] = "규제 한계 (0개)", "법안 통과 즉시 선점"
-                elif kw == "하방 방어형 100% 버퍼 ETF": lineup_status[i], action_plans[i] = "공백 (0개)", "하락장 방어 포트폴리오 설계"
-                elif kw == asset_class and kw not in base_themes: lineup_status[i], action_plans[i] = "확인 필요 (신규 검토)", "시장성 및 규제 검토 즉시 착수"
-
+                    
             st.dataframe(pd.DataFrame({
                 "혁신 상품 구조 (메가 트렌드)": raw_keywords, 
                 "최근 뉴스 기반 유입 강도": trend_strengths, 
-                "당사 라인업 현황": lineup_status, 
-                "전략적 제언 (Action Plan)": action_plans
+                "당사 라인업 현황": ["공백 (0개)", "일부 유사 (1개)", "규제 한계 (0개)", "규제 한계 (0개)", "공백 (0개)"], 
+                "전략적 제언 (Action Plan)": ["즉시 벤치마킹 기획 가동", "분배율 메시지 고도화", "정책 완화 시그널 추적", "법안 통과 즉시 선점", "하락장 방어 포트폴리오 설계"]
             }), use_container_width=True, hide_index=True)
             
             st.divider()
@@ -1914,14 +1898,11 @@ with col_main:
                                 
                                 port_cum = (1 + port_daily).cumprod() * 100
                                 discount_array = (1 - lp_cost/100) ** (np.arange(len(port_cum)) / 252)
-                                port_cum = port_cum * discount_array # FDR Close 데이터이므로 이미 Price Return임
+                                port_cum = port_cum * discount_array
                                 
                                 dates = port_cum.index
                                 port_vol = np.std(port_daily) * np.sqrt(252)
-                                
-                                # [수정 3] 연환산 수익률(CAGR) 3년 하드코딩 제거 (유동적 경과시간 반영)
-                                years_elapsed = (dates[-1] - dates[0]).days / 365.25 if len(dates) > 1 else 1
-                                ann_ret = (port_cum.iloc[-1] / 100) ** (1 / years_elapsed) - 1
+                                ann_ret = (port_cum.iloc[-1] / 100) ** (1/3) - 1
                                 sharpe = (ann_ret - 0.035) / port_vol if port_vol > 0 else 0
                                 mdd = (port_cum / np.maximum.accumulate(port_cum) - 1).min() * 100
                                 backtest_success = True
@@ -1934,21 +1915,19 @@ with col_main:
                         st.session_state.p_sharpe = round(sharpe, 2)
                         st.session_state.p_mdd = round(mdd, 1)
 
-                        # [수정 1] Price Return과 Total Return 분해 로직 수정 (Bottom-up Add 방식)
                         daily_yield = annual_yield / 252
-                        income_pts = 100 * (((1 + daily_yield) ** np.arange(len(port_cum))) - 1) # 누적 인컴 포인트
-                        
-                        price_return_pct = port_cum.values - 100 # 순수 주가 수익률
-                        total_return_pct = price_return_pct + income_pts # 주가 수익률 + 배당(인컴)
+                        income_return = (np.cumprod(1 + np.full(len(port_cum), daily_yield)) * 100) - 100
+                        total_return_pct = port_cum.values - 100
+                        price_return = total_return_pct - income_return
                         
                         fig_decomp = go.Figure()
-                        fig_decomp.add_trace(go.Scatter(x=dates, y=price_return_pct, mode='lines', stackgroup='one', name='누적 자본 차익 (Price Return)', line=dict(color='#4da6ff')))
-                        fig_decomp.add_trace(go.Scatter(x=dates, y=income_pts, mode='lines', stackgroup='one', name=f'누적 배당/이자 (연 {annual_yield*100:.1f}%)', line=dict(color='#ffb04d')))
+                        fig_decomp.add_trace(go.Scatter(x=dates, y=income_return, mode='lines', stackgroup='one', name=f'누적 배당/이자 (연 {annual_yield*100:.1f}%)', line=dict(color='#ffb04d')))
+                        fig_decomp.add_trace(go.Scatter(x=dates, y=price_return, mode='lines', stackgroup='one', name='누적 자본 차익 (가격변동)', line=dict(color='#4da6ff')))
                         fig_decomp.update_layout(height=250, margin=dict(t=10,b=10,l=10,r=10), yaxis_title="누적 수익률 (%)", xaxis_title="", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                         st.plotly_chart(fig_decomp, use_container_width=True)
 
                         cc1, cc2 = st.columns(2)
-                        cc1.metric("샤프 비율 (연환산 자동조정)", f"{st.session_state.p_sharpe}")
+                        cc1.metric("샤프 비율", f"{st.session_state.p_sharpe}")
                         cc2.metric("실증 최대 낙폭(MDD)", f"{st.session_state.p_mdd}%")
 
             with c_bt2:
@@ -2005,7 +1984,7 @@ with col_main:
                         st.markdown("**⚙️ 옵션 파라미터 설정**")
                         if "Covered Call" in opt_strategy:
                             strike_pct = st.slider("콜옵션 행사가격 (월간 OTM, %)", 0.0, 10.0, 2.0, 0.5)
-                            premium = st.slider("수취 프리미엄 (월간, %)", 0.10, 5.00, 0.35, 0.05)
+                            premium = st.slider("수취 프리미엄 (월간, %)", 0.1, 5.0, 1.5, 0.1)
                         else:
                             buffer_pct = st.slider("하방 방어 수준 (연간 Buffer, %)", 5.0, 20.0, 10.0, 1.0)
                             cap_pct = st.slider("상방 제한 수준 (연간 Cap, %)", 5.0, 15.0, 8.0, 1.0)
@@ -2030,17 +2009,7 @@ with col_main:
                 
                 c_fx1, c_fx2 = st.columns([1, 2])
                 with c_fx1:
-                    # [수정 2] 환율(USD/KRW) 시뮬레이션 화폐 단위 충돌 방지 (예외 처리)
-                    proxy_ticker = str(st.session_state.p_proxy)
-                    is_domestic = any(char.isdigit() for char in proxy_ticker) or ".KS" in proxy_ticker or ".KQ" in proxy_ticker
-                    
-                    if is_domestic:
-                        fx_strategy = "국내 자산 (원화 Base)"
-                        st.selectbox("환율 전략 선택:", ["국내 자산 (원화 Base)"], disabled=True, help="기초자산이 국내 종목이므로 환율 시뮬레이션이 비활성화됩니다.")
-                        st.info("💡 선택된 기초자산이 한국 종목으로 감지되어 자동으로 '국내 원화 Base' 로직이 적용됩니다.")
-                    else:
-                        fx_strategy = st.selectbox("환율 전략 선택:", ["환노출 (Unhedged - 환차익/차손 노출)", "환헤지 (Hedged - 변동성 제거)", "국내 자산 (원화 Base)"])
-                    
+                    fx_strategy = st.selectbox("환율 전략 선택:", ["환노출 (Unhedged - 환차익/차손 노출)", "환헤지 (Hedged - 변동성 제거)", "국내 자산 (원화 Base)"])
                     st.session_state.p_fx = fx_strategy
                     ter = st.slider("예상 총보수율 (TER, %)", 0.1, 1.5, 0.45, 0.05)
                     fx_hedge_cost = 2.0 if "환헤지" in fx_strategy else 0.0
@@ -2146,12 +2115,15 @@ with col_main:
             with st.container(border=True):
                 st.markdown("#### 1. 퀀트 시뮬레이션 컨트롤 패널 (Total Return 기반 분해)")
                 
-                sandbox_tickers_input = st.text_input("📌 지수 편입 종목 (전 세계 주식/ETF 티커를 쉼표(,)로 구분):", value="AMT, CCI, SRVR")
+                sandbox_tickers_input = st.text_input("📌 지수 편입 종목 (쉼표로 구분):", value="AMT, CCI, EQIX, DLR")
                 sandbox_tickers = [t.strip().upper() for t in sandbox_tickers_input.split(",") if t.strip()]
+                
+                sandbox_weights_input = st.text_input("⚖️ 종목별 편입 비중 (티커 순서대로 쉼표로 구분, 단위: %):", value="25, 25, 25, 25")
+                raw_weights = [float(w.strip()) for w in sandbox_weights_input.split(",") if w.strip()]
                 
                 col_sb1, col_sb2, col_sb3 = st.columns([1, 1, 1])
                 with col_sb1:
-                    sandbox_weight = st.selectbox("⚖️ 비중 배분 룰:", ["동일 가중 (Equal Weight)", "시가총액 가중 방식 (Cap-weighted)"])
+                    sandbox_weight = st.selectbox("⚖️ 비중 배분 룰:", ["사용자 지정 비중 (Custom Weights)", "동일 가중 (Equal Weight)", "시가총액 가중 방식 (Cap-weighted)"])
                 with col_sb2:
                     sandbox_div = st.slider("💰 포트폴리오 예상 연 배당수익률 (%)", 0.0, 15.0, 8.5, 0.5, help="배당이 제외된 주가 궤적(Price Return) 위에 누적 인컴(Income) 면적으로 독립 시각화됩니다.")
                 with col_sb3:
@@ -2179,18 +2151,19 @@ with col_main:
                             pass 
                     
                     if len(df_list) > 0:
-                        # [수정 4] 샌드박스의 dropna() 증발 현상 방지 및 결측치 보간
-                        df_merged = pd.concat(df_list, axis=1)
-                        first_valid_indices = df_merged.apply(lambda x: x.first_valid_index())
-                        max_start_date = first_valid_indices.max()
+                        df_merged = pd.concat(df_list, axis=1).dropna()
                         
-                        if max_start_date > pd.to_datetime(start_dt) + timedelta(days=15):
-                            st.warning(f"⚠️ 일부 편입 종목의 상장일이 짧아, 전체 포트폴리오 백테스트 기준일이 {max_start_date.strftime('%Y-%m-%d')} 로 자동 단축 조정되었습니다.")
-                        
-                        # 결측치 보간 및 시작점 맞춤
-                        df_merged = df_merged.loc[max_start_date:].ffill().bfill()
-                        
-                        weights = np.array([1/len(valid_tickers)] * len(valid_tickers))
+                        if sandbox_weight == "사용자 지정 비중 (Custom Weights)":
+                            if len(raw_weights) == len(sandbox_tickers):
+                                ticker_weight_map = dict(zip(sandbox_tickers, raw_weights))
+                                valid_weights = [ticker_weight_map[t] for t in valid_tickers]
+                                total_w = sum(valid_weights)
+                                weights = np.array([(w / total_w) for w in valid_weights])
+                            else:
+                                st.error("⚠️ 티커 개수와 비중 개수가 일치하지 않습니다. 동일 가중(1/N)으로 임시 계산합니다.")
+                                weights = np.array([1/len(valid_tickers)] * len(valid_tickers))
+                        else:
+                            weights = np.array([1/len(valid_tickers)] * len(valid_tickers))
                         
                         port_daily_ret_price = df_merged.dot(weights)
                         
@@ -2245,7 +2218,7 @@ with col_main:
                                     buttons=list([
                                         dict(count=6, label="6개월", step="month", stepmode="backward"),
                                         dict(count=1, label="1년", step="year", stepmode="backward"),
-                                        dict(step="all", label="전체")
+                                        dict(step="all", label="전체(3년)")
                                     ]),
                                     bgcolor="#1e3a8a", activecolor="#3b82f6", font=dict(color="white")
                                 )
@@ -2264,8 +2237,8 @@ with col_main:
                             c_m1, c_m2, c_m3, c_m4 = st.columns(4)
                             final_base = base_cum_returns_price.iloc[-1]
                             mdd_base = (base_cum_returns_price / np.maximum.accumulate(base_cum_returns_price) - 1).min() * 100
-                            years_elapsed_sb = years[-1] if years[-1] > 0 else 1
-                            cagr_price = ((final_base/100)**(1/years_elapsed_sb)-1)*100
+                            years_elapsed = years[-1] if years[-1] > 0 else 1
+                            cagr_price = ((final_base/100)**(1/years_elapsed)-1)*100
                             
                             c_m1.metric("연환산 주가 수익률 (Price CAGR)", f"{cagr_price:.1f}%")
                             c_m2.metric("최종 총수익률 (Total Return)", f"{y_total.iloc[-1]:.1f}%", f"배당(인컴) 분해 적용")
@@ -2284,14 +2257,10 @@ with col_main:
             else:
                 st.info("👉 편입할 티커를 하나 이상 입력해주세요.")
 
-        # [수정 6] 프롬프트 상태 백지화 방어 코드 추가
+        # [신규 통합] 🌟 상품 기획 마스터 프롬프트 하위 탭 
         with sub_tabs_plan[3]:
             st.markdown("#### [글로벌 대체자산 ETF 상품기획 프롬프트 - 5-Step 체인]")
             st.caption("대시보드에서 산출된 퀀트 수치, 동적 P&L, 샌드박스 편입 종목 등의 Raw Data를 프롬프트에 꽉 채워 넣었습니다. 순서대로 복사하여 AI에 입력하세요.")
-
-            # 사전 탭(시뮬레이션 탭) 미수행 시 경고문 렌더링
-            if st.session_state.get('p_sharpe', 0.0) == 0.0 or st.session_state.get('p_profit', 0.0) == 0.0:
-                st.warning("⚠️ 백테스트 및 P&L 시뮬레이션을 먼저 실행(렌더링)해야 퀀트 데이터가 포함된 완벽한 프롬프트가 생성됩니다. '2. 기존 프록시 기반 상품 구조화' 탭을 먼저 확인해 주세요.")
 
             with st.container(border=True):
                 st.markdown("##### 💡 0. 기획 상품 핵심 컨셉 요약 (AI 주입용)")
@@ -2307,6 +2276,7 @@ with col_main:
 
             trend_label = st.session_state.get('selected_trend_label', '혁신 타겟 인컴')
             
+            # 여기서도 동기화
             if asset_class not in search_kw_map:
                 search_kw_map[asset_class] = f'"{asset_class}"'
                 
