@@ -1732,7 +1732,7 @@ with col_main:
             
         st.info(f"💡 **프록시 선정 논리(AI 프롬프트 연동):** {st.session_state.p_proxy_reason}")
 
-        # [수정 영역] 상품 기획 탭에도 AI 프롬프트 서브탭 추가
+        # 상품 기획 탭 추가
         sub_tabs_plan = st.tabs([
             "📡 1. 규제 공백 및 신상품 모니터링", 
             "🔍 2. 기존 프록시 기반 상품 구조화 (Proxy Simulator)", 
@@ -2041,58 +2041,85 @@ with col_main:
                         st.warning("상단 백테스트 데이터가 없어 환율 궤적을 그릴 수 없습니다.")
 
             with st.container(border=True):
-                st.markdown("**🏢 자산운용사(AMC) 수지 분석 및 피어(Peer) 타겟팅**")
-                c_pl_left, c_pl_right = st.columns(2)
+                st.markdown("**🏢 자산운용사(AMC) 수지 분석 (1년 차 vs 안정화 기간)**")
                 
-                with c_pl_left:
-                    col_tgt1, col_tgt2 = st.columns(2)
-                    with col_tgt1:
-                        comp_ticker = st.text_input("타겟 경쟁사 ETF 티커", value="TIGER 미국MSCI리츠")
-                        st.session_state.p_comp_ticker = comp_ticker
-                    with col_tgt2:
-                        comp_ter = st.number_input("경쟁사 보수율 (%)", value=0.50, step=0.01)
-                        st.session_state.p_comp_ter = comp_ter
-                        
-                    target_aum = st.number_input("1년 차 당사 타겟 AUM (억원)", value=1500, step=100)
+                col_in1, col_in2, col_in3 = st.columns(3)
+                
+                with col_in1:
+                    comp_ticker = st.text_input("타겟 경쟁사 ETF 티커", value="TIGER 미국MSCI리츠")
+                    st.session_state.p_comp_ticker = comp_ticker
+                    comp_ter = st.number_input("경쟁사 보수율 (%)", value=0.50, step=0.01)
+                    st.session_state.p_comp_ter = comp_ter
+                    
+                with col_in2:
+                    target_aum = st.number_input("당사 유지 타겟 AUM (억원)", value=1500, step=100)
                     st.session_state.p_aum = target_aum
+                    mkt_cost_y1 = st.number_input("1년 차 런칭 마케팅 예산 (억원)", value=3.0, step=0.5)
+                    st.session_state.p_launch_budget = mkt_cost_y1
                     
-                    mkt_cost = st.number_input("초기 런칭 마케팅 예산 (억원)", value=3.0, step=0.5)
-                    st.session_state.p_launch_budget = mkt_cost
-                    
+                with col_in3:
                     ter_diff = comp_ter - ter
                     if ter_diff > 0:
-                        st.success(f"🔥 가격 경쟁력 확보: 경쟁사 대비 보수율이 {ter_diff:.2f}% 저렴합니다.")
+                        st.success(f"🔥 가격 경쟁력 확보: 경쟁사 대비 {ter_diff:.2f}% 저렴합니다.")
                     else:
                         st.warning(f"⚠️ 보수율 열위: 경쟁사 대비 보수율이 높거나 같으므로 차별화 포인트가 필요합니다.")
                     
                     amc_margin = ter - 0.05
-                    fixed_cost = 2.0  # 지수 산출 의뢰 비용(0.5억) 반영
-                    
                     expected_revenue = target_aum * (amc_margin / 100)
-                    net_profit = expected_revenue - fixed_cost - mkt_cost
-                    st.session_state.p_profit = round(net_profit, 2)
+                    
+                    # 1년 차 계산
+                    fixed_cost_y1 = 2.0  # 지수 산출 의뢰 비용(0.5억) 반영
+                    profit_y1 = expected_revenue - fixed_cost_y1 - mkt_cost_y1
+                    st.session_state.p_profit_y1 = round(profit_y1, 2)
+                    
+                    # 2년 차(안정화) 계산
+                    fixed_cost_y2 = 1.5  # 지수 유지비용만 반영
+                    mkt_cost_y2 = 0.5    # 리텐션 마케팅 비용
+                    profit_y2 = expected_revenue - fixed_cost_y2 - mkt_cost_y2
+                    st.session_state.p_profit_y2 = round(profit_y2, 2)
                     
                     if amc_margin > 0:
-                        bep_aum = (fixed_cost + mkt_cost) / (amc_margin / 100)
-                        st.info(f"💡 **BEP(손익분기점) 달성 필요 AUM:** 약 {bep_aum:,.0f}억 원")
+                        bep_aum = (fixed_cost_y1 + mkt_cost_y1) / (amc_margin / 100)
+                        st.info(f"💡 **1년 차 BEP(손익분기점) 달성 필요 AUM:** 약 {bep_aum:,.0f}억 원")
                     else:
                         st.error("마진이 0 또는 마이너스입니다. 보수율(TER)을 높이거나 고정비를 줄이세요.")
+
+                st.divider()
+                st.markdown("##### 📈 운용사 P&L 워터폴 시각화")
                 
-                with c_pl_right:
-                    fig_wf = go.Figure(go.Waterfall(
-                        name = "P&L", orientation = "v",
+                c_wf1, c_wf2 = st.columns(2)
+                
+                with c_wf1:
+                    fig_wf1 = go.Figure(go.Waterfall(
+                        name = "1년 차", orientation = "v",
                         measure = ["relative", "relative", "relative", "total"],
-                        x = ["총 운용수익", "고정/유지비용", "초기 런칭 예산", "최종 순이익"],
+                        x = ["총 운용수익", "고정비(개발비 포함)", "초기 런칭 예산", "최종 순이익"],
                         textposition = "outside",
-                        text = [f"+{expected_revenue:.1f}억", f"-{fixed_cost:.1f}억", f"-{mkt_cost:.1f}억", f"{net_profit:.1f}억"],
-                        y = [expected_revenue, -fixed_cost, -mkt_cost, net_profit],
+                        text = [f"+{expected_revenue:.1f}억", f"-{fixed_cost_y1:.1f}억", f"-{mkt_cost_y1:.1f}억", f"{profit_y1:.1f}억"],
+                        y = [expected_revenue, -fixed_cost_y1, -mkt_cost_y1, profit_y1],
                         connector = {"line":{"color":"rgba(255,255,255,0.2)"}},
                         decreasing = {"marker":{"color":"#ff4d4d"}},
                         increasing = {"marker":{"color":"#4da6ff"}},
-                        totals = {"marker":{"color":"#ffb04d" if net_profit > 0 else "gray"}}
+                        totals = {"marker":{"color":"#ffb04d" if profit_y1 > 0 else "gray"}}
                     ))
-                    fig_wf.update_layout(height=280, margin=dict(t=20, b=10, l=10, r=10), template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-                    st.plotly_chart(fig_wf, use_container_width=True)
+                    fig_wf1.update_layout(title="**[1년 차] 런칭 및 BEP 방어기**", title_x=0.5, height=320, margin=dict(t=40, b=20, l=10, r=10), template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                    st.plotly_chart(fig_wf1, use_container_width=True)
+
+                with c_wf2:
+                    fig_wf2 = go.Figure(go.Waterfall(
+                        name = "2년 차", orientation = "v",
+                        measure = ["relative", "relative", "relative", "total"],
+                        x = ["총 운용수익", "유지 고정비", "리텐션 마케팅", "최종 순이익"],
+                        textposition = "outside",
+                        text = [f"+{expected_revenue:.1f}억", f"-{fixed_cost_y2:.1f}억", f"-{mkt_cost_y2:.1f}억", f"{profit_y2:.1f}억"],
+                        y = [expected_revenue, -fixed_cost_y2, -mkt_cost_y2, profit_y2],
+                        connector = {"line":{"color":"rgba(255,255,255,0.2)"}},
+                        decreasing = {"marker":{"color":"#ff4d4d"}},
+                        increasing = {"marker":{"color":"#4da6ff"}},
+                        totals = {"marker":{"color":"#ffb04d" if profit_y2 > 0 else "gray"}}
+                    ))
+                    fig_wf2.update_layout(title="**[2년 차 이후] 안정화 및 캐시카우**", title_x=0.5, height=320, margin=dict(t=40, b=20, l=10, r=10), template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                    st.plotly_chart(fig_wf2, use_container_width=True)
 
             with st.container(border=True):
                 st.markdown("##### 📄 Simulated Product Factsheet")
@@ -2344,7 +2371,7 @@ with col_main:
             st.code(p2_step3, language="text")
 
             st.markdown("**📌 [Step 4: 상품 구조화 및 운용사 동적 P&L 분석]**")
-            st.warning("📸 **[필수 스크린샷 첨부]** **'P&L 폭포수(Waterfall) 차트'** 이미지를 캡처하여 프롬프트와 함께 첨부해 주세요!")
+            st.warning("📸 **[필수 스크린샷 첨부]** **'P&L 워터폴(1년 차 vs 2년 차)'** 이미지를 캡처하여 프롬프트와 함께 첨부해 주세요!")
             
             p2_step4 = f"""네 번째 작업으로, 실질적인 상품 런칭 및 재무 타당성을 다루는 **[4. 상품 구조화 및 운용사 비즈니스 모델]** 파트를 경영진 보고용으로 작성해 줘.
 
@@ -2354,22 +2381,23 @@ with col_main:
 [운용사 동적 P&L 시뮬레이션 Raw Data]:
 - 타겟 경쟁사 티커: {st.session_state.get('p_comp_ticker', '유사ETF')}
 - 경쟁사 보수율: {st.session_state.get('p_comp_ter', 0.50)}%
-- 당사 1년 차 타겟 AUM: {st.session_state.get('p_aum', 1500)} 억 원
-- 초기 런칭 마케팅 예산: {st.session_state.get('p_launch_budget', 3.0):.2f} 억 원
-- 운용사 예상 최종 순이익(비용 차감 후): {st.session_state.get('p_profit', 0.0)} 억 원
-- 고정비 내역: 커스텀 지수 의뢰 초기 개발비(Upfront Fee) 0.5억 원 포함
+- 당사 유지 타겟 AUM: {st.session_state.get('p_aum', 1500)} 억 원
+- 1년 차(런칭기) 총비용: 초기 마케팅 {st.session_state.get('p_launch_budget', 3.0):.2f}억 + 고정비 2.0억(지수개발비 포함)
+- 1년 차(런칭기) 예상 순이익: {st.session_state.get('p_profit_y1', 0.0)} 억 원
+- 2년 차(안정기) 총비용: 리텐션 마케팅 0.5억 + 유지 고정비 1.5억
+- 2년 차(안정기) 예상 순이익: {st.session_state.get('p_profit_y2', 0.0)} 억 원
 
 [지시사항]: 
 1) 채택된 환율 전략({st.session_state.get('p_fx', '환노출')})과 인컴 속성을 고려할 때, 고객의 세후 수익률 측면에서 유리한 연금/ISA 채널 타겟팅 전략을 서술할 것.
 2) 입력된 P&L Raw Data와 당사의 보수율 경쟁력을 기반으로 AUM 뺏어오기(Switching) 영업 전략을 구체화할 것.
-3) 내가 함께 첨부한 'P&L 폭포수(Waterfall) 차트' 이미지를 근거로 삼아, 이번에 책정된 마케팅 집행 예산({st.session_state.get('p_launch_budget', 3.0):.2f} 억 원)이 시장 점유율 확보와 BEP(손익분기점) 달성 관점에서 왜 합리적이고 타당한 투자인지 임원진을 강력하게 설득할 것."""
+3) 내가 함께 첨부한 'P&L 워터폴(1년 차 vs 2년 차)' 이미지를 근거로 삼아, 1년 차에는 지수 개발비 등 막대한 초기 비용을 감수하고도 BEP를 방어하며(Survival), 2년 차 안정화 기간부터는 마케팅/고정비가 축소되어 마진이 극대화되는 '캐시카우(Cash Cow)' 비즈니스 구조임을 임원진에게 강력하게 어필할 것."""
             st.code(p2_step4, language="text")
 
             st.markdown("**📌 [Step 5: 요약 보고서 및 투트랙 팩트시트 산출]**")
             p2_step5 = """마지막 작업이야. Step 1부터 Step 4까지 전개한 모든 퀀트 논리와 주입된 Raw Data를 총망라하여, 다음 두 가지 실무 산출물을 각각 분리해서 최종 완성해 줘.
 
 1. **[Executive Summary (임원 보고용 요약본)]**: 
-   본부장 및 C-Level 임원진이 1분 안에 의사결정을 내릴 수 있도록 1페이지 분량으로 요약된 공문서. (출시 당위성, 핵심 퀀트 성과, P&L 기반 BEP 달성 및 경쟁사 타겟팅 전략이 일목요연하게 정리되어야 함)
+   본부장 및 C-Level 임원진이 1분 안에 의사결정을 내릴 수 있도록 1페이지 분량으로 요약된 공문서. (출시 당위성, 핵심 퀀트 성과, 1년 차 BEP 달성 및 2년 차 흑자 전환 구조, 경쟁사 타겟팅 전략이 일목요연하게 정리되어야 함)
 
 2. **[Two-Track Sales Factsheet (투트랙 세일즈 팩트시트)]**: 
    - **리테일/PB용 (1p):** 일반 고객을 사로잡을 직관적인 카피라이팅, 핵심 소구 포인트 3가지, 투자 위험도 및 세금(Tax) 혜택 활용법을 알기 쉽게 도출.
