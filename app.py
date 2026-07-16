@@ -1851,23 +1851,23 @@ with col_main:
                 with c_s1:
                     st.markdown("**🔍 기초자산 펀더멘털 스크리닝 (허들 설정)**")
                     st.caption("AI를 통한 실제 종목 필터링 지시 기준이 될 재무 비율을 설정합니다.")
-                    ltv_limit = st.slider("[AI 유니버스 필터링 지시용] 최대 LTV (부채비율) 한도 (%)", 10, 80, 40, step=5)
-                    fcf_limit = st.slider("[AI 유니버스 필터링 지시용] 최소 잉여현금흐름(FCF) 마진 (%)", 0, 30, 10, step=1)
+                    ltv_limit = st.slider("[AI 유니버스 필터링 지시용] 최대 LTV (부채비율) 한도 (%)", 10, 80, 45, step=5)
+                    fcf_limit = st.slider("[AI 유니버스 필터링 지시용] 최소 잉여현금흐름(FCF) 마진 (%)", 0, 30, 15, step=1)
                     st.session_state.p_ltv = ltv_limit
                     st.session_state.p_fcf = fcf_limit
                 with c_s2:
                     st.markdown("**⚖️ 포트폴리오 가중치 및 리스크 통제**")
                     weight_opt = st.selectbox("비중 배분 방식 선택:", [
-                        "시가총액 가중 방식 (Cap-weighted)",
                         "Top 3 핵심종목 75% 편중 (Akros Core-Satellite)",
+                        "시가총액 가중 방식 (Cap-weighted)",
                         "Log-Market Cap 기반 비선형 가중 (대형주 쏠림 방지)"
                     ])
                     st.session_state.p_weight = weight_opt
-                    cap_limit = st.slider("단일 종목 최대 편입 상한선 (Cap, %)", 10, 30, 20, step=1)
+                    cap_limit = st.slider("단일 종목 최대 편입 상한선 (Cap, %)", 10, 30, 25, step=1)
                     st.session_state.p_cap = cap_limit
                     
                 st.info("💡 **안내:** 본 대시보드의 백테스트 차트는 대표 프록시 ETF의 실제 과거 수익률을 추종합니다. 위 슬라이더로 설정한 펀더멘털 룰은 차트를 실시간으로 변경하지 않으며, 하단의 'AI 기획서 프롬프트'에 조건값으로 주입되어 최종 기획서 작성에 활용됩니다.")
-                st.session_state.p_has_csv = st.checkbox("✅ 외부 AI(ChatGPT 등)에 유니버스 엑셀 파일을 직접 첨부할 예정입니다.", value=True)
+                st.session_state.p_has_csv = st.checkbox("✅ 외부 AI(ChatGPT 등)에 유니버스 엑셀 파일을 직접 첨부할 예정입니다.", value=False)
 
             st.divider()
 
@@ -1934,8 +1934,8 @@ with col_main:
                 with st.container(height=550, border=True):
                     st.markdown("**🌪️ 매크로 스트레스 테스트 시나리오**")
                     scenario = st.selectbox("과거 위기 시나리오 국면을 선택하세요:", [
-                        "2020년 코로나 팬데믹 (글로벌 셧다운 및 신용경색)",
                         "2022년 급격한 금리 인상기 (인플레이션 쇼크)",
+                        "2020년 코로나 팬데믹 (글로벌 셧다운 및 신용경색)",
                         "2023년 실리콘밸리은행(SVB) 파산 (단기 유동성 위기)"
                     ])
                     st.session_state.p_scenario = scenario
@@ -1972,19 +1972,19 @@ with col_main:
 
             st.markdown("#### Step 3. 구조화, 세일즈 타겟팅 및 P&L")
             
-            with st.expander("➕ 파생상품(옵션) 오버레이 전략 추가하기 (선택형 심화 모듈)", expanded=False):
+            with st.expander("➕ 파생상품(옵션) 오버레이 전략 추가하기 (선택형 심화 모듈)", expanded=True):
                 st.markdown("**📈 옵션 페이오프(Payoff) 개념 구조도**")
                 st.caption("설정된 옵션 파라미터를 기반으로 만기 시점의 개념적인 수익률 페이오프 구조를 시각화합니다.")
                 
-                opt_strategy = st.radio("시뮬레이션 전략 선택:", ["적용 안 함 (순수 자산)", "초단기 커버드콜 (Covered Call)", "하방 방어형 (Buffer ETF)"], horizontal=True)
+                opt_strategy = st.radio("시뮬레이션 전략 선택:", ["초단기 커버드콜 (Covered Call)", "적용 안 함 (순수 자산)", "하방 방어형 (Buffer ETF)"], horizontal=True)
 
                 if opt_strategy != "적용 안 함 (순수 자산)":
                     c_opt1, c_opt2 = st.columns([1, 2])
                     with c_opt1:
                         st.markdown("**⚙️ 옵션 파라미터 설정**")
                         if "Covered Call" in opt_strategy:
-                            strike_pct = st.slider("콜옵션 행사가격 (월간 OTM, %)", 0.0, 10.0, 2.0, 0.5)
-                            premium = st.slider("수취 프리미엄 (월간, %)", 0.1, 5.0, 1.5, 0.1)
+                            strike_pct = st.slider("콜옵션 행사가격 (월간 OTM, %)", 0.0, 10.0, 3.0, 0.5)
+                            premium = st.slider("수취 프리미엄 (월간, %)", 0.1, 5.0, 0.35, 0.05)
                         else:
                             buffer_pct = st.slider("하방 방어 수준 (연간 Buffer, %)", 5.0, 20.0, 10.0, 1.0)
                             cap_pct = st.slider("상방 제한 수준 (연간 Cap, %)", 5.0, 15.0, 8.0, 1.0)
@@ -2011,7 +2011,7 @@ with col_main:
                 with c_fx1:
                     fx_strategy = st.selectbox("환율 전략 선택:", ["환노출 (Unhedged - 환차익/차손 노출)", "환헤지 (Hedged - 변동성 제거)", "국내 자산 (원화 Base)"])
                     st.session_state.p_fx = fx_strategy
-                    ter = st.slider("예상 총보수율 (TER, %)", 0.1, 1.5, 0.45, 0.05)
+                    ter = st.slider("예상 총보수율 (TER, %)", 0.1, 1.5, 0.40, 0.05)
                     fx_hedge_cost = 2.0 if "환헤지" in fx_strategy else 0.0
                     annual_yield = 8.0 if "BDC" in asset_class else 6.0
                     net_yield = annual_yield - ter - fx_hedge_cost
@@ -2047,16 +2047,16 @@ with col_main:
                 with c_pl_left:
                     col_tgt1, col_tgt2 = st.columns(2)
                     with col_tgt1:
-                        comp_ticker = st.text_input("타겟 경쟁사 ETF 티커", value="TIGER 유사ETF")
+                        comp_ticker = st.text_input("타겟 경쟁사 ETF 티커", value="TIGER 미국MSCI리츠")
                         st.session_state.p_comp_ticker = comp_ticker
                     with col_tgt2:
                         comp_ter = st.number_input("경쟁사 보수율 (%)", value=0.50, step=0.01)
                         st.session_state.p_comp_ter = comp_ter
                         
-                    target_aum = st.number_input("1년 차 당사 타겟 AUM (억원)", value=1000, step=100)
+                    target_aum = st.number_input("1년 차 당사 타겟 AUM (억원)", value=1500, step=100)
                     st.session_state.p_aum = target_aum
                     
-                    mkt_cost = st.number_input("초기 런칭 마케팅 예산 (억원)", value=2.0, step=0.5)
+                    mkt_cost = st.number_input("초기 런칭 마케팅 예산 (억원)", value=3.0, step=0.5)
                     st.session_state.p_launch_budget = mkt_cost
                     
                     ter_diff = comp_ter - ter
@@ -2066,7 +2066,7 @@ with col_main:
                         st.warning(f"⚠️ 보수율 열위: 경쟁사 대비 보수율이 높거나 같으므로 차별화 포인트가 필요합니다.")
                     
                     amc_margin = ter - 0.05
-                    fixed_cost = 1.5
+                    fixed_cost = 2.0  # 지수 산출 의뢰 비용(0.5억) 반영
                     
                     expected_revenue = target_aum * (amc_margin / 100)
                     net_profit = expected_revenue - fixed_cost - mkt_cost
@@ -2115,22 +2115,22 @@ with col_main:
             with st.container(border=True):
                 st.markdown("#### 1. 퀀트 시뮬레이션 컨트롤 패널 (Total Return 기반 분해)")
                 
-                sandbox_tickers_input = st.text_input("📌 지수 편입 종목 (쉼표로 구분):", value="AMT, CCI, EQIX, DLR")
+                sandbox_tickers_input = st.text_input("📌 지수 편입 종목 (쉼표로 구분):", value="AMT, CCI, EQIX, DLR, SBAC, IRM, DBRG, UNIT, CCOI, GLPI")
                 sandbox_tickers = [t.strip().upper() for t in sandbox_tickers_input.split(",") if t.strip()]
                 
-                sandbox_weights_input = st.text_input("⚖️ 종목별 편입 비중 (티커 순서대로 쉼표로 구분, 단위: %):", value="25, 25, 25, 25")
+                sandbox_weights_input = st.text_input("⚖️ 종목별 편입 비중 (티커 순서대로 쉼표로 구분, 단위: %):", value="25, 25, 25, 5, 5, 4, 3, 3, 3, 2")
                 raw_weights = [float(w.strip()) for w in sandbox_weights_input.split(",") if w.strip()]
                 
                 col_sb1, col_sb2, col_sb3 = st.columns([1, 1, 1])
                 with col_sb1:
                     sandbox_weight = st.selectbox("⚖️ 비중 배분 룰:", ["사용자 지정 비중 (Custom Weights)", "동일 가중 (Equal Weight)", "시가총액 가중 방식 (Cap-weighted)"])
                 with col_sb2:
-                    sandbox_div = st.slider("💰 포트폴리오 예상 연 배당수익률 (%)", 0.0, 15.0, 8.5, 0.5, help="배당이 제외된 주가 궤적(Price Return) 위에 누적 인컴(Income) 면적으로 독립 시각화됩니다.")
+                    sandbox_div = st.slider("💰 포트폴리오 예상 연 배당수익률 (%)", 0.0, 15.0, 7.5, 0.5, help="배당이 제외된 주가 궤적(Price Return) 위에 누적 인컴(Income) 면적으로 독립 시각화됩니다.")
                 with col_sb3:
-                    sandbox_error = st.slider("🌪️ 예상 오차율/마찰 비용 (Tracking Error, 연간 ±%)", 0.5, 5.0, 2.0, 0.5)
+                    sandbox_error = st.slider("🌪️ 예상 오차율/마찰 비용 (Tracking Error, 연간 ±%)", 0.5, 5.0, 2.5, 0.5)
                     sandbox_hedging = st.checkbox("🛡️ 환헤지 프리미엄 비용 차감 (연 -1.5%)")
                     
-                sandbox_rebal_cost = st.slider("🔄 연간 리밸런싱 마찰 비용 (Turnover Cost, %)", 0.0, 1.0, 0.3, 0.1, help="잦은 매매로 인해 깎여나가는 거래 비용을 일할 차감하여 백테스트의 보수성을 높입니다.")
+                sandbox_rebal_cost = st.slider("🔄 연간 리밸런싱 마찰 비용 (Turnover Cost, %)", 0.0, 1.0, 0.2, 0.1, help="잦은 매매로 인해 깎여나가는 거래 비용을 일할 차감하여 백테스트의 보수성을 높입니다.")
 
             st.markdown("#### 2. 하이브리드 시나리오 차트 및 복제 오차(TE) 모니터링")
             if len(sandbox_tickers) > 0:
@@ -2266,13 +2266,13 @@ with col_main:
                 st.markdown("##### 💡 0. 기획 상품 핵심 컨셉 요약 (AI 주입용)")
                 st.caption("여기에 작성한 컨셉이 아래 Step 1 프롬프트에 자동 반영되어 AI가 어떤 상품을 기획해야 하는지 뚜렷한 방향성을 잡아줍니다.")
                 user_idea = st.text_area("✍️ 기획하고자 하는 ETF의 핵심 아이디어를 자유롭게 적어주세요:", 
-                                         value="미국 사모신용 자산 중에서 부채비율(LTV)이 낮고 현금흐름이 탄탄해서 배당 지속성이 높은 우량 BDC 종목들을 모아서 지수를 짜고 싶어. 커버드콜 옵션도 살짝 섞을 거야.", height=80)
+                                         value="AI 전력난 수혜를 입는 미국 핵심 데이터센터와 통신탑 리츠에만 집중 투자. LTV 45% 이하, FCF 마진 15% 이상의 퀄리티 필터링 적용. 단일 종목 캡 25%를 엄수하여 Top 3 종목에 75%를 편중. OTM 초단기 커버드콜과 환노출 전략을 결합하여 연 7.5% 인컴과 하방 버퍼를 제공하는 프리미엄 커스텀 지수 ETF.", height=80)
 
             if st.session_state.get('p_has_csv', False):
                 st.error("📥 **[필수 엑셀 파일 첨부]** '외부 AI에 엑셀 첨부' 옵션을 체크하셨습니다. 프롬프트 입력 시 다운로드하신 **'기초자산 유니버스 엑셀(CSV) 파일'**을 대화창에 반드시 함께 업로드해 주세요!")
-                csv_directive = f"내가 함께 첨부한 유니버스 엑셀(CSV) 원본 데이터를 분석하여, 아래 펀더멘털 필터링 룰(LTV {st.session_state.get('p_ltv', 40)}% 이하, FCF 마진 {st.session_state.get('p_fcf', 10)}% 이상)을 통과한 최종 편입 종목의 리스트를 추출하고 기획서 포트폴리오 섹션에 표 형태로 출력할 것."
+                csv_directive = f"내가 함께 첨부한 유니버스 엑셀(CSV) 원본 데이터를 분석하여, 아래 펀더멘털 필터링 룰(LTV {st.session_state.get('p_ltv', 45)}% 이하, FCF 마진 {st.session_state.get('p_fcf', 15)}% 이상)을 통과한 최종 편입 종목의 리스트를 추출하고 기획서 포트폴리오 섹션에 표 형태로 출력할 것."
             else:
-                csv_directive = f"구체적인 개별 종목 데이터가 없으므로, 아래 펀더멘털 필터링 룰(LTV {st.session_state.get('p_ltv', 40)}% 이하, FCF 마진 {st.session_state.get('p_fcf', 10)}% 이상)을 적용했을 때 편입될 수 있는 대표적인 우량 기초자산들의 예시와 해당 필터링 방식의 논리적 타당성을 퀀트적 관점에서 서술할 것."
+                csv_directive = f"구체적인 개별 종목 데이터가 없으므로, 아래 펀더멘털 필터링 룰(LTV {st.session_state.get('p_ltv', 45)}% 이하, FCF 마진 {st.session_state.get('p_fcf', 15)}% 이상)을 적용했을 때 편입될 수 있는 대표적인 우량 기초자산들의 예시와 해당 필터링 방식의 논리적 타당성을 퀀트적 관점에서 서술할 것."
 
             trend_label = st.session_state.get('selected_trend_label', '혁신 타겟 인컴')
             
@@ -2312,12 +2312,12 @@ with col_main:
 - 선정 논리: {st.session_state.get('p_proxy_reason', '데이터 없음')}
 
 [펀더멘털 스크리닝 허들]: 
-- LTV(부채비율) {st.session_state.get('p_ltv', 40)}% 이하
-- 잉여현금흐름(FCF) 마진 {st.session_state.get('p_fcf', 10)}% 이상
+- LTV(부채비율) {st.session_state.get('p_ltv', 45)}% 이하
+- 잉여현금흐름(FCF) 마진 {st.session_state.get('p_fcf', 15)}% 이상
 
 [포트폴리오 가중치 및 리스크 통제 룰]:
 - 비중 배분: {st.session_state.get('p_weight', '데이터 없음')}
-- 단일 종목 상한선(Cap): {st.session_state.get('p_cap', 20)}%
+- 단일 종목 상한선(Cap): {st.session_state.get('p_cap', 25)}%
 
 [지시사항]: 
 {csv_directive}
@@ -2353,15 +2353,16 @@ with col_main:
 
 [운용사 동적 P&L 시뮬레이션 Raw Data]:
 - 타겟 경쟁사 티커: {st.session_state.get('p_comp_ticker', '유사ETF')}
-- 경쟁사 보수율: {st.session_state.get('p_comp_ter', 0.5)}%
-- 당사 1년 차 타겟 AUM: {st.session_state.get('p_aum', 1000)} 억 원
-- 초기 런칭 마케팅 예산: {st.session_state.get('p_launch_budget', 2.0):.2f} 억 원
+- 경쟁사 보수율: {st.session_state.get('p_comp_ter', 0.50)}%
+- 당사 1년 차 타겟 AUM: {st.session_state.get('p_aum', 1500)} 억 원
+- 초기 런칭 마케팅 예산: {st.session_state.get('p_launch_budget', 3.0):.2f} 억 원
 - 운용사 예상 최종 순이익(비용 차감 후): {st.session_state.get('p_profit', 0.0)} 억 원
+- 고정비 내역: 커스텀 지수 의뢰 초기 개발비(Upfront Fee) 0.5억 원 포함
 
 [지시사항]: 
 1) 채택된 환율 전략({st.session_state.get('p_fx', '환노출')})과 인컴 속성을 고려할 때, 고객의 세후 수익률 측면에서 유리한 연금/ISA 채널 타겟팅 전략을 서술할 것.
 2) 입력된 P&L Raw Data와 당사의 보수율 경쟁력을 기반으로 AUM 뺏어오기(Switching) 영업 전략을 구체화할 것.
-3) 내가 함께 첨부한 'P&L 폭포수(Waterfall) 차트' 이미지를 근거로 삼아, 이번에 책정된 마케팅 집행 예산({st.session_state.get('p_launch_budget', 2.0):.2f} 억 원)이 시장 점유율 확보와 BEP(손익분기점) 달성 관점에서 왜 합리적이고 타당한 투자인지 임원진을 강력하게 설득할 것."""
+3) 내가 함께 첨부한 'P&L 폭포수(Waterfall) 차트' 이미지를 근거로 삼아, 이번에 책정된 마케팅 집행 예산({st.session_state.get('p_launch_budget', 3.0):.2f} 억 원)이 시장 점유율 확보와 BEP(손익분기점) 달성 관점에서 왜 합리적이고 타당한 투자인지 임원진을 강력하게 설득할 것."""
             st.code(p2_step4, language="text")
 
             st.markdown("**📌 [Step 5: 요약 보고서 및 투트랙 팩트시트 산출]**")
