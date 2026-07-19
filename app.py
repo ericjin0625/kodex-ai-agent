@@ -1882,7 +1882,8 @@ with col_main:
                 with st.container(height=550, border=True):
                     st.markdown(f"**📈 {st.session_state.p_proxy} 과거 3년 백테스트 (자본차익 vs 배당수익 분해)**")
                     
-                    lp_cost = st.slider("예상 LP 호가 스프레드 및 마찰비용 (연 %)", 0.0, 1.0, 0.2, 0.1)
+                    # [수정 1] 마찰비용 슬라이더 한도 상향 및 1.2% 기본값 세팅
+                    lp_cost = st.slider("예상 LP 호가 스프레드 및 마찰비용 (연 %)", 0.0, 5.0, 1.2, 0.1)
                     st.session_state.p_lp_cost = lp_cost
                     
                     end_dt = datetime.today()
@@ -1986,7 +1987,8 @@ with col_main:
                             strike_pct = st.slider("콜옵션 행사가격 (월간 OTM, %)", 0.0, 10.0, 3.0, 0.5)
                             premium = st.slider("수취 프리미엄 (월간, %)", 0.1, 5.0, 0.35, 0.05)
                         else:
-                            buffer_pct = st.slider("하방 방어 수준 (연간 Buffer, %)", 5.0, 20.0, 10.0, 1.0)
+                            # [수정 2] 하방 방어 슬라이더 한도 상향 (최대 100%)
+                            buffer_pct = st.slider("하방 방어 수준 (연간 Buffer, %)", 5.0, 100.0, 10.0, 1.0)
                             cap_pct = st.slider("상방 제한 수준 (연간 Cap, %)", 5.0, 15.0, 8.0, 1.0)
                     
                     with c_opt2:
@@ -2011,7 +2013,8 @@ with col_main:
                 with c_fx1:
                     fx_strategy = st.selectbox("환율 전략 선택:", ["환노출 (Unhedged - 환차익/차손 노출)", "환헤지 (Hedged - 변동성 제거)", "국내 자산 (원화 Base)"])
                     st.session_state.p_fx = fx_strategy
-                    ter = st.slider("예상 총보수율 (TER, %)", 0.1, 1.5, 0.40, 0.05)
+                    # [수정 3] 보수율 슬라이더 한도 상향 (최대 3.0%)
+                    ter = st.slider("예상 총보수율 (TER, %)", 0.1, 3.0, 0.40, 0.05)
                     fx_hedge_cost = 2.0 if "환헤지" in fx_strategy else 0.0
                     annual_yield = 8.0 if "BDC" in asset_class else 6.0
                     net_yield = annual_yield - ter - fx_hedge_cost
@@ -2157,7 +2160,8 @@ with col_main:
                     sandbox_error = st.slider("🌪️ 예상 오차율/마찰 비용 (Tracking Error, 연간 ±%)", 0.5, 5.0, 2.5, 0.5)
                     sandbox_hedging = st.checkbox("🛡️ 환헤지 프리미엄 비용 차감 (연 -1.5%)")
                     
-                sandbox_rebal_cost = st.slider("🔄 연간 리밸런싱 마찰 비용 (Turnover Cost, %)", 0.0, 1.0, 0.2, 0.1, help="잦은 매매로 인해 깎여나가는 거래 비용을 일할 차감하여 백테스트의 보수성을 높입니다.")
+                # [수정 4] 리밸런싱 마찰 비용 슬라이더 한도 상향 (최대 3.0%)
+                sandbox_rebal_cost = st.slider("🔄 연간 리밸런싱 마찰 비용 (Turnover Cost, %)", 0.0, 3.0, 0.2, 0.1, help="잦은 매매로 인해 깎여나가는 거래 비용을 일할 차감하여 백테스트의 보수성을 높입니다.")
 
             st.markdown("#### 2. 하이브리드 시나리오 차트 및 복제 오차(TE) 모니터링")
             if len(sandbox_tickers) > 0:
