@@ -246,8 +246,13 @@ def render_compact_metric(title, data):
     return f"""<div style="background: rgba(128, 128, 128, 0.05); border: 1px solid rgba(128, 128, 128, 0.1); border-radius: 8px; padding: 12px 16px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;"><div style="font-size: 15px; font-weight: 600;">{title}</div><div style="text-align: right;"><div style="font-size: 17px; font-weight: 800;">{data['val']}</div><div style="color: {color}; font-size: 12px; font-weight: 600; margin-top: 2px;">{arrow} {delta_str} ({data['pct']})</div></div></div>"""
 
 @st.cache_data(ttl=3600)
-def get_realtime_news(keyword="ETF", timeframe="7d", max_items=12):
-    url = f"https://news.google.com/rss/search?q={keyword}+when:{timeframe}&hl=ko&gl=KR&ceid=KR:ko"
+def get_realtime_news(keyword="ETF", timeframe="7d", start_date=None, end_date=None, max_items=12):
+    if start_date and end_date:
+        query = f"{keyword}+after:{start_date}+before:{end_date}"
+    else:
+        query = f"{keyword}+when:{timeframe}"
+        
+    url = f"https://news.google.com/rss/search?q={query}&hl=ko&gl=KR&ceid=KR:ko"
     try:
         res = requests.get(url, timeout=5)
         root = ET.fromstring(res.text)
@@ -482,7 +487,6 @@ with col_main:
         st.markdown("## 📊 ETF Market Intelligence")
         st.caption("국내외 거시 경제, 경쟁사 수급, 마케팅 액션 및 리테일 투자자 심리를 종합적으로 모니터링합니다.")
         
-        # [수정 영역] 서브 탭의 맨 마지막에 AI 프롬프트 탭 추가
         sub_tabs = st.tabs(["🏠 Home", "📊 Weekly Info", "📈 순매수/거래대금 및 수익률", "📰 뉴스 & 트렌드", "📺 이벤트 및 성과 검증", "🗣️ 고객 UX", "🥧 ETF/AUM 현황", "🤖 주간 브리핑 AI 프롬프트"])
 
         with sub_tabs[0]:
@@ -710,6 +714,17 @@ with col_main:
         with sub_tabs[3]:
             st.markdown("### 📰 실시간 뉴스 리스트")
             
+            # --- [추가/수정된 부분] 주차(selected_week)를 날짜로 변환 ---
+            data_year = datetime.today().year
+            s_dt, e_dt = parse_week_range(selected_week, data_year)
+            
+            if s_dt and e_dt:
+                start_str = s_dt.strftime("%Y-%m-%d")
+                end_str = (e_dt + timedelta(days=1)).strftime("%Y-%m-%d") 
+            else:
+                start_str, end_str = None, None
+            # --------------------------------------------------------
+
             top_keyword = "ETF"
             if uploaded_excel is not None and selected_week != "데이터 없음":
                 try:
@@ -721,7 +736,8 @@ with col_main:
                     pass
             
             st.markdown("#### 🌐 일반 ETF 트렌드 뉴스 (거시/업계 동향)")
-            df_general_news = get_realtime_news("ETF", timeframe="7d", max_items=12)
+            # [수정된 부분] 날짜 파라미터 주입
+            df_general_news = get_realtime_news("ETF", start_date=start_str, end_date=end_str, max_items=12)
             if "링크" in df_general_news.columns and df_general_news["링크"].iloc[0] != "":
                 
                 titles_gen = df_general_news["원본제목"].tolist()
@@ -745,7 +761,8 @@ with col_main:
 
             st.markdown(f"#### 🎯 주간 수급 Top 테마 동적 뉴스 ({top_keyword})")
             search_kw_dynamic = f"{top_keyword} ETF"
-            st.session_state.df_real_news = get_realtime_news(search_kw_dynamic, timeframe="7d", max_items=12)
+            # [수정된 부분] 날짜 파라미터 주입
+            st.session_state.df_real_news = get_realtime_news(search_kw_dynamic, start_date=start_str, end_date=end_str, max_items=12)
             df_dynamic_news = st.session_state.df_real_news
             
             news_summary = "\n".join([f"- {row['원본제목']}" for _, row in df_dynamic_news.head(5).iterrows()])
@@ -1627,7 +1644,7 @@ with col_main:
 [통계적 유의성 (p-value)]: {st.session_state.get('stat_p_value', 1.0)}
 
 [{tgt}]에 유입된 전체 순매수 중 단순 시장 상승분이 아닌 마케팅/영업의 순수 기여분(설정효과)을 위 통계 수치를 바탕으로 분석하시오.
-특히, 투입된 '마케팅 총 예산' 대비 도출된 'ROAS 배수'를 재무적 관점에서 해석하고, 첨부한 '예산 vs 파급력 산점도'를 참고하여 이번에 실행된 프로모션이 비용 효율적인(Cost-effective) 캠페인이었는지, 아니면 지출 대비 유입이 저조한 한계 효용 상태였는지 철저히 진단하시오."""
+특히, 투입된 '마케팅 총 예산' 대비 도출된 'ROAS 배수' 단가율을 재무적 관점에서 해석하고, 첨부한 '예산 vs 파급력 산점도'를 참고하여 이번에 실행된 프로모션이 비용 효율적인(Cost-effective) 캠페인이었는지, 아니면 지출 대비 유입이 저조한 한계 효용 상태였는지 철저히 진단하시오."""
             st.code(p1_step3, language="text")
 
             vids = scrape_youtube_search_real(tgt)
@@ -1649,9 +1666,8 @@ with col_main:
 [네이버 데이터랩 주요 키워드 검색량 추이 요약]:
 {st.session_state.get('dl_summary', '데이터랩 요약 없음')}
 
-내가 첨부한 '종토방 VOC 엑셀 파일'의 원문 데이터와 위 미디어/유튜브 링크 Raw Data를 모두 크로스체크하여 분석하시오. 
-1) VOC 엑셀 데이터를 바탕으로 [{tgt}]에 대한 리테일 투자자들의 페인 포인트(불만)나 열광하는 핵심 키워드를 추출할 것.
-2) 위 유튜브 및 데이터랩 추이를 바탕으로 경쟁사 [{cmp}]가 최근 어떤 테마를 집중적으로 밀고 있는지(차기 마케팅 테마) 예측할 것."""
+내가 첨부한 '종토방 VOC 통합 엑셀 파일'의 론칭일 시트와 피크일 시트를 크로스체크하여, 마케팅 프로모션 전후로 긍정 감성 비율 및 핵심 후킹 키워드가 어떻게 동태적(Dynamic)으로 진화했는지 비교 분석할 것. 
+또한 위 유튜브 및 데이터랩 추이를 바탕으로 경쟁사 [{cmp}]가 최근 어떤 테마를 집중적으로 밀고 있는지(차기 마케팅 테마) 예측할 것."""
             st.code(p1_step4, language="text")
 
             st.markdown("**📌 [Step 5: Actionable Insights (투트랙 세일즈 & 마케팅 액션 플랜)]**")
@@ -1661,7 +1677,7 @@ with col_main:
 1. 리테일 타겟 (마케팅/콘텐츠 본부용): 앞선 3단계의 마케팅 ROAS 결과를 고려할 때, 예산을 증액하여 비슷한 캠페인을 이어갈지 혹은 바이럴 위주의 굿즈/콘텐츠로 선회할지 방향을 잡고, 데이터랩 트렌드를 찌를 수 있는 자사 유튜브/블로그 후킹(Hooking) 콘텐츠 주제 및 카피라이팅 1가지를 제안할 것.
 2. 기관 타겟 (법인영업/세일즈 본부용): [{tgt}]가 [{cmp}] 대비 보유한 강점(AUM 규모, 실제 거래량 유동성, 설정효과 방어력 등 앞선 데이터 기반)을 엮어, PB들이 거액 자산가/연기금 기관에게 던질 수 있는 강력하고 묵직한 '원 라이너(1-liner) 세일즈 멘트'를 도출할 것."""
             st.code(p1_step5, language="text")
-
+            
 # -------------------------------------------------------------------------
     # Big 탭 2: 정책 모니터링 및 상품 기획 시뮬레이터
 # -------------------------------------------------------------------------
